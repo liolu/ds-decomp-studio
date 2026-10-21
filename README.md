@@ -10,7 +10,7 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 ## Avancement des jeux
 
 <!-- games:start -->
-62 jeux, 21 publiés · 68034/453245 fonctions matchées au total · mis à jour le 2026-10-21 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
+62 jeux, 21 publiés · 71504/453245 fonctions matchées au total · mis à jour le 2026-10-22 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
 
 | Jeu | Version | Studio | Code matché | Fonctions | ROM | Dépôt |
 |---|---|---|---|---|---|---|
@@ -27,6 +27,7 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Luminousarc2 | eu YL2P |  | `██░░░░░░░░` 18.72% | 2878/7441 | ✅ | local (pas encore de match) |
 | Blue Dragon: Awakened Shadow | ger YBUD | Brownie Brown | `██░░░░░░░░` 15.38% | 4173/11800 | ✅ | [blue-dragon-awakened-shadow-decomp](https://github.com/liolu/blue-dragon-awakened-shadow-decomp) |
 | Cooking Mama | usa ACCE | Office Create | `██░░░░░░░░` 15.35% | 1034/2551 | ✅ | [cooking-mama-decomp](https://github.com/liolu/cooking-mama-decomp) |
+| Spyro: Shadow Legacy | usa ASSE | Amaze Entertainment | `█░░░░░░░░░` 13.62% | 1708/3697 | ✅ | [spyro-shadow-legacy-decomp](https://github.com/liolu/spyro-shadow-legacy-decomp) |
 | Resident Evil: Deadly Silence | usa ABHE | Capcom | `█░░░░░░░░░` 13.34% | 2299/5824 | ✅ | [resident-evil-deadly-silence-decomp](https://github.com/liolu/resident-evil-deadly-silence-decomp) |
 | MySims | usa AQIE | EA | `█░░░░░░░░░` 11.97% | 2595/6820 | ✅ | [mysims-decomp](https://github.com/liolu/mysims-decomp) |
 | Thrillville | usa YTVE |  | `█░░░░░░░░░` 11.70% | 2948/9903 | ✅ | local (pas encore de match) |
@@ -36,10 +37,11 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | SimCity Creator | eu YC2P | EA | `█░░░░░░░░░` 9.38% | 1736/6580 | ✅ | local (pas encore de match) |
 | The Simpsons Game | usa YSZE | Amaze Entertainment | `█░░░░░░░░░` 9.19% | 2975/8968 | ✅ | [simpsons-game-decomp](https://github.com/liolu/simpsons-game-decomp) |
 | SimAnimals | eu CM3P | EA | `█░░░░░░░░░` 8.54% | 707/2923 | ✅ | local (pas encore de match) |
+| Nintendogs | jp AD2J |  | `█░░░░░░░░░` 7.38% | 1477/8614 | ✅ | local (pas encore de match) |
 | Livly Garden | jp BLIJ | Brownie Brown | `█░░░░░░░░░` 5.76% | 1281/9012 | ✅ | [livly-garden-decomp](https://github.com/liolu/livly-garden-decomp) |
-| Spyro: Shadow Legacy | usa ASSE | Amaze Entertainment | `░░░░░░░░░░` 4.93% | 799/3697 | ✅ | [spyro-shadow-legacy-decomp](https://github.com/liolu/spyro-shadow-legacy-decomp) |
 | Star Wars: Lethal Alliance | eu AWUP | Ubisoft | `░░░░░░░░░░` 4.58% | 1306/8569 | ✅ | local (pas encore de match) |
 | Spore Creatures | usa YSPE | Amaze Entertainment | `░░░░░░░░░░` 4.45% | 1554/12008 | ✅ | local (pas encore de match) |
+| Poke Ranger | usa ARGE |  | `░░░░░░░░░░` 4.21% | 1084/7304 | ✅ | local (pas encore de match) |
 | Craftingmama | usa BQ8E |  | `░░░░░░░░░░` 3.67% | 1272/6423 | ✅ | local (pas encore de match) |
 | Dinosaurs | usa CD5E |  | `░░░░░░░░░░` 3.18% | 528/10536 | ✅ | local (pas encore de match) |
 | Eyeshield 21 | jp AE4J | Eighting | `░░░░░░░░░░` 2.90% | 1328/21940 | ✅ | [eyeshield-21-decomp](https://github.com/liolu/eyeshield-21-decomp) |
@@ -57,10 +59,8 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Howttydragon | eu BHDP |  | `░░░░░░░░░░` 0.00% | 0/9088 | ✅ | local (pas encore de match) |
 | Ironman2 | usa B2IE |  | `░░░░░░░░░░` 0.00% | 0/13596 | ✅ | local (pas encore de match) |
 | Myst | usa YMYE |  | `░░░░░░░░░░` 0.00% | 0/2585 | ✅ | local (pas encore de match) |
-| Nintendogs | jp AD2J |  | `░░░░░░░░░░` 0.00% | 0/8614 | ✅ | local (pas encore de match) |
 | Nintendogs | jp ADGJ |  | `░░░░░░░░░░` 0.00% | 0/8614 | ✅ | local (pas encore de match) |
 | Nintendogs | jp AD3J |  | `░░░░░░░░░░` 0.00% | 0/8614 | ✅ | local (pas encore de match) |
-| Poke Ranger | usa ARGE |  | `░░░░░░░░░░` 0.00% | 0/7304 | ✅ | local (pas encore de match) |
 | Pokemon_Dash | usa APDE |  | `░░░░░░░░░░` 0.00% | 0/3279 | ✅ | local (pas encore de match) |
 | Pvz | usa BWBE |  | `░░░░░░░░░░` 0.00% | 0/5614 | ✅ | local (pas encore de match) |
 | Pvz         | eu BWBY |  | `░░░░░░░░░░` 0.00% | 0/5647 | ✅ | local (pas encore de match) |
