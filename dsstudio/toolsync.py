@@ -3,7 +3,8 @@
 The single source is `studio/gametools/`. The tools read everything game-specific (version, ROM name, main .text
 range) from the project through `tools/project.py`, so they are byte-identical in every game: syncing is a plain
 copy. Each game keeps a copy in its repo, so a clone of one game works on its own (and its CI sees the tools).
-`tools/configure.py` stays per game (compiler and flags of that game) and is never touched.
+Per-game settings live in <project>/game.toml (read by the shared tools/configure.py). Update protocol: `studio.py sync-tools`
+copies the tools, then refreshes README progress + ByteMatch report of each published game (`--no-progress` to skip).
 """
 import hashlib
 import shutil

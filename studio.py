@@ -48,7 +48,7 @@ def main():
     s = sub.add_parser("done"); s.add_argument("game"); s.add_argument("block"); s.add_argument("--who")
     s = sub.add_parser("release"); s.add_argument("game"); s.add_argument("block"); s.add_argument("--who")
     s = sub.add_parser("rebuild"); s.add_argument("game")
-    s = sub.add_parser("sync-tools"); s.add_argument("game", nargs="?")
+    s = sub.add_parser("sync-tools"); s.add_argument("game", nargs="?"); s.add_argument("--no-progress", action="store_true", help="do not update README/ByteMatch afterwards")
     s.add_argument("--no-push", action="store_true", help="commit in each game but do not push")
     sub.add_parser("readme", help="update the table of every game in README.md")
     s = sub.add_parser("progress", help="progress of every published game in its README, then the Studio's table, pushed")
@@ -98,6 +98,11 @@ def main():
             r = toolsync.sync(g, push=not a.no_push)
             print(f"{g.id}: " + (r.get("error") or (", ".join(r["changed"]) + " mis a jour" if r["changed"] else "a jour"))
                   + (f" ({r['warning']})" if r.get("warning") else ""))
+        if not a.no_progress:  # update protocol: README progress + ByteMatch report follow every tool update
+            from dsstudio import progress
+            for g in targets:
+                if g.remote():
+                    progress.run(g.id, push=not a.no_push)
     elif a.cmd == "progress":
         from dsstudio import progress
         progress.run(a.game, push=not a.no_push)
