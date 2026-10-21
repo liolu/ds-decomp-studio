@@ -10,7 +10,7 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 ## Avancement des jeux
 
 <!-- games:start -->
-32 jeux, 21 publiés · 58307/232419 fonctions matchées au total · mis à jour le 2026-10-20 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
+53 jeux, 21 publiés · 58307/372805 fonctions matchées au total · mis à jour le 2026-10-21 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
 
 | Jeu | Version | Studio | Code matché | Fonctions | ROM | Dépôt |
 |---|---|---|---|---|---|---|
@@ -44,8 +44,29 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Star Wars Episode III | eu ASTP | Ubisoft | `░░░░░░░░░░` 2.35% | 805/6518 | ✅ | local (pas encore de match) |
 | Fairy Tail: Kardia | jp TFTJ | Konami | `░░░░░░░░░░` 2.01% | 1454/12899 | ✅ | [fairy-tail-kardia-decomp](https://github.com/liolu/fairy-tail-kardia-decomp) |
 | Club House Games | usa ATDE | Agenda | `░░░░░░░░░░` 1.41% | 477/8314 | ✅ | local (pas encore de match) |
+| Childrenmana | usa ASEE |  | `░░░░░░░░░░` 0.00% | 0/9011 | ✅ | local (pas encore de match) |
+| Craftingmama | usa BQ8E |  | `░░░░░░░░░░` 0.00% | 0/6423 | ✅ | local (pas encore de match) |
+| Db Kai Rpg | eu BRPP |  | `░░░░░░░░░░` 0.00% | 0/2127 | ✅ | local (pas encore de match) |
+| Dinosaurs | usa CD5E |  | `░░░░░░░░░░` 0.00% | 0/10536 | ✅ | local (pas encore de match) |
+| Doh | usa CIEE |  | `░░░░░░░░░░` 0.00% | 0/9688 | ✅ | local (pas encore de match) |
+| Harrypottera | usa B7HE |  | `░░░░░░░░░░` 0.00% | 0/6418 | ✅ | local (pas encore de match) |
+| Luminousarc2 | eu YL2P |  | `░░░░░░░░░░` 0.00% | 0/7441 | ✅ | local (pas encore de match) |
+| Myst | usa YMYE |  | `░░░░░░░░░░` 0.00% | 0/2585 | ✅ | local (pas encore de match) |
+| Nintendogs | jp AD2J |  | `░░░░░░░░░░` 0.00% | 0/8614 | ✅ | local (pas encore de match) |
+| Nintendogs | jp ADGJ |  | `░░░░░░░░░░` 0.00% | 0/8614 | ✅ | local (pas encore de match) |
+| Nintendogs | jp AD3J |  | `░░░░░░░░░░` 0.00% | 0/8614 | ✅ | local (pas encore de match) |
+| Ntr-P-Yybp | eu YYBP |  | `░░░░░░░░░░` 0.00% | 0/16145 | ✅ | local (pas encore de match) |
+| Poke Ranger | usa ARGE |  | `░░░░░░░░░░` 0.00% | 0/7304 | ✅ | local (pas encore de match) |
+| Pokemon_Dash | usa APDE |  | `░░░░░░░░░░` 0.00% | 0/3279 | ✅ | local (pas encore de match) |
+| Pvz | usa BWBE |  | `░░░░░░░░░░` 0.00% | 0/5614 | ✅ | local (pas encore de match) |
+| Rrr2 Ds | usa YRRE |  | `░░░░░░░░░░` 0.00% | 0/6200 | ✅ | local (pas encore de match) |
 | Shrek Forever After | eu VSKV | Griptonite Games | `░░░░░░░░░░` 0.00% | 1/12253 | ✅ | local (pas encore de match) |
+| Spider Man 2 | None  |  | `░░░░░░░░░░` 0.00% | 0/0 | ❌ projet incomplet (dsd init a echoue) | local (pas encore de match) |
 | The Penguins of Madagascar | eu VPEV | Griptonite Games | `░░░░░░░░░░` 0.00% | 5/8879 | ✅ | local (pas encore de match) |
+| The Sims 2 | eu ASJP |  | `░░░░░░░░░░` 0.00% | 0/5060 | ✅ | local (pas encore de match) |
+| Thrillville | usa YTVE |  | `░░░░░░░░░░` 0.00% | 0/9903 | ✅ | local (pas encore de match) |
+| Toy Story 3 | None  |  | `░░░░░░░░░░` 0.00% | 0/0 | ❌ ROM DSi (NDSi Enhanced) : dsd 0.12 ne sait pas l'extraire | local (pas encore de match) |
+| Vivapinatads | usa CP3E |  | `░░░░░░░░░░` 0.00% | 0/6810 | ✅ | local (pas encore de match) |
 
 *Code matché : part du code des fonctions (ARM9, ITCM, DTCM, overlays) qui recompile à l'octet près. ROM ✅ : la ROM se reconstruit identique à l'originale.*
 <!-- games:end -->
