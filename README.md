@@ -10,25 +10,27 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 ## Avancement des jeux
 
 <!-- games:start -->
-62 jeux, 21 publiés · 58882/453245 fonctions matchées au total · mis à jour le 2026-10-21 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
+62 jeux, 21 publiés · 66132/453245 fonctions matchées au total · mis à jour le 2026-10-21 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
 
 | Jeu | Version | Studio | Code matché | Fonctions | ROM | Dépôt |
 |---|---|---|---|---|---|---|
 | Rayman Raving Rabbids | usa AR5E | Ubisoft Casablanca | `█████░░░░░` 47.23% | 2560/3607 | ✅ | [Rayman-RR-usa-decomp](https://github.com/liolu/Rayman-RR-usa-decomp) |
 | Tom and Jerry Tales | eu AJTP | Sensory Sweep | `████░░░░░░` 41.00% | 1251/1921 | ✅ | local (pas encore de match) |
 | Ultimate Spider-Man | fra AUSF | Vicarious Visions | `███░░░░░░░` 31.43% | 2393/4592 | ✅ | [ultimate-spider-man-decomp](https://github.com/liolu/ultimate-spider-man-decomp) |
+| Farm Frenzy | usa BFZE | Alawar | `███░░░░░░░` 26.13% | 876/1208 | ✅ | [farm-frenzy-decomp](https://github.com/liolu/farm-frenzy-decomp) |
 | Powerpuff Girls Z | jp YPPJ | Bandai Namco | `███░░░░░░░` 26.01% | 1489/2359 | ✅ | [powerpuff-girls-z-decomp](https://github.com/liolu/powerpuff-girls-z-decomp) |
-| Heroes of Mana | eu AHEP | Brownie Brown | `███░░░░░░░` 25.20% | 5502/9264 | ✅ | [heroes-of-mana-decomp](https://github.com/liolu/heroes-of-mana-decomp) |
+| Heroes of Mana | eu AHEP | Brownie Brown | `███░░░░░░░` 25.28% | 5510/9264 | ✅ | [heroes-of-mana-decomp](https://github.com/liolu/heroes-of-mana-decomp) |
 | LEGO Star Wars II | usa AL7E | Amaze Entertainment | `██░░░░░░░░` 24.45% | 3205/4763 | ✅ | [lego-star-wars-ii-the-original-trilogy-decomp](https://github.com/liolu/lego-star-wars-ii-the-original-trilogy-decomp) |
 | Madagascar | eu AMGP | Vicarious Visions | `██░░░░░░░░` 22.02% | 1803/3444 | ✅ | local (pas encore de match) |
+| Dragon Ball Origins | eu CDZP | Game Republic | `██░░░░░░░░` 20.93% | 3052/5118 | ✅ | [dragon-ball-origins-decomp](https://github.com/liolu/dragon-ball-origins-decomp) |
 | Nintendogs Dachshund | usa ADGE | Nintendo EAD | `██░░░░░░░░` 20.87% | 3708/8609 | ✅ | [nintendogs-dachshund-decomp](https://github.com/liolu/nintendogs-dachshund-decomp) |
-| Farm Frenzy | usa BFZE | Alawar | `██░░░░░░░░` 19.90% | 777/1208 | ✅ | [farm-frenzy-decomp](https://github.com/liolu/farm-frenzy-decomp) |
-| Dragon Ball Origins | eu CDZP | Game Republic | `██░░░░░░░░` 18.80% | 2932/5118 | ✅ | [dragon-ball-origins-decomp](https://github.com/liolu/dragon-ball-origins-decomp) |
+| Luminousarc2 | eu YL2P |  | `██░░░░░░░░` 18.72% | 2878/7441 | ✅ | local (pas encore de match) |
+| Blue Dragon: Awakened Shadow | ger YBUD | Brownie Brown | `██░░░░░░░░` 15.38% | 4173/11800 | ✅ | [blue-dragon-awakened-shadow-decomp](https://github.com/liolu/blue-dragon-awakened-shadow-decomp) |
 | Cooking Mama | usa ACCE | Office Create | `██░░░░░░░░` 15.35% | 1034/2551 | ✅ | [cooking-mama-decomp](https://github.com/liolu/cooking-mama-decomp) |
 | Resident Evil: Deadly Silence | usa ABHE | Capcom | `█░░░░░░░░░` 13.34% | 2299/5824 | ✅ | [resident-evil-deadly-silence-decomp](https://github.com/liolu/resident-evil-deadly-silence-decomp) |
 | MySims | usa AQIE | EA | `█░░░░░░░░░` 11.97% | 2595/6820 | ✅ | [mysims-decomp](https://github.com/liolu/mysims-decomp) |
+| Thrillville | usa YTVE |  | `█░░░░░░░░░` 11.70% | 2948/9903 | ✅ | local (pas encore de match) |
 | Code Lyoko | usa AL5E | Game Machine Studios | `█░░░░░░░░░` 11.02% | 2114/7474 | ✅ | [code-lyoko-decomp](https://github.com/liolu/code-lyoko-decomp) |
-| Blue Dragon: Awakened Shadow | ger YBUD | Brownie Brown | `█░░░░░░░░░` 10.71% | 3667/11800 | ✅ | [blue-dragon-awakened-shadow-decomp](https://github.com/liolu/blue-dragon-awakened-shadow-decomp) |
 | Harvest Moon DS | usa ABCE | Marvelous | `█░░░░░░░░░` 10.38% | 2719/5133 | ✅ | [harvest-moon-ds-decomp](https://github.com/liolu/harvest-moon-ds-decomp) |
 | Spider-Man: Web of Shadows | x CS5X | Amaze Entertainment | `█░░░░░░░░░` 9.57% | 2486/5846 | ✅ | [spider-man-web-of-shadows-decomp](https://github.com/liolu/spider-man-web-of-shadows-decomp) |
 | SimCity Creator | eu YC2P | EA | `█░░░░░░░░░` 9.38% | 1736/6580 | ✅ | local (pas encore de match) |
@@ -38,21 +40,21 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Spyro: Shadow Legacy | usa ASSE | Amaze Entertainment | `░░░░░░░░░░` 4.93% | 799/3697 | ✅ | [spyro-shadow-legacy-decomp](https://github.com/liolu/spyro-shadow-legacy-decomp) |
 | Star Wars: Lethal Alliance | eu AWUP | Ubisoft | `░░░░░░░░░░` 4.58% | 1306/8569 | ✅ | local (pas encore de match) |
 | Spore Creatures | usa YSPE | Amaze Entertainment | `░░░░░░░░░░` 4.45% | 1554/12008 | ✅ | local (pas encore de match) |
+| Dinosaurs | usa CD5E |  | `░░░░░░░░░░` 3.18% | 528/10536 | ✅ | local (pas encore de match) |
 | Eyeshield 21 | jp AE4J | Eighting | `░░░░░░░░░░` 2.90% | 1328/21940 | ✅ | [eyeshield-21-decomp](https://github.com/liolu/eyeshield-21-decomp) |
 | Fairy Tail: Madoushi | jp BH6J | Konami | `░░░░░░░░░░` 2.53% | 1352/11096 | ✅ | [fairy-tail-madoushi-decomp](https://github.com/liolu/fairy-tail-madoushi-decomp) |
 | Professor Layton and the Spectre's Call | eu BLFP | Level-5 | `░░░░░░░░░░` 2.37% | 568/8430 | ✅ | local (pas encore de match) |
 | Star Wars Episode III | eu ASTP | Ubisoft | `░░░░░░░░░░` 2.35% | 805/6518 | ✅ | local (pas encore de match) |
 | Fairy Tail: Kardia | jp TFTJ | Konami | `░░░░░░░░░░` 2.01% | 1454/12899 | ✅ | [fairy-tail-kardia-decomp](https://github.com/liolu/fairy-tail-kardia-decomp) |
 | Club House Games | usa ATDE | Agenda | `░░░░░░░░░░` 1.41% | 477/8314 | ✅ | local (pas encore de match) |
+| Saga3 | jp BZ3J |  | `░░░░░░░░░░` 0.91% | 163/10835 | ✅ | local (pas encore de match) |
 | Childrenmana | usa ASEE |  | `░░░░░░░░░░` 0.00% | 0/9011 | ✅ | local (pas encore de match) |
 | Craftingmama | usa BQ8E |  | `░░░░░░░░░░` 0.00% | 0/6423 | ✅ | local (pas encore de match) |
 | Db Kai Rpg | eu BRPP |  | `░░░░░░░░░░` 0.00% | 0/2127 | ✅ | local (pas encore de match) |
-| Dinosaurs | usa CD5E |  | `░░░░░░░░░░` 0.00% | 0/10536 | ✅ | local (pas encore de match) |
 | Doh | usa CIEE |  | `░░░░░░░░░░` 0.00% | 0/9688 | ✅ | local (pas encore de match) |
 | Harrypottera | usa B7HE |  | `░░░░░░░░░░` 0.00% | 0/6418 | ✅ | local (pas encore de match) |
 | Howttydragon | eu BHDP |  | `░░░░░░░░░░` 0.00% | 0/9088 | ✅ | local (pas encore de match) |
 | Ironman2 | usa B2IE |  | `░░░░░░░░░░` 0.00% | 0/13596 | ✅ | local (pas encore de match) |
-| Luminousarc2 | eu YL2P |  | `░░░░░░░░░░` 0.00% | 0/7441 | ✅ | local (pas encore de match) |
 | Myst | usa YMYE |  | `░░░░░░░░░░` 0.00% | 0/2585 | ✅ | local (pas encore de match) |
 | Nintendogs | jp AD2J |  | `░░░░░░░░░░` 0.00% | 0/8614 | ✅ | local (pas encore de match) |
 | Nintendogs | jp ADGJ |  | `░░░░░░░░░░` 0.00% | 0/8614 | ✅ | local (pas encore de match) |
@@ -64,7 +66,6 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Pvz         | eu BWBY |  | `░░░░░░░░░░` 0.00% | 0/5647 | ✅ | local (pas encore de match) |
 | Pvz         | eu BWBX |  | `░░░░░░░░░░` 0.00% | 0/5647 | ✅ | local (pas encore de match) |
 | Rrr2 Ds | usa YRRE |  | `░░░░░░░░░░` 0.00% | 0/6200 | ✅ | local (pas encore de match) |
-| Saga3 | jp BZ3J |  | `░░░░░░░░░░` 0.00% | 0/10835 | ✅ | local (pas encore de match) |
 | Shrek Forever After | eu VSKV | Griptonite Games | `░░░░░░░░░░` 0.00% | 1/12253 | ✅ | local (pas encore de match) |
 | Spider-Man 2 | eu AS2P |  | `░░░░░░░░░░` 0.00% | 0/2847 | ✅ | local (pas encore de match) |
 | Spider-Man 2 | usa AS2E |  | `░░░░░░░░░░` 0.00% | 0/2837 | ✅ | local (pas encore de match) |
@@ -72,7 +73,6 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Sw:Cw-Rh | usa BW9E |  | `░░░░░░░░░░` 0.00% | 0/6665 | ✅ | local (pas encore de match) |
 | The Penguins of Madagascar | eu VPEV | Griptonite Games | `░░░░░░░░░░` 0.00% | 5/8879 | ✅ | local (pas encore de match) |
 | The Sims 2 | eu ASJP |  | `░░░░░░░░░░` 0.00% | 0/5060 | ✅ | local (pas encore de match) |
-| Thrillville | usa YTVE |  | `░░░░░░░░░░` 0.00% | 0/9903 | ✅ | local (pas encore de match) |
 | Toy Story 3 | eu VT3V |  | `░░░░░░░░░░` 0.00% | 0/5745 | ✅ | local (pas encore de match) |
 | Vivapinatads | usa CP3E |  | `░░░░░░░░░░` 0.00% | 0/6810 | ✅ | local (pas encore de match) |
 | Wheelfortune | usa BW7E |  | `░░░░░░░░░░` 0.00% | 0/7389 | ✅ | local (pas encore de match) |
@@ -82,7 +82,11 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 
 ## Lancer
 
-Double-clic sur `Studio.cmd` (ou `python studio.py`). L'app s'ouvre sur http://127.0.0.1:8765.
+Double-clic sur `Studio.cmd` : le studio s'ouvre dans sa propre fenêtre (`desktop/`, petit programme Rust + WebView2
+qui lance le serveur Python sans console ; sa sortie va dans `data/server.log`). Fermer la fenêtre arrête le serveur
+et ses tâches (le programme demande confirmation si des tâches tournent). Compiler la fenêtre une fois :
+`desktop\build.cmd` (toolchain Rust gnu + WinLibs). Sans elle, ou avec `Studio.cmd web`, l'app tourne comme avant
+dans le navigateur sur http://127.0.0.1:8765.
 
 ## Ce que fait l'app
 
