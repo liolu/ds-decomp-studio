@@ -10,7 +10,7 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 ## Avancement des jeux
 
 <!-- games:start -->
-62 jeux, 21 publiés · 66132/453245 fonctions matchées au total · mis à jour le 2026-10-21 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
+62 jeux, 21 publiés · 68034/453245 fonctions matchées au total · mis à jour le 2026-10-21 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
 
 | Jeu | Version | Studio | Code matché | Fonctions | ROM | Dépôt |
 |---|---|---|---|---|---|---|
@@ -40,16 +40,17 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Spyro: Shadow Legacy | usa ASSE | Amaze Entertainment | `░░░░░░░░░░` 4.93% | 799/3697 | ✅ | [spyro-shadow-legacy-decomp](https://github.com/liolu/spyro-shadow-legacy-decomp) |
 | Star Wars: Lethal Alliance | eu AWUP | Ubisoft | `░░░░░░░░░░` 4.58% | 1306/8569 | ✅ | local (pas encore de match) |
 | Spore Creatures | usa YSPE | Amaze Entertainment | `░░░░░░░░░░` 4.45% | 1554/12008 | ✅ | local (pas encore de match) |
+| Craftingmama | usa BQ8E |  | `░░░░░░░░░░` 3.67% | 1272/6423 | ✅ | local (pas encore de match) |
 | Dinosaurs | usa CD5E |  | `░░░░░░░░░░` 3.18% | 528/10536 | ✅ | local (pas encore de match) |
 | Eyeshield 21 | jp AE4J | Eighting | `░░░░░░░░░░` 2.90% | 1328/21940 | ✅ | [eyeshield-21-decomp](https://github.com/liolu/eyeshield-21-decomp) |
 | Fairy Tail: Madoushi | jp BH6J | Konami | `░░░░░░░░░░` 2.53% | 1352/11096 | ✅ | [fairy-tail-madoushi-decomp](https://github.com/liolu/fairy-tail-madoushi-decomp) |
 | Professor Layton and the Spectre's Call | eu BLFP | Level-5 | `░░░░░░░░░░` 2.37% | 568/8430 | ✅ | local (pas encore de match) |
 | Star Wars Episode III | eu ASTP | Ubisoft | `░░░░░░░░░░` 2.35% | 805/6518 | ✅ | local (pas encore de match) |
+| Ntr-P-Yybp | eu YYBP |  | `░░░░░░░░░░` 2.12% | 630/16145 | ✅ | local (pas encore de match) |
 | Fairy Tail: Kardia | jp TFTJ | Konami | `░░░░░░░░░░` 2.01% | 1454/12899 | ✅ | [fairy-tail-kardia-decomp](https://github.com/liolu/fairy-tail-kardia-decomp) |
 | Club House Games | usa ATDE | Agenda | `░░░░░░░░░░` 1.41% | 477/8314 | ✅ | local (pas encore de match) |
 | Saga3 | jp BZ3J |  | `░░░░░░░░░░` 0.91% | 163/10835 | ✅ | local (pas encore de match) |
 | Childrenmana | usa ASEE |  | `░░░░░░░░░░` 0.00% | 0/9011 | ✅ | local (pas encore de match) |
-| Craftingmama | usa BQ8E |  | `░░░░░░░░░░` 0.00% | 0/6423 | ✅ | local (pas encore de match) |
 | Db Kai Rpg | eu BRPP |  | `░░░░░░░░░░` 0.00% | 0/2127 | ✅ | local (pas encore de match) |
 | Doh | usa CIEE |  | `░░░░░░░░░░` 0.00% | 0/9688 | ✅ | local (pas encore de match) |
 | Harrypottera | usa B7HE |  | `░░░░░░░░░░` 0.00% | 0/6418 | ✅ | local (pas encore de match) |
@@ -59,7 +60,6 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Nintendogs | jp AD2J |  | `░░░░░░░░░░` 0.00% | 0/8614 | ✅ | local (pas encore de match) |
 | Nintendogs | jp ADGJ |  | `░░░░░░░░░░` 0.00% | 0/8614 | ✅ | local (pas encore de match) |
 | Nintendogs | jp AD3J |  | `░░░░░░░░░░` 0.00% | 0/8614 | ✅ | local (pas encore de match) |
-| Ntr-P-Yybp | eu YYBP |  | `░░░░░░░░░░` 0.00% | 0/16145 | ✅ | local (pas encore de match) |
 | Poke Ranger | usa ARGE |  | `░░░░░░░░░░` 0.00% | 0/7304 | ✅ | local (pas encore de match) |
 | Pokemon_Dash | usa APDE |  | `░░░░░░░░░░` 0.00% | 0/3279 | ✅ | local (pas encore de match) |
 | Pvz | usa BWBE |  | `░░░░░░░░░░` 0.00% | 0/5614 | ✅ | local (pas encore de match) |
