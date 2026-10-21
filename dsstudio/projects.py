@@ -10,10 +10,14 @@ from . import config, games, gitutil
 FORBIDDEN_EXT = {".nds", ".bin", ".srl", ".sav", ".narc", ".sdat", ".nftr", ".nclr", ".ncgr", ".nscr", ".exe",
                  ".dll", ".o", ".elf", ".zip", ".7z"}
 MAX_FILE = 20 * 1024 * 1024
+# 4th letter of the game code -> config/<version> name (same table as tools/new_project.py)
+REGIONS = {"E": "usa", "P": "eu", "V": "eu", "X": "eu", "Y": "eu", "J": "jp", "K": "kor", "U": "aus", "D": "ger",
+           "F": "fra", "I": "ita", "S": "spa"}
 
 
 def roms_without_project() -> list[dict]:
     known = {g.code: g.id for g in games.all_games() if g.code}
+    taken = {p.name for p in config.PROJETS.iterdir()} if config.PROJETS.exists() else set()
     out, seen = [], set()
     for rom in sorted(config.ROMS.glob("*.nds")) if config.ROMS.exists() else []:
         try:
@@ -25,8 +29,16 @@ def roms_without_project() -> list[dict]:
         if code in known or code in seen:
             continue
         seen.add(code)
+        slug = slug_of(rom.name)
+        if slug in taken:
+            # same game in another region (USA / Europe...): one project per ROM, named after its region
+            base = f"{slug[:36]}-{REGIONS.get(code[3:4], code[3:4].lower() or 'x')}"
+            slug, n = base, 2
+            while slug in taken:
+                slug, n = f"{base}-{n}", n + 1
+        taken.add(slug)
         out.append({"rom": rom.name, "code": code, "title": title, "mb": rom.stat().st_size // 2 ** 20,
-                    "slug": slug_of(rom.name)})
+                    "slug": slug})
     return out
 
 
