@@ -1094,6 +1094,8 @@ def integrate(found: list[tuple[str, int, int, str]]) -> list[Path]:
         extra = ""
         rec = PROFILE_REC(name) if PROFILE_REC else None  # -profile functions own a .data record (their name string)
         if rec:
+            import profrec  # while the function was unmatched its record may have had a data file of its own
+            profrec.release(rec[0])
             extra = "    .data       start:0x%08x end:0x%08x\n" % rec
         entries.append(f"\nsrc/auto/{name}.c:\n    complete\n    .text       start:0x{addr:08x} end:0x{addr + size:08x}\n" + extra)
     with DELINKS.open("a", newline="\n") as f:

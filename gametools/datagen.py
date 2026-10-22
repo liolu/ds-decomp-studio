@@ -124,8 +124,9 @@ def main() -> None:
             syms = [(ad, n) for ad, n, k in m.symbols if start <= ad < end and k == "data"]
             addrs = [ad for ad, _n in syms]
             items = []  # (addr, name, size, c_decl or None, externs)
+            bounds = sorted({ad for ad, _n, _k in m.symbols if start < ad < end})  # labels too (-profile records)
             for i, (ad, n) in enumerate(syms):
-                nxt = syms[i + 1][0] if i + 1 < len(syms) else end
+                nxt = next((b for b in bounds if b > ad), end)
                 size = nxt - ad
                 bad = size == 0 or addrs.count(ad) > 1 or any(s <= ad < e for s, e in m.taken) \
                     or any(ad < pe and ps < nxt for ps, pe in prof_ranges)
@@ -195,7 +196,11 @@ def declare(wb, m: Mod, targets, ad: int, n: str, size: int, secname: str):
     const = "const " if secname == ".rodata" else ""
     ptrs = {f: m.relocs[f] for f in range(ad, ad + size) if f in m.relocs}
     if not ptrs and not any(raw):
-        return None, set()  # mwcc puts all-zero data in .bss
+        if not const:
+            return None, set()  # mwcc puts all-zero data in .bss (const zero data stays in .rodata)
+        if size % 4 == 0 and ad % 4 == 0:
+            return f"const u32 {n}[{size // 4}] = {{0}};", set()
+        return f"const u8 {n}[{size}] = {{0}};", set()
     if not ptrs:
         s = c_string(raw)
         if s is not None:
@@ -207,10 +212,14 @@ def declare(wb, m: Mod, targets, ad: int, n: str, size: int, secname: str):
             if ad + o in ptrs:
                 to, mod = ptrs[ad + o]
                 t = target_name(targets, to, mod)
-                if t is None or w & 1:  # thumb pointer: the linker adds the bit itself
+                if t is None:
                     return None, set()
                 tn, off = t
                 off += w - to
+                if w & 1:  # thumb function pointer: written plain, the linker adds the bit itself
+                    if off != 1 or not any(a2 == to - 1 and k == "function" for a2, _n, k in targets.get(mod, [])):
+                        return None, set()
+                    off = 0
                 ext.add(tn)
                 words.append(f"(u32)&{tn}" if off == 0 else f"(u32)((u8 *)&{tn} + 0x{off:x})")
             else:

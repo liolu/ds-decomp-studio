@@ -639,7 +639,8 @@ def cmd_commit(a) -> None:
             drop_files([p["file"] for p in bad])
             dropped += [p["name"] for p in bad]
             pend = [p for p in pend if p not in bad]
-        paths = [p["file"] for p in pend] + [f"config/{project.VERSION}"]
+        import profrec  # record files given back to their (now matched) function
+        paths = [p["file"] for p in pend] + [f"config/{project.VERSION}"] + profrec.clean_orphans()
         names = [p["name"] for p in pend]
         if names:
             who = ", ".join(sorted({p.get("who") or "workbench" for p in pend}))

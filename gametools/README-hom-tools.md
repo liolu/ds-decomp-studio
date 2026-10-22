@@ -32,3 +32,14 @@ units of a profile record and nothing else: same size, same fuzzy value => every
 missing; code sections must still be 100% and the ROM byte-identical. Pipeline: `profpad.py` -> `profhook.py build/drafts D1`
 -> `profmap.py D1 D2` -> `AUTO_EXTRA_PROFILES='1.2/sp3 -profile,2.0/sp1p5 -profile' fj.py D2 --ov --max 20000` ->
 `workbench.py submit-many D2` -> `commit`.
+
+## Data (.data / .rodata / .bss) to C
+
+Order: `datagap.py` (what is left and why) -> `fakeptr.py --apply` (false pointers dsd found in byte tables) ->
+`symmerge.py --apply` (unaligned struct-field symbols folded into their object, relocs become `to:obj add:off`) ->
+`bssgen.py` / `datagen.py` -> `profrec.py` (name records of unmatched -profile functions; released to the function
+by auto_match.integrate, file removed at `workbench commit`) -> `tiegen.py gen`, ninja, `tiegen.py check` (twice) for
+equal-size runs -> `datagap.py --name-nosym` + `datagen.py` for unreferenced data -> `match.py verify`.
+mwcc facts: one element type per run; arrays get a section each (aligned 4 by the linker) but 1-2 byte scalars are
+packed in one section (so tiegen writes scalars); const all-zero data stays in .rodata, non-const goes to .bss;
+thumb function pointers are written `(u32)&f` (the linker sets bit 0).
