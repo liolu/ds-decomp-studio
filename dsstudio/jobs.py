@@ -43,7 +43,8 @@ DEFS = {
                   "le clonage dans chaque jeu (1 match dans un jeu = 1 match dans chaque jeu qui a la meme fonction), verify, puis commit + push des jeux qui passent"),
     "misses": ("Rejouer les essais rates", "game", 1800,
                "base des essais rates (missdb : Qwen, hunt, Claude, editeur) : chaque C rate est essaye sur toutes les "
-               "fonctions non matchees du jeu qui ont la meme forme, misses de TOUS nos jeux, puis verify + commit"),
+               "fonctions non matchees du jeu qui ont la meme forme, misses de TOUS nos jeux ; les DONNEES aussi "
+               "(.data/.rodata : essais rates + donnees deja matchees dans nos autres jeux), puis verify + commit"),
     "misses_all": ("Rejouer les essais rates dans tous les jeux", "global", 7200,
                    "les essais rates de chaque jeu (A) essayes sur tous les autres jeux (B, C, D...) : import des "
                    "anciens essais, rejeu, verify, commit + push des jeux qui passent"),
@@ -141,6 +142,9 @@ def command(jid: str, game, p: dict) -> str:
             if config.game_tool(game.path, "donor_match.py").exists():
                 pre.append(f"python {_t(game, 'donor_match.py')}" + dry + (f" -j {int(p['jobs'])}" if p.get("jobs") else ""))
             cmd = "; ".join(pre + [cmd])
+            # the misses of every game (AI, hand sessions, these near misses) on what is still unmatched here
+            if config.game_tool(game.path, "missdb.py").exists():
+                cmd += f"; python {_t(game, 'missdb.py')} replay --all-games" + (" --dry-run" if p.get("dry_run") else "")
         return cmd
     if jid == "moulinette":
         cmd = f"python {_q(MOULINETTE.as_posix())} --game {_q(game.id)}"

@@ -1348,6 +1348,8 @@ def main():
             (WORK / "near" / f"{n}.c").write_text(src, encoding="utf-8")
         (WORK / "status.json").write_text(json.dumps([r[:4] for r in results]))
         print(f"{len(near)} near misses kept in {(WORK / 'near').relative_to(ROOT)}")
+    if near and not args.dry_run:  # the near misses go to the miss database too (replayed on the other functions)
+        subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "missdb.py"), "import"], cwd=ROOT)
 
     if args.permute and near:
         print(f"Permuter on {min(args.permute, len(near))} near misses, {args.minutes} min each:")

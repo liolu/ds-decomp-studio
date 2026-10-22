@@ -795,10 +795,21 @@ def cmd_datacheck(a) -> None:
     source = Path(a.file).read_text(encoding="utf-8", errors="replace")
     prof = source.split("*/")[0][len(am.MARKER):].strip() if source.startswith(am.MARKER) else \
         f"{am.COMPILERS[0][0]} {am.COMPILERS[0][1]}".strip()
-    objbytes, msg, _obj, tmp = compile_one(source, prof)
-    tmp.cleanup()
+    objbytes, msg, obj, tmp = compile_one(source, prof)
     if objbytes is None:
+        tmp.cleanup()
         return out({"ok": False, "error": "does not compile", "errors": msg[-3000:]})
+    try:
+        r = datacheck(source, objbytes, prof)
+        import missdata  # every data object that differs goes to the miss database (replayed on all games)
+        missdata.record(source, obj, r["symbols"], prof, MODULE)
+    finally:
+        tmp.cleanup()
+    out(r)
+
+
+def datacheck(source: str, objbytes: bytes, prof: str) -> dict:
+    """What cmd_datacheck prints: every data object of the compiled file compared with the game."""
     d = objbytes
     secs = elf_sections(d)
     syms = elf_symbols(d, secs)
@@ -862,8 +873,8 @@ def cmd_datacheck(a) -> None:
                              "(the linker keeps the object's order: change the order of the definitions, or what "
                              "initializes them, until it follows the game)")
     all_ok &= not order
-    out({"ok": all_ok, "profile": prof, "symbols": report, "order": order,
-         "note": "pointers are compared by what they point at; data that is not in symbols.txt cannot be checked"})
+    return {"ok": all_ok, "profile": prof, "symbols": report, "order": order,
+            "note": "pointers are compared by what they point at; data that is not in symbols.txt cannot be checked"}
 
 
 # ---------------------------------------------------------------- shared header
