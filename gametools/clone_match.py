@@ -31,7 +31,8 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from project import ROOT  # noqa: E402  (the game: DSD_PROJECT or the current folder)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import project  # noqa: E402
 import donorlib  # noqa: E402

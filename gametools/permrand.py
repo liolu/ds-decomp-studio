@@ -2,7 +2,7 @@
 Random permutations of the local declaration lines (one declaration per line, no initializer; 'a, b;' lists are split
 first) of NAME, judged in parallel. Writes FILE.best.c when better than FILE.c. Use when permdecl.py (first 800 in
 lexicographic order only) is too narrow, i.e. 7+ locals. Run from the project dir."""
-import json, random, re, subprocess, sys
+import json, os, random, re, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
 a = sys.argv[1:]
 def opt(k, d):
@@ -10,7 +10,7 @@ def opt(k, d):
 n_try, jobs, sub = int(opt('--n', 300)), int(opt('-j', 6)), '--submit' in a
 name, f = a[0], a[1]
 def wb(*x):
-    r = subprocess.run(['python', 'tools/workbench.py', *x], capture_output=True, text=True)
+    r = subprocess.run(['python', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workbench.py'), *x], capture_output=True, text=True)
     try: return json.loads(r.stdout)
     except Exception: return {}
 prof = opt('--profile', None) or wb('info', name).get('profiles', ['2.0/sp1p5'])[0]

@@ -20,16 +20,16 @@ python studio/studio.py done <game> <block>                    # or `release` to
 `python studio/studio.py mcp-config` prints the command that gives an agent the studio's tools
 (`workers/mcp_server.py`): claim_block, get_function (asm, draft, Ghidra's reading, calls, look-alikes from all
 games), compile_and_diff, submit_match, commit_matches, read_data / check_data, edit_header, split_function. They
-all run the game's `tools/workbench.py`, which can also be used by hand:
+all run `studio/gametools/workbench.py` in the game's folder, which can also be used by hand (from `projets/<game>/`):
 
 ```shell
-python tools/workbench.py info <function>          # everything about one function (JSON)
-python tools/workbench.py judge <function> f.c     # compile + compare with the game's compilers
-python tools/workbench.py submit <function> f.c    # into src/auto, ROM rebuilt, kept only if byte-identical
-python tools/workbench.py commit [--push]          # one full verify for all submitted matches, then commit
-python tools/workbench.py data <symbol>            # decoded data + a C declaration; datacheck f.c compares it
-python tools/workbench.py header include/engine.h new.h   # shared header, kept only if the ROM still matches
-python tools/ghidra_draft.py --names a,b            # Ghidra drafts in build/ghidra/ (2nd reading after m2c)
+python ../../studio/gametools/workbench.py info <function>          # everything about one function (JSON)
+python ../../studio/gametools/workbench.py judge <function> f.c     # compile + compare with the game's compilers
+python ../../studio/gametools/workbench.py submit <function> f.c    # into src/auto, ROM rebuilt, kept only if byte-identical
+python ../../studio/gametools/workbench.py commit [--push]          # one full verify for all submitted matches, then commit
+python ../../studio/gametools/workbench.py data <symbol>            # decoded data + a C declaration; datacheck f.c compares it
+python ../../studio/gametools/workbench.py header include/engine.h new.h   # shared header, kept only if the ROM still matches
+python ../../studio/gametools/ghidra_draft.py --names a,b            # Ghidra drafts in build/ghidra/ (2nd reading after m2c)
 ```
 
 ## Rules
@@ -51,8 +51,10 @@ python tools/ghidra_draft.py --names a,b            # Ghidra drafts in build/ghi
 - `dsstudio/difficulty.py`: levels. `dsstudio/blocks.py`: blocks and claims. `dsstudio/jobs.py`: machine task queue.
 - `dsstudio/server.py` + `web/`: the web app. `workers/qwen_block.py`: local Qwen agents on blocks (Ollama, or an
   OpenAI-compatible server: `workers/llm_server.py` runs llama.cpp server on the GGUF file Ollama downloaded).
-- `gametools/`: the ONLY source of the matching tools copied into every game's `tools/` (`studio.py sync-tools`).
-  They read game-specific values from `tools/project.py`. Change tools here, never in a game's copy.
+- `gametools/`: the ONLY source of the matching tools. They run from here with cwd = the game (`project.py`
+  finds it: `DSD_PROJECT`, else the current folder). Only the build tools (`toolsync.BUILD_TOOLS`: configure,
+  ROM rebuild, `match.py`, `probe_compiler.py`) are copied into a game's `tools/` (`studio.py sync-tools`;
+  `--slim` removes a game's old copies of the others). Change tools here, never in a game's copy.
   `gametools/find_culprits.py` finds the files that break the ROM from one build (byte comparison).
   `gametools/clone_match.py` multiplies matches without AI: same code (or same code with other constants) as a
   matched function, in this game or another of our projects; `--list` writes build/clone/families.json, which

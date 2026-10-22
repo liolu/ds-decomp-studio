@@ -164,7 +164,7 @@ def t_commit_matches(a):
     log.parent.mkdir(parents=True, exist_ok=True)
     log.unlink(missing_ok=True)
     f = log.open("w", encoding="utf-8")
-    _COMMITS[g.id] = subprocess.Popen([str(gameenv.PYTHON), "tools/workbench.py", "commit"] +
+    _COMMITS[g.id] = subprocess.Popen([str(gameenv.PYTHON), str(config.game_tool(g.path, "workbench.py")), "commit"] +
                                       (["--push"] if a.get("push") else []), cwd=g.path, env=gameenv.env(), stdin=subprocess.DEVNULL,
                                       stdout=f, stderr=subprocess.STDOUT, text=True)
     return {"started": True, "note": "match.py verify runs on the whole game, then git commit: ask commit_status"}

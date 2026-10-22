@@ -30,11 +30,10 @@ def env() -> dict:
 
 
 def workbench(game_path: Path, *args: str, timeout: float = 3600) -> dict:
-    """Runs tools/workbench.py in a game and returns its JSON answer."""
+    """Runs workbench.py (the game's copy, else studio/gametools/) in a game and returns its JSON answer."""
     import json
-    if not (game_path / "tools" / "workbench.py").exists():
-        return {"error": "this game's tools are behind: run the job 'Mettre a jour les outils' (sync-tools)"}
-    r = subprocess.run([str(PYTHON), "tools/workbench.py", *args], cwd=game_path, env=env(), capture_output=True, stdin=subprocess.DEVNULL,
+    from . import config
+    r = subprocess.run([str(PYTHON), str(config.game_tool(game_path, "workbench.py")), *args], cwd=game_path, env=env(), capture_output=True, stdin=subprocess.DEVNULL,
                        text=True, encoding="utf-8", errors="replace", timeout=timeout)
     for line in reversed((r.stdout or "").strip().splitlines()):
         if line.startswith("{"):

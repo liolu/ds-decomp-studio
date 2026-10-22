@@ -2,12 +2,12 @@
 compiler version/service pack (default 2.0/sp1p5 and 1.2/sp2p3) and print the diff counts, best first.
 Many 'unsolvable' loops (`b cond` entry, mul/mla instead of strength reduction) are just files built with -O2 / -O1.
 Run from a project dir.  --submit submits the first exact match with its profile."""
-import sys, json, subprocess
+import json, os, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
 a = [x for x in sys.argv[1:] if not x.startswith('--')]; sub = '--submit' in sys.argv
 name, f = a[0], a[1]; vers = a[2:] or ['2.0/sp1p5', '1.2/sp2p3']
 def wb(*x):
-    r = subprocess.run(['python', 'tools/workbench.py', *x], capture_output=True, text=True)
+    r = subprocess.run(['python', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workbench.py'), *x], capture_output=True, text=True)
     try: return json.loads(r.stdout)
     except Exception: return {'status': 'error'}
 profs = [f'{v} -O{o},{t}' for v in vers for o in (0, 1, 2, 3, 4) for t in ('p', 's')]

@@ -35,10 +35,11 @@ import time
 from multiprocessing import Pool
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from project import ROOT  # noqa: E402  (the game: DSD_PROJECT or the current folder)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import project  # noqa: E402  (this game's version, ROM name, paths: tools/project.py)
-sys.path.insert(0, str(ROOT / "tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import probe_compiler as pc  # noqa: E402
 from pipeline_lock import journal_begin, journal_created, journal_end  # noqa: E402
 
@@ -52,6 +53,18 @@ MWCC_ROOT = Path(os.environ.get("MWCCARM", ROOT / "tools" / "mwccarm"))
 # Main compiler first, then the one used for some libraries (see docs/compiler.md)
 # (version, extra flags): profiles found in this game, most common first (see docs/compiler.md)
 COMPILERS = [("2.0/sp1p5", ""), ("1.2/sp2p3", ""), ("1.2/sp2p3", "-proc arm7tdmi")]
+# Other mwccarm builds to try, e.g. AUTO_EXTRA_PROFILES="1.2/sp3,1.2/sp4" (Heroes of Mana: 1.2/sp3 builds code that ends in
+# `pop {.., pc}` and keeps `sub sp` instead of the `push r3` pad, which 2.0 and 1.2/sp2p3 do not produce).
+EXTRA_PROFILES = [(v.strip(), "") for v in os.environ.get("AUTO_EXTRA_PROFILES", "").split(",") if v.strip()]
+COMPILERS += [c for c in EXTRA_PROFILES if c not in COMPILERS]
+# Multi search (--multi / AUTO_MULTI=1): every version also with these optimisation flags (they come after -O4,p and
+# override it); a match with one of them is recorded in compilers.txt like any other profile
+MULTI_FLAGS = ["-O4,s", "-O2", "-O3,p"]
+if "--multi" in sys.argv:
+    os.environ["AUTO_MULTI"] = "1"  # before anything reads it: cache version, time budget, worker processes
+MULTI = bool(os.environ.get("AUTO_MULTI"))
+if MULTI:
+    COMPILERS += [(v, fl) for v in dict.fromkeys(c[0] for c in list(COMPILERS)) for fl in MULTI_FLAGS if (v, fl) not in COMPILERS]
 MWCC = MWCC_ROOT / COMPILERS[0][0] / "mwccarm.exe"
 COMPILERS_TXT = project.COMPILERS_TXT
 MARKER = "/* compiler: "
@@ -59,7 +72,8 @@ MAIN_TEXT = project.MAIN_TEXT
 CONTEXT = ROOT / "build" / "auto" / "m2c_context.c"
 
 
-FUNCTION_BUDGET = 45  # seconds spent on one function over all compilers/variants
+GROUP = int(os.environ.get("AUTO_GROUP", 60))  # functions per grouped first compile (one mwccarm start-up for all)
+FUNCTION_BUDGET = int(os.environ.get("AUTO_BUDGET", 120 if os.environ.get("AUTO_MULTI") else 45))  # seconds spent on one function over all compilers/variants
 
 
 def run_limited(cmd, cwd=None, shell=False, timeout=15):
@@ -80,7 +94,7 @@ def run_limited(cmd, cwd=None, shell=False, timeout=15):
         return subprocess.CompletedProcess(cmd, 1, "", "timeout")
     return subprocess.CompletedProcess(cmd, p.returncode, out, err)
 
-AUTO_VERSION = hashlib.sha1(Path(__file__).read_bytes()).hexdigest()[:12]
+AUTO_VERSION = hashlib.sha1(Path(__file__).read_bytes() + (b"multi" if MULTI else b"")).hexdigest()[:12]
 CACHE = WORK / "cache.jsonl"
 _M2C = {}
 
@@ -141,7 +155,7 @@ def function_asm(name: str) -> str | None:
     global _ASM
     if _ASM is None:
         _ASM = "\n".join(f.read_text(encoding="utf-8") for f in ASM_DIR.glob("*.s"))
-    m = re.search(rf"^{re.escape(name)}: .*?^\s+arm_func_end {re.escape(name)}$", _ASM, re.S | re.M)
+    m = re.search(rf"^{re.escape(name)}: .*?^\s+(?:arm|thumb)_func_end {re.escape(name)}$", _ASM, re.S | re.M)
     return m.group(0) if m else None
 
 
@@ -149,7 +163,7 @@ def neighbours(names: set[str]) -> set[str]:
     """Functions calling or called by `names` (bl / b / blx to a symbol, from the disassembly)."""
     function_asm("")  # loads the disassembly
     out = set()
-    for m in re.finditer(r"^(\w+): ; 0x[0-9a-f]+\n(.*?)^\s+arm_func_end \1$", _ASM, re.S | re.M):
+    for m in re.finditer(r"^(\w+): ; 0x[0-9a-f]+\n(.*?)^\s+(?:arm|thumb)_func_end \1$", _ASM, re.S | re.M):
         callees = set(re.findall(r"^\s+(?:blx|bl|b)(?:eq|ne|cs|hs|cc|lo|mi|pl|vs|vc|hi|ls|ge|lt|gt|le)?\s+(\w+)\s*$",
                                  m.group(2), re.M))
         callees = {c for c in callees if not re.fullmatch(r"r\d+|lr|ip|sp|pc", c) and not c.startswith("_L")}
@@ -194,7 +208,7 @@ def fix_byte_offsets(source: str) -> str:
 
 
 # Instructions the compiler never generates: functions using them were written in assembly
-ASM_ONLY = re.compile(r"^\s+(swpb?|mrs|msr|mcr|mrc|ldc|stc|cdp)\b", re.M)
+ASM_ONLY = re.compile(r"^\s+(swpb?|mrs|msr|mcr|mrc|ldc|stc|cdp|svc|swi)\b", re.M)
 
 
 def asm_function(name: str, asm: str) -> str | None:
@@ -289,15 +303,14 @@ def profiles_for(name: str, size: int, addr: int) -> list[tuple[str, str]]:
         return COMPILERS
     style = code_style(addr, size)
     if style == "v20":
-        return [c for c in COMPILERS if c[0].startswith("2.")]
+        return [c for c in COMPILERS if c[0].startswith("2.") or c in EXTRA_PROFILES]
     if style == "v12":
-        return [c for c in COMPILERS if c[0].startswith("1.")]
+        return [c for c in COMPILERS if c[0].startswith("1.") and c not in EXTRA_PROFILES or c in EXTRA_PROFILES]
     return COMPILERS
 
 
 def try_function(f: tuple[str, int, int]) -> tuple[str, int, int, str, str]:
     """Tries every compiler; a match with a non-default compiler is tagged with a marker comment."""
-    _M2C.clear()
     first = None
     t0 = time.time()
     for version, extra in profiles_for(*f):
@@ -310,6 +323,95 @@ def try_function(f: tuple[str, int, int]) -> tuple[str, int, int, str, str]:
             return result
         first = first or result
     return first
+
+
+def compile_many(items: list[tuple[str, int, int, str]], mwcc: Path, extra: str = "") -> list[str]:
+    """`compile_and_compare` for sources of DIFFERENT functions, in as few compiler calls as possible (one start-up of
+    about a second for the whole list instead of one per source). items = (name, size, addr, source); returns the status
+    of each. Same rule as compile_batch: the compiler stops at the first file with an error, the rest goes in the next
+    call. A call that times out marks what is left as `compile` (the one-by-one pass tries it again)."""
+    if not items:
+        return []
+    with tempfile.TemporaryDirectory() as tmp:
+        work = Path(tmp)
+        (work / "objs").mkdir()
+        for i, it in enumerate(items):
+            (work / f"v{i}.c").write_text(it[3])
+        result = {}
+        pending = list(range(len(items)))
+        while pending:
+            files = " ".join(f"v{i}.c" for i in pending)
+            cmd = f'"{mwcc}" -O4,p {pc.BASE_FLAGS} {extra} -i "{ROOT / "include"}" -c {files} -o objs'
+            r = run_limited(cmd, cwd=work, shell=True, timeout=30 + len(pending))
+            if r.stderr == "timeout":
+                break
+            missing = []
+            for i in pending:
+                name, size, addr, _ = items[i]
+                obj = work / "objs" / f"v{i}.o"
+                if not obj.exists():
+                    missing.append(i)
+                    continue
+                cand = pc.compiled_function(obj, name)
+                if cand is None:
+                    result[i] = "compile"
+                    continue
+                bad, _ = pc.compare(pc.target_bytes(addr, size), cand)
+                result[i] = "match" if bad == 0 else ("near" if len(cand) == size else "size")
+            if not missing:
+                break
+            result[missing[0]] = "compile"
+            pending = missing[1:]
+        return [result.get(i, "compile") for i in range(len(items))]
+
+
+def grouped_first_pass(group: list[tuple[str, int, int]]) -> dict[str, tuple[str, int, int, str, str]]:
+    """First attempt of a whole group of functions: the plain m2c drafts (both modes) are compiled together, one
+    compiler call per profile. Only the matches are kept; every other function goes through `try_function` as before
+    (m2c output stays in the in-process cache), so the group pass can only save time, never change a result."""
+    drafts = {}  # name -> [source, ...]
+    with tempfile.TemporaryDirectory() as tmp:
+        for i, f in enumerate(group):
+            name = f[0]
+            asm = function_asm(name)
+            if asm is None or ASM_ONLY.search(asm):
+                continue
+            sf = Path(tmp) / f"f{i}.s"
+            sf.write_text(asm + "\n")
+            base = [sys.executable, str(M2C), "-t", "arm-mwcc-c", "--valid-syntax"]
+            attempts = [(base + ["--context", str(CONTEXT), str(sf)], header(name)), (base + [str(sf)], '#include "m2c.h"\n\n')]
+            if os.environ.get("AUTO_ORDER", "noctx_first") == "noctx_first":
+                attempts.reverse()
+            for cmd, head in attempts:
+                r = m2c_cached(name, cmd)
+                if r.returncode != 0 or "M2C_ERROR" in r.stdout:
+                    continue
+                drafts.setdefault(name, []).append(head + fix_byte_offsets(restore_leading_args(r.stdout, name)))
+    won = {}
+    by_profile = {}
+    for f in group:
+        if f[0] in drafts:
+            for prof in profiles_for(*f):
+                by_profile.setdefault(prof, []).append(f)
+    for prof in COMPILERS:
+        fs = [f for f in by_profile.get(prof, []) if f[0] not in won]
+        items = [(f[0], f[1], f[2], src) for f in fs for src in drafts[f[0]]]
+        if not items:
+            continue
+        version, extra = prof
+        for it, st in zip(items, compile_many(items, MWCC_ROOT / version / "mwccarm.exe", extra)):
+            if st == "match" and it[0] not in won:
+                src = it[3] if prof == COMPILERS[0] else f"{MARKER}{version} {extra} */\n" + it[3]
+                won[it[0]] = (it[0], it[1], it[2], "match", src)
+    return won
+
+
+def try_group(group: list[tuple[str, int, int]]) -> list[tuple[str, int, int, str, str]]:
+    """Grouped first pass (AUTO_NO_GROUP=1 turns it off), then the usual one-by-one search for the rest."""
+    won = {} if os.environ.get("AUTO_NO_GROUP") else grouped_first_pass(group)
+    out = [won[f[0]] if f[0] in won else try_function(f) for f in group]
+    _M2C.clear()
+    return out
 
 
 def try_function_with(f: tuple[str, int, int], mwcc: Path, extra: str = "") -> tuple[str, int, int, str, str]:
@@ -977,6 +1079,9 @@ def freeze(source: str, name: str, protos: dict[str, str]) -> str:
     return marker + '#include "m2c.h"\n#include "engine.h"\n\n' + decls + ("\n" if decls else "") + body
 
 
+PROFILE_REC = None  # set by workbench: name -> (start, end) of the -profile .data record
+
+
 def integrate(found: list[tuple[str, int, int, str]]) -> list[Path]:
     AUTO_SRC.mkdir(parents=True, exist_ok=True)
     created = []
@@ -986,7 +1091,11 @@ def integrate(found: list[tuple[str, int, int, str]]) -> list[Path]:
         path = AUTO_SRC / f"{name}.c"
         path.write_text(freeze(source, name, protos), encoding="utf-8", newline="\n")
         created.append(path)
-        entries.append(f"\nsrc/auto/{name}.c:\n    complete\n    .text       start:0x{addr:08x} end:0x{addr + size:08x}\n")
+        extra = ""
+        rec = PROFILE_REC(name) if PROFILE_REC else None  # -profile functions own a .data record (their name string)
+        if rec:
+            extra = "    .data       start:0x%08x end:0x%08x\n" % rec
+        entries.append(f"\nsrc/auto/{name}.c:\n    complete\n    .text       start:0x{addr:08x} end:0x{addr + size:08x}\n" + extra)
     with DELINKS.open("a", newline="\n") as f:
         f.writelines(entries)
     # Files matched with another compiler are recorded in compilers.txt (read by tools/configure.py)
@@ -1023,7 +1132,7 @@ def permute_near(near: list[tuple[str, int, int, str]], count: int, minutes: flo
         ranked = sorted(todo, key=lambda x: (state.get(x[0], {}).get("attempts", 0), diff_count(Path(tmp), *x), x[1]))
     for name, size, addr, source in ranked[:count]:
         src = WORK / "near" / f"{name}.c"
-        subprocess.run([sys.executable, str(ROOT / "tools" / "permute.py"), name, "--source", str(src),
+        subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "permute.py"), name, "--source", str(src),
                         "--minutes", str(minutes)], cwd=ROOT, capture_output=True, text=True)
         best = sorted((ROOT / "build" / "permuter" / name).glob("output-0-*"))
         print(f"  {name}: {'MATCH' if best else 'no match'}", flush=True)
@@ -1038,120 +1147,9 @@ def permute_near(near: list[tuple[str, int, int, str]], count: int, minutes: flo
     return won
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("-j", type=int, default=int(os.environ.get("AUTO_JOBS", os.cpu_count() or 4)))
-    ap.add_argument("--permute", type=int, default=0, metavar="N", help="Run the permuter on N near misses")
-    ap.add_argument("--minutes", type=float, default=5.0, help="Permuter time per function")
-    ap.add_argument("--dry-run", action="store_true", help="Only report, change nothing")
-    ap.add_argument("--cached-only", action="store_true",
-                    help="Do not try new functions: only integrate the matches already in the cache (resume)")
-    ap.add_argument("--names", help="Only these functions (comma separated), tried again even if cached")
-    ap.add_argument("--neighbours", help="Only the callers and callees of these functions, tried again even if cached")
-    args = ap.parse_args()
-
-    if not M2C.exists():
-        raise SystemExit(f"m2c not found at {M2C} (set M2C_PATH)")
-    # dsd does not delete old files and gap file names change when delinks.txt changes
-    shutil.rmtree(ASM_DIR, ignore_errors=True)
-    subprocess.run(["ninja", "dis"], cwd=ROOT, check=True, capture_output=True)
-    protos = ROOT / "include" / "m2c_protos.h"
-    old_protos = protos.read_bytes() if protos.exists() else None
-    journal_begin([protos])
-    subprocess.run([sys.executable, str(ROOT / "tools" / "gen_context.py")], cwd=ROOT, check=True)
-    if old_protos is not None and protos.read_bytes() != old_protos:
-        # Files already in src/ include this header: make sure the ROM still builds byte-identical before going on
-        # (a ninja build: seconds; the objects do not change unless the header does)
-        import find_culprits
-        out = find_culprits.build()
-        if not find_culprits.rom_ok(out):
-            print(out[-2000:])
-            protos.write_bytes(old_protos)
-            journal_end()
-            raise SystemExit("New m2c_protos.h breaks the build: restored the previous one, stopping. "
-                             "If the ROM already failed before, run tools/find_culprits.py.")
-    journal_end()
-
-    todo = candidates()
-    focus = None  # --names / --neighbours: a few functions, retried because the context changed
-    if args.names or args.neighbours:
-        focus = set(args.names.split(",")) if args.names else set()
-        if args.neighbours:
-            focus |= neighbours(set(args.neighbours.split(",")))
-        todo = [f for f in todo if f[0] in focus]
-    cached = load_cache()
-    keys = {f[0]: cache_key(f) for f in todo}
-    results = [cached[keys[f[0]]] for f in todo if keys[f[0]] in cached and (focus is None or cached[keys[f[0]]][3] == "match")]
-    pending = [f for f in todo if keys[f[0]] not in cached or (focus is not None and cached[keys[f[0]]][3] != "match")]
-    if args.cached_only:
-        # The asm text (part of the cache key) can change between dsd runs: in this mode take back the matches by
-        # name + size + address. Nothing is trusted blindly: verify and find_culprits check the result.
-        by_name = {}
-        for line in CACHE.read_text(encoding="utf-8", errors="replace").splitlines() if CACHE.exists() else []:
-            try:
-                r = tuple(json.loads(line)["r"])
-            except Exception:
-                continue
-            if r[3] == "match":
-                by_name[(r[0], r[1], r[2])] = r
-        have = {r[0] for r in results}
-        results += [by_name[f] for f in todo if f[0] not in have and f in by_name]
-        pending = []
-    print(f"Trying {len(pending)} functions ({len(results)} already in the cache)...", flush=True)
-    WORK.mkdir(parents=True, exist_ok=True)
-    with Pool(args.j) as pool, CACHE.open("a", encoding="utf-8") as cache_out:
-        for i, r in enumerate(pool.imap_unordered(try_function, pending, chunksize=4)):
-            results.append(r)
-            cache_out.write(json.dumps({"k": keys[r[0]], "v": AUTO_VERSION, "r": list(r)}) + chr(10))
-            cache_out.flush()
-            if i % 100 == 99:
-                print(f"[{i + 1}/{len(pending)}] evaluated", flush=True)
-
-    stats = {}
-    for r in results:
-        stats[r[3]] = stats.get(r[3], 0) + 1
-    print("Results: " + ", ".join(f"{k} {v}" for k, v in sorted(stats.items())))
-
-    found = [(n, s, a, src) for n, s, a, st, src in results if st == "match"]
-    # Matches that broke the ROM once linked (find_culprits): known bad, not integrated again
-    bad = set((WORK / "culprits.txt").read_text(encoding="utf-8").split()) if (WORK / "culprits.txt").exists() else set()
-    if bad & {f[0] for f in found}:
-        print(f"Skipping {len(bad & {f[0] for f in found})} match(es) known to break the ROM (build/auto/culprits.txt)")
-        found = [f for f in found if f[0] not in bad]
-    near = [(n, s, a, src) for n, s, a, st, src in results if st == "near"]
-    WORK.mkdir(parents=True, exist_ok=True)
-    if focus is not None and not args.cached_only:
-        # Partial pass: update the near misses and the status of these functions only
-        (WORK / "near").mkdir(exist_ok=True)
-        for n, s, a, st, src in results:
-            p = WORK / "near" / f"{n}.c"
-            if st == "near":
-                p.write_text(src, encoding="utf-8")
-            elif st == "match":
-                p.unlink(missing_ok=True)
-        try:
-            old = json.loads((WORK / "status.json").read_text())
-        except Exception:
-            old = []
-        mine = {r[0]: list(r[:4]) for r in results}
-        (WORK / "status.json").write_text(json.dumps([mine.pop(r[0], r) for r in old] + list(mine.values())))
-    elif not args.cached_only:  # a partial pass must not replace the full list of near misses (Qwen, permuter use it)
-        if (WORK / "near").exists():
-            shutil.rmtree(WORK / "near")
-        (WORK / "near").mkdir()
-        for n, s, a, src in near:
-            (WORK / "near" / f"{n}.c").write_text(src, encoding="utf-8")
-        (WORK / "status.json").write_text(json.dumps([r[:4] for r in results]))
-        print(f"{len(near)} near misses kept in {(WORK / 'near').relative_to(ROOT)}")
-
-    if args.permute and near:
-        print(f"Permuter on {min(args.permute, len(near))} near misses, {args.minutes} min each:")
-        found += permute_near(near, args.permute, args.minutes)
-
-    if args.dry_run or not found:
-        print("Nothing added." if not found else f"{len(found)} matches (dry run, nothing added).")
-        return
-
+def commit_found(found: list[tuple[str, int, int, str]]) -> int:
+    """Adds the matches to src/auto/, verifies the ROM (dropping the files that break it); on failure everything is
+    rolled back. Returns the number of functions added (0 = nothing kept)."""
     backup = DELINKS.read_bytes()
     compilers_backup = COMPILERS_TXT.read_bytes() if COMPILERS_TXT.exists() else b""
     # Killed before the end (job cancelled): the next run puts these files back and deletes the new sources
@@ -1162,7 +1160,11 @@ def main():
     subprocess.run([sys.executable, "tools/configure.py", project.VERSION], cwd=ROOT, check=True, capture_output=True)
     verify = subprocess.run([sys.executable, "tools/match.py", "verify"], cwd=ROOT, capture_output=True, text=True)
     for _ in range(8):
+        # Only this run's files: an older file failing is a baseline problem, and the rollback below would not
+        # bring it back
+        new = {c.relative_to(ROOT).as_posix() for c in created}
         bad = re.findall(r"FAIL: (src/auto/\S+?\.c) is marked complete", verify.stdout) if verify.returncode else []
+        bad = [b for b in bad if b in new]
         if not bad:
             break
         print(f"Dropping {len(bad)} file(s) that do not match once linked: " + ", ".join(bad[:5]))
@@ -1206,9 +1208,157 @@ def main():
             p.unlink()
         subprocess.run([sys.executable, "tools/configure.py", project.VERSION], cwd=ROOT, capture_output=True)
         journal_end()
-        sys.exit(1)
+        return 0
     journal_end()
     print(f"OK: {len(created)} new matching functions.")
+    return len(created)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("-j", type=int, default=int(os.environ.get("AUTO_JOBS", os.cpu_count() or 4)))
+    ap.add_argument("--permute", type=int, default=0, metavar="N", help="Run the permuter on N near misses")
+    ap.add_argument("--minutes", type=float, default=5.0, help="Permuter time per function")
+    ap.add_argument("--dry-run", action="store_true", help="Only report, change nothing")
+    ap.add_argument("--cached-only", action="store_true",
+                    help="Do not try new functions: only integrate the matches already in the cache (resume)")
+    ap.add_argument("--batch", type=int, default=int(os.environ.get("AUTO_BATCH", 0)), metavar="N",
+                    help="Try N functions at a time, adding + verifying the matches of each batch before the next (0 = one pass)")
+    ap.add_argument("--multi", action="store_true",
+                    help="Multi search: also try every compiler version with other optimisation flags (" + "/".join(MULTI_FLAGS) + ")")
+    ap.add_argument("--names", help="Only these functions (comma separated), tried again even if cached")
+    ap.add_argument("--neighbours", help="Only the callers and callees of these functions, tried again even if cached")
+    args = ap.parse_args()
+    if args.multi:
+        os.environ["AUTO_MULTI"] = "1"  # the worker processes read it when they import this module
+
+    if not M2C.exists():
+        raise SystemExit(f"m2c not found at {M2C} (set M2C_PATH)")
+    # dsd does not delete old files and gap file names change when delinks.txt changes
+    shutil.rmtree(ASM_DIR, ignore_errors=True)
+    subprocess.run(["ninja", "dis"], cwd=ROOT, check=True, capture_output=True)
+    protos = ROOT / "include" / "m2c_protos.h"
+    old_protos = protos.read_bytes() if protos.exists() else None
+    journal_begin([protos])
+    subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "gen_context.py")], cwd=ROOT, check=True)
+    if old_protos is not None and protos.read_bytes() != old_protos:
+        # Files already in src/ include this header: make sure the ROM still builds byte-identical before going on
+        # (a ninja build: seconds; the objects do not change unless the header does)
+        import find_culprits
+        out = find_culprits.build()
+        if not find_culprits.rom_ok(out):
+            print(out[-2000:])
+            protos.write_bytes(old_protos)
+            journal_end()
+            raise SystemExit("New m2c_protos.h breaks the build: restored the previous one, stopping. "
+                             "If the ROM already failed before, run tools/find_culprits.py.")
+    journal_end()
+
+    todo = candidates()
+    focus = None  # --names / --neighbours: a few functions, retried because the context changed
+    if args.names or args.neighbours:
+        focus = set(args.names.split(",")) if args.names else set()
+        if args.neighbours:
+            focus |= neighbours(set(args.neighbours.split(",")))
+        todo = [f for f in todo if f[0] in focus]
+    cached = load_cache()
+    keys = {f[0]: cache_key(f) for f in todo}
+    results = [cached[keys[f[0]]] for f in todo if keys[f[0]] in cached and (focus is None or cached[keys[f[0]]][3] == "match")]
+    pending = [f for f in todo if keys[f[0]] not in cached or (focus is not None and cached[keys[f[0]]][3] != "match")]
+    if args.cached_only:
+        # The asm text (part of the cache key) can change between dsd runs: in this mode take back the matches by
+        # name + size + address. Nothing is trusted blindly: verify and find_culprits check the result.
+        by_name = {}
+        for line in CACHE.read_text(encoding="utf-8", errors="replace").splitlines() if CACHE.exists() else []:
+            try:
+                r = tuple(json.loads(line)["r"])
+            except Exception:
+                continue
+            if r[3] == "match":
+                by_name[(r[0], r[1], r[2])] = r
+        have = {r[0] for r in results}
+        results += [by_name[f] for f in todo if f[0] not in have and f in by_name]
+        pending = []
+    print(f"Trying {len(pending)} functions ({len(results)} already in the cache)...", flush=True)
+    WORK.mkdir(parents=True, exist_ok=True)
+    # --batch N: N functions at a time; the matches of a batch are added and verified before the next one starts, so a
+    # long run keeps what it found and one bad batch only loses its own matches
+    size = args.batch if args.batch > 0 else max(1, len(pending))
+    handled = set()
+    batch_added = 0
+    done = 0
+    with Pool(args.j) as pool, CACHE.open("a", encoding="utf-8") as cache_out:
+        for start in range(0, len(pending), size):
+            chunk = pending[start:start + size]
+            chunk_results = []
+            gsize = max(8, min(GROUP, -(-len(chunk) // args.j)))
+            groups = [chunk[g:g + gsize] for g in range(0, len(chunk), gsize)]
+            for r in (x for grp in pool.imap_unordered(try_group, groups) for x in grp):
+                results.append(r)
+                chunk_results.append(r)
+                cache_out.write(json.dumps({"k": keys[r[0]], "v": AUTO_VERSION, "r": list(r)}) + chr(10))
+                cache_out.flush()
+                done += 1
+                if done % 100 == 99:
+                    print(f"[{done + 1}/{len(pending)}] evaluated", flush=True)
+            if args.batch > 0 and not args.dry_run:
+                bad_now = set((WORK / "culprits.txt").read_text(encoding="utf-8").split()) if (WORK / "culprits.txt").exists() else set()
+                won = [(n, s_, a_, src) for n, s_, a_, st, src in chunk_results if st == "match" and n not in bad_now]
+                if won:
+                    print(f"Batch {start // size + 1}/{-(-len(pending) // size)}: {len(won)} matches, integrating...", flush=True)
+                    batch_added += commit_found(won)
+                    handled |= {w[0] for w in won}
+
+    stats = {}
+    for r in results:
+        stats[r[3]] = stats.get(r[3], 0) + 1
+    print("Results: " + ", ".join(f"{k} {v}" for k, v in sorted(stats.items())))
+
+    found = [(n, s, a, src) for n, s, a, st, src in results if st == "match"]
+    # Matches that broke the ROM once linked (find_culprits): known bad, not integrated again
+    bad = set((WORK / "culprits.txt").read_text(encoding="utf-8").split()) if (WORK / "culprits.txt").exists() else set()
+    if bad & {f[0] for f in found}:
+        print(f"Skipping {len(bad & {f[0] for f in found})} match(es) known to break the ROM (build/auto/culprits.txt)")
+        found = [f for f in found if f[0] not in bad]
+    found = [f for f in found if f[0] not in handled]  # already integrated (or rolled back) batch by batch
+    near = [(n, s, a, src) for n, s, a, st, src in results if st == "near"]
+    WORK.mkdir(parents=True, exist_ok=True)
+    if focus is not None and not args.cached_only:
+        # Partial pass: update the near misses and the status of these functions only
+        (WORK / "near").mkdir(exist_ok=True)
+        for n, s, a, st, src in results:
+            p = WORK / "near" / f"{n}.c"
+            if st == "near":
+                p.write_text(src, encoding="utf-8")
+            elif st == "match":
+                p.unlink(missing_ok=True)
+        try:
+            old = json.loads((WORK / "status.json").read_text())
+        except Exception:
+            old = []
+        mine = {r[0]: list(r[:4]) for r in results}
+        (WORK / "status.json").write_text(json.dumps([mine.pop(r[0], r) for r in old] + list(mine.values())))
+    elif not args.cached_only:  # a partial pass must not replace the full list of near misses (Qwen, permuter use it)
+        if (WORK / "near").exists():
+            shutil.rmtree(WORK / "near")
+        (WORK / "near").mkdir()
+        for n, s, a, src in near:
+            (WORK / "near" / f"{n}.c").write_text(src, encoding="utf-8")
+        (WORK / "status.json").write_text(json.dumps([r[:4] for r in results]))
+        print(f"{len(near)} near misses kept in {(WORK / 'near').relative_to(ROOT)}")
+
+    if args.permute and near:
+        print(f"Permuter on {min(args.permute, len(near))} near misses, {args.minutes} min each:")
+        found += permute_near(near, args.permute, args.minutes)
+
+    if args.dry_run or not found:
+        if batch_added:
+            print(f"OK: {batch_added} new matching functions (batches).")
+        print("Nothing added." if not found else f"{len(found)} matches (dry run, nothing added).")
+        return
+
+    if commit_found(found) == 0 and found:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

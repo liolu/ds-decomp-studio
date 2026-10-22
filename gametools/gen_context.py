@@ -19,8 +19,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from project import ROOT  # noqa: E402  (the game: DSD_PROJECT or the current folder)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import infer_signatures  # noqa: E402
 PROTOS = ROOT / "include" / "m2c_protos.h"
 CONTEXT = ROOT / "build" / "auto" / "m2c_context.c"

@@ -1,8 +1,10 @@
 """One version of the matching tools for every game.
 
 The single source is `studio/gametools/`. The tools read everything game-specific (version, ROM name, main .text
-range) from the project through `tools/project.py`, so they are byte-identical in every game: syncing is a plain
-copy. Each game keeps a copy in its repo, so a clone of one game works on its own (and its CI sees the tools).
+range) from the project through `tools/project.py`, so they are byte-identical in every game. A game's repo only
+keeps the BUILD_TOOLS (configure, ROM rebuild, `match.py verify`/`progress`, `probe_compiler.py`), so a clone of one
+game builds and verifies on its own; every other tool (auto_match, clone_match, workbench...) runs from
+studio/gametools/ with cwd = the game (`config.game_tool`). `sync --slim` removes those old copies from a game.
 Per-game settings live in <project>/game.toml (read by the shared tools/configure.py). Update protocol: `studio.py sync-tools`
 copies the tools, then refreshes README progress + ByteMatch report of each published game (`--no-progress` to skip).
 """
@@ -14,10 +16,20 @@ from . import config, games, gitutil
 
 SOURCE = config.STUDIO / "gametools"
 PER_GAME: set[str] = set()  # nothing: per-game settings live in <project>/game.toml
+# what a game needs to build the ROM, verify it and publish its progress (configure.py imports or runs the rest)
+BUILD_TOOLS = {"configure.py", "project.py", "get_platform.py", "ninja_syntax.py", "reloc_fixes.py",
+               "download_tool.py", "m2ctx.py", "banner_fix.py", "rom_build.py", "sha1.py", "transform_dep.py",
+               "match.py", "pipeline_lock.py", "probe_compiler.py"}
 
 
 def tool_names() -> list[str]:
-    return sorted(p.name for p in SOURCE.glob("*.py") if p.name not in PER_GAME)
+    return sorted(p.name for p in SOURCE.glob("*.py") if p.name in BUILD_TOOLS and p.name not in PER_GAME)
+
+
+def studio_only(g) -> list[str]:
+    """Copies of studio-only tools still in the game's tools/ (they run from gametools/ now)."""
+    return sorted(p.name for p in (g.path / "tools").glob("*.py")
+                  if p.name not in BUILD_TOOLS and (SOURCE / p.name).exists())
 
 
 def adapted(g, name: str) -> str | None:
@@ -69,29 +81,42 @@ def template_version() -> str:
     return h.hexdigest()[:8]
 
 
-def sync(g, commit=True, push=True, log=print) -> dict:
-    """Copies gametools/ into the game. Replaced files are kept in build/tools_backup/<date>/."""
+def sync(g, commit=True, push=True, log=print, slim=False) -> dict:
+    """Copies the build tools of gametools/ into the game; slim=True also removes the game's copies of the studio-only
+    tools. Replaced or removed files are kept in build/tools_backup/<date>/."""
     changed = status(g)["behind"]
-    if changed:
+    retired = studio_only(g) if slim else []
+    if changed or retired:
         backup = g.path / "build" / "tools_backup" / time.strftime("%Y%m%d-%H%M%S")
         backup.mkdir(parents=True, exist_ok=True)
-        for name in changed:
+        for name in changed + retired:
             cur = g.path / "tools" / name
             if cur.exists():
                 shutil.copy2(cur, backup / name)
-            cur.write_bytes(_norm((SOURCE / name).read_bytes()))
-        log(f"{g.id}: {', '.join(changed)} mis a jour (anciens fichiers dans {backup.relative_to(g.path)})")
+            if name in retired:
+                cur.unlink()
+            else:
+                cur.write_bytes(_norm((SOURCE / name).read_bytes()))
+        if changed:
+            log(f"{g.id}: {', '.join(changed)} mis a jour (anciens fichiers dans {backup.relative_to(g.path)})")
+        if retired:
+            log(f"{g.id}: {len(retired)} outil(s) retire(s), ils tournent depuis studio/gametools/ "
+                f"(copies dans {backup.relative_to(g.path)})")
     # Commit every shared tool that differs from the last commit (also copies made earlier without a commit)
-    dirty = set(gitutil.git(g.path, "status", "--porcelain", "--", *[f"tools/{n}" for n in tool_names()])
+    names = tool_names() + retired
+    dirty = set(gitutil.git(g.path, "status", "--porcelain", "--", *[f"tools/{n}" for n in names])
                 .stdout.replace("\\", "/").split())
-    changed = [n for n in tool_names() if f"tools/{n}" in dirty]
+    changed = [n for n in names if f"tools/{n}" in dirty]
     if not changed:
         return {"ok": True, "changed": []}
     if commit:
         paths = [f"tools/{n}" for n in changed]
-        gitutil.git(g.path, "add", "--", *paths)
+        gitutil.git(g.path, "add", "-A", "--", *paths)
+        what = f"sync {', '.join(n for n in changed if n not in retired)}" if set(changed) - set(retired) else ""
+        if retired:
+            what = (what + "; " if what else "") + f"remove {len(retired)} tools that now run from studio/gametools"
         r = gitutil.git(g.path, "commit", "-q", "-m",
-                        f"tools: sync {', '.join(changed)} from ds-decomp-studio/gametools ({template_version()})",
+                        f"tools: {what} (ds-decomp-studio/gametools {template_version()})",
                         "--", *paths)
         if r.returncode:
             return {"error": r.stderr.strip()[-300:], "changed": changed}

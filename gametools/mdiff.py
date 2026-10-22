@@ -7,7 +7,7 @@ a = [x for x in sys.argv[1:]]
 name, f = a[0], a[1]
 prof = a[2] if len(a) > 2 and not a[2].startswith('--') else '2.0/sp1p5'
 env = dict(os.environ, WB_FULL='1')
-r = subprocess.run(['python', 'tools/workbench.py', 'judge', name, f, '--profile', prof], capture_output=True, text=True, env=env)
+r = subprocess.run(['python', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workbench.py'), 'judge', name, f, '--profile', prof], capture_output=True, text=True, env=env)
 d = json.loads(r.stdout)
 if not d.get('full'):
     print(d.get('status'), (d.get('errors') or '')[:800]); sys.exit()

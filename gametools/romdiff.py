@@ -11,7 +11,8 @@ import struct
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from project import ROOT  # noqa: E402  (the game: DSD_PROJECT or the current folder)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 HEADER_FIELDS = [  # (offset, size, name)

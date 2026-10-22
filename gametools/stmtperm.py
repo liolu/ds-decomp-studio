@@ -7,13 +7,13 @@ prof = a[a.index('--profile') + 1] if '--profile' in a else None
 j = int(a[a.index('-j') + 1]) if '-j' in a else 6
 lines = open(f).read().split('\n')
 idx = [i for i, l in enumerate(lines) if l.rstrip().endswith('/*P*/')]
-if not prof: prof = json.loads(subprocess.run(['python', 'tools/workbench.py', 'info', name], capture_output=True, text=True).stdout)['profiles'][0]
+if not prof: prof = json.loads(subprocess.run(['python', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workbench.py'), 'info', name], capture_output=True, text=True).stdout)['profiles'][0]
 tmp = tempfile.mkdtemp()
 def run(perm):
     L = list(lines)
     for k, i in enumerate(idx): L[i] = lines[idx[perm[k]]]
     p = os.path.join(tmp, 'p%s.c' % ''.join(map(str, perm))); open(p, 'w').write('\n'.join(L))
-    r = subprocess.run(['python', 'tools/workbench.py', 'judge', name, p, '--profile', prof], capture_output=True, text=True)
+    r = subprocess.run(['python', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workbench.py'), 'judge', name, p, '--profile', prof], capture_output=True, text=True)
     try: d = json.loads(r.stdout)
     except Exception: return (9999, perm, p)
     return ((0 if d.get('match') else d.get('diffs', 9999) if d.get('status') != 'compile' else 9999), perm, p)

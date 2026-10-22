@@ -20,6 +20,16 @@ ENV_SH = ROOT / "env.sh"
 DATA = STUDIO / "data"  # local state, never committed
 WEB = STUDIO / "web"
 WORKERS = STUDIO / "workers"
+# The matching tools: only the build tools are copied into a game's tools/ (toolsync.BUILD_TOOLS), the others run
+# from here with cwd = the game (gametools/project.py finds it)
+GAMETOOLS = STUDIO / "gametools"
+
+
+def game_tool(game_path: Path, name: str) -> Path:
+    """The studio's copy of a matching tool (also for games that still carry an old copy in tools/), else the game's
+    own tool (tools that exist only in that game)."""
+    shared = GAMETOOLS / name
+    return shared if shared.exists() else Path(game_path) / "tools" / name
 PORT = int(os.environ.get("DSSTUDIO_PORT", "8765"))
 
 DATA.mkdir(exist_ok=True)

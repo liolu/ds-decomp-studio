@@ -24,7 +24,9 @@ DEFS = {
     "verify": ("Verifier (VERIFY PASSED)", "game", 90, "ROM identique + fichiers complets a 100 %"),
     "dis": ("Desassembler", "game", 60, "regenere build/<ver>/asm"),
     "culprits": ("Trouver ce qui casse la ROM", "game", 900, "compare la ROM reconstruite octet par octet et retire les fichiers fautifs"),
-    "auto": ("Auto-match", "game", 900, "m2c + compile + compare sur toutes les fonctions"),
+    "auto": ("Auto-match", "game", 3000,
+             "1) clone les jumelles deja matchees (ici ou dans nos autres jeux, sans IA), 2) reprend les matchs des "
+             "autres decomps (NitroSDK, pret...), 3) m2c + compile + compare sur toutes les fonctions"),
     "permute": ("Auto-match + permuter", "game", 2400, "permuter sur les N near misses"),
     "moulinette": ("Moulinette complete", "game", 1800, "build, brouillons, auto-match, verify, commit (+push)"),
     "qwen": ("Qwen (agents)", "game", 3600, "agents IA locaux (Ollama) sur les fonctions d'un ou plusieurs blocs"),
@@ -83,6 +85,12 @@ def _q(s: str) -> str:
     return "'" + str(s).replace("'", "'\\''") + "'"
 
 
+def _t(game, name: str) -> str:
+    """A matching tool for a command run with cwd = the game: its tools/ copy, else gametools/ (quoted)."""
+    p = config.game_tool(game.path, name)
+    return f"tools/{name}" if p.parent != config.GAMETOOLS else _q(p.as_posix())
+
+
 def _block_functions(game, block_id: str) -> list[str]:
     from . import blocks as _blocks
     b = next((b for b in _blocks.load(game)["blocks"] if b["id"] == block_id), None)
@@ -100,20 +108,33 @@ def command(jid: str, game, p: dict) -> str:
     if jid == "verify":
         return "python tools/match.py verify"
     if jid == "culprits":
-        return "python tools/find_culprits.py" + (" --fix" if p.get("fix") else "") + (" --any" if p.get("any") else "")
+        return f"python {_t(game, 'find_culprits.py')}" + (" --fix" if p.get("fix") else "") + (" --any" if p.get("any") else "")
     if jid == "dis":
         return f"rm -rf build/{v}/asm; ninja dis"
     if jid in ("auto", "permute"):
         env = "AUTO_FRESH=1 " if p.get("fresh") else ""
-        cmd = f"{env}python tools/auto_match.py"
+        cmd = f"{env}python {_t(game, 'auto_match.py')}"
         if p.get("jobs"):
             cmd += f" -j {int(p['jobs'])}"
         if jid == "permute" or p.get("permute"):
             cmd += f" --permute {int(p.get('permute') or p.get('n') or 10)} --minutes {float(p.get('minutes') or 2)}"
+        if p.get("multi"):
+            cmd += " --multi"
+        if int(p.get("batch") or 0):
+            cmd += f" --batch {int(p['batch'])}"
         if p.get("dry_run"):
             cmd += " --dry-run"
         if p.get("cached_only"):
             cmd += " --cached-only"
+        if jid == "auto" and not p.get("cached_only") and not p.get("no_reuse"):
+            # reuse first (no compiler guessing): twins in our games, then external decomps; a failing step does not stop the next
+            pre = []
+            dry = " --dry-run" if p.get("dry_run") else ""
+            if config.game_tool(game.path, "clone_match.py").exists():
+                pre.append(f"python {_t(game, 'clone_match.py')} --other-games" + dry)
+            if config.game_tool(game.path, "donor_match.py").exists():
+                pre.append(f"python {_t(game, 'donor_match.py')}" + dry + (f" -j {int(p['jobs'])}" if p.get("jobs") else ""))
+            cmd = "; ".join(pre + [cmd])
         return cmd
     if jid == "moulinette":
         cmd = f"python {_q(MOULINETTE.as_posix())} --game {_q(game.id)}"
@@ -149,7 +170,7 @@ def command(jid: str, game, p: dict) -> str:
     if jid == "sync_all":
         return f"python {_q((config.STUDIO / 'studio.py').as_posix())} sync-tools"
     if jid == "clone":
-        cmd = "python tools/clone_match.py"
+        cmd = f"python {_t(game, 'clone_match.py')}"
         if p.get("list"):
             return cmd + " --list"
         if p.get("other_games", True):
@@ -163,20 +184,20 @@ def command(jid: str, game, p: dict) -> str:
         return cmd
     if jid == "clone_all":
         # one game after the other; a game busy with another pipeline is skipped (its lock), the others go on
-        dirs = " ".join(_q(f"projets/{g.id}") for g in games.all_games() if g.ready)
-        return (f"for d in {dirs}; do [ -f \"$d/tools/clone_match.py\" ] || continue; echo \"== $d\"; "
-                f"(cd \"$d\" && python tools/clone_match.py --other-games --commit --push); done")
+        return "; ".join(f"echo {_q('== projets/' + g.id)}; (cd {_q('projets/' + g.id)} && "
+                         f"python {_t(g, 'clone_match.py')} --other-games --commit --push)"
+                         for g in games.all_games() if g.ready and config.game_tool(g.path, "clone_match.py").exists())
     if jid == "donors":
         # by block (the functions of one block), by batch (--max N matches), or only the list of candidates
-        cmd = "python tools/donor_match.py"
+        cmd = f"python {_t(game, 'donor_match.py')}"
         if p.get("list"):
             return cmd + " --list"
         if p.get("block"):
             names = _q(",".join(_block_functions(game, p["block"])))
             cmd += " --names " + names
             # the block's twins already matched in our games (or clones here) come first: no compiler guessing
-            if (game.path / "tools" / "clone_match.py").exists():
-                cmd = f"python tools/clone_match.py --other-games --names {names}; " + cmd
+            if config.game_tool(game.path, "clone_match.py").exists():
+                cmd = f"python {_t(game, 'clone_match.py')} --other-games --names {names}; " + cmd
         if int(p.get("max") or 0):
             cmd += f" --max {int(p['max'])}"
         if int(p.get("jobs") or 0):
@@ -185,7 +206,7 @@ def command(jid: str, game, p: dict) -> str:
             cmd += f" --bisect {int(p['bisect'])}"
         if p.get("dry_run"):
             cmd += " --dry-run"
-        return cmd + " && python tools/donor_match.py --list"
+        return cmd + f" && python {_t(game, 'donor_match.py')} --list"
     if jid == "examples":
         return f"python {_q((config.WORKERS / 'examples.py').as_posix())} build"
     if jid == "dataset":
@@ -193,7 +214,7 @@ def command(jid: str, game, p: dict) -> str:
     if jid == "donors_index":
         return "python tools/donors.py index"
     if jid in ("names", "regroup", "cleanup"):
-        return f"python tools/{jid}.py" + (" --dry-run" if p.get("dry_run") else "")
+        return f"python {_t(game, jid + '.py')}" + (" --dry-run" if p.get("dry_run") else "")
     if jid == "progress":
         return (f"python {_q((config.STUDIO / 'studio.py').as_posix())} progress"
                 + (f" --game {_q(p['game'])}" if p.get("game") else "") + (" --no-push" if p.get("no_push") else ""))
@@ -202,13 +223,13 @@ def command(jid: str, game, p: dict) -> str:
     if jid == "new_project":
         return f"python tools/new_project.py {_q(p['slug'])} {_q(p['rom'])}"
     if jid == "wb_submit":
-        return f"python tools/workbench.py submit {_q(p['name'])} {_q(p['file'])} --who {_q(p.get('who') or 'editeur')}"
+        return f"python {_t(game, 'workbench.py')} submit {_q(p['name'])} {_q(p['file'])} --who {_q(p.get('who') or 'editeur')}"
     if jid == "wb_commit":
-        return "python tools/workbench.py commit" + (" --push" if p.get("push") else "")
+        return f"python {_t(game, 'workbench.py')} commit" + (" --push" if p.get("push") else "")
     if jid == "split":
-        return f"python tools/workbench.py split {_q(p['name'])} {_q(p['at'])}"
+        return f"python {_t(game, 'workbench.py')} split {_q(p['name'])} {_q(p['at'])}"
     if jid == "ghidra":
-        cmd = "python tools/ghidra_draft.py"
+        cmd = f"python {_t(game, 'ghidra_draft.py')}"
         if p.get("block"):
             cmd += " --names " + _q(",".join(_block_functions(game, p["block"])))
         elif p.get("names"):
@@ -389,3 +410,35 @@ def view(limit=40) -> list[dict]:
 def full_log(n: int) -> str:
     p = LOGS / f"{int(n)}.log"
     return p.read_text(encoding="utf-8", errors="replace")[-200000:] if p.exists() else ""
+
+
+def _whole_chars(b: bytes) -> bytes:
+    """b without a UTF-8 character cut in the middle at its end (the job is still writing it)."""
+    for i in range(1, min(4, len(b)) + 1):
+        c = b[-i]
+        if c & 0xC0 == 0x80:
+            continue
+        if c >= 0xC0:
+            need = 2 if c < 0xE0 else 3 if c < 0xF0 else 4
+            return b if i >= need else b[:-i]
+        return b
+    return b
+
+
+def log_since(n: int, start: int = -1) -> dict:
+    """{"log", "size", "append"}: the bytes after `start` when the page already has the beginning (append=True),
+    else the last 200 KB. The page asks every few seconds: a long log is not sent again in full each time."""
+    p = LOGS / f"{int(n)}.log"
+    if not p.exists():
+        return {"log": "", "size": 0, "append": False}
+    size = p.stat().st_size
+    if 0 <= start <= size and size - start <= 200000:
+        with p.open("rb") as f:
+            f.seek(start)
+            data = _whole_chars(f.read(size - start))
+        return {"log": data.decode("utf-8", errors="replace"), "size": start + len(data), "append": True}
+    start = max(0, size - 200000)
+    with p.open("rb") as f:
+        f.seek(start)
+        data = _whole_chars(f.read(size - start))
+    return {"log": data.decode("utf-8", errors="replace"), "size": start + len(data), "append": False}

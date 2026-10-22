@@ -14,7 +14,8 @@
     python studio.py readme                  table of every game (progress, ROM, repo) in README.md
     python studio.py bytematch <game> [--token bm_...]   ByteMatch: save the upload token / upload the report
     python studio.py progress [--game G] [--no-push]   progress in the README of every published game + Studio, pushed
-    python studio.py sync-tools [<game>] [--no-push]  latest tools of rayman-rr (auto_match...) into one or every game
+    python studio.py sync-tools [<game>] [--no-push] [--slim]  build tools of gametools/ into one or every game
+                                                      (--slim: also remove the tools that run from gametools/)
     python studio.py publish <game> [--private] [--yes]
 """
 import argparse
@@ -50,6 +51,7 @@ def main():
     s = sub.add_parser("rebuild"); s.add_argument("game")
     s = sub.add_parser("sync-tools"); s.add_argument("game", nargs="?"); s.add_argument("--no-progress", action="store_true", help="do not update README/ByteMatch afterwards")
     s.add_argument("--no-push", action="store_true", help="commit in each game but do not push")
+    s.add_argument("--slim", action="store_true", help="also remove the game's copies of the tools that run from gametools/")
     sub.add_parser("readme", help="update the table of every game in README.md")
     s = sub.add_parser("progress", help="progress of every published game in its README, then the Studio's table, pushed")
     s.add_argument("--game", default="")
@@ -95,7 +97,7 @@ def main():
         from dsstudio import toolsync
         targets = [games.get(a.game)] if a.game else [g for g in games.all_games() if g.ready]
         for g in targets:
-            r = toolsync.sync(g, push=not a.no_push)
+            r = toolsync.sync(g, push=not a.no_push, slim=a.slim)
             print(f"{g.id}: " + (r.get("error") or (", ".join(r["changed"]) + " mis a jour" if r["changed"] else "a jour"))
                   + (f" ({r['warning']})" if r.get("warning") else ""))
         if not a.no_progress:  # update protocol: README progress + ByteMatch report follow every tool update

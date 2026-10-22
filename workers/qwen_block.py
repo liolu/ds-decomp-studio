@@ -89,7 +89,9 @@ for _stream in (sys.stdout, sys.stderr):  # Windows consoles (cp932...) cannot p
 _log_lock = threading.Lock()
 
 ROOT = args.project.resolve()
-sys.path.insert(0, str(ROOT / "tools"))
+os.environ["DSD_PROJECT"] = str(ROOT)  # gametools/project.py: this game, whatever the cwd
+TOOLS = Path(__file__).resolve().parent.parent / "gametools"  # the matching tools (only build tools are in the game)
+sys.path.insert(0, str(TOOLS))
 VERSION = next(p.name for p in sorted((ROOT / "config").iterdir()) if (p / "arm9" / "symbols.txt").exists())
 WORK = ROOT / "build" / "qwen_auto"
 WORK.mkdir(parents=True, exist_ok=True)
@@ -682,7 +684,7 @@ def permute(fn: Fn, on_match) -> None:
     Runs on the CPU in the background while the model works on other functions. Only for the default compiler
     (tools/permute.py builds with it)."""
     if fn.permuting or args.permute_minutes <= 0 or fn.profile.split(" ")[0] != "2.0/sp1p5" or \
-            not (ROOT / "tools" / "permute.py").exists():
+            not (TOOLS / "permute.py").exists():
         return
     fn.permuting = True
     src = WORK / "permute" / f"{fn.name}.c"
@@ -694,7 +696,7 @@ def permute(fn: Fn, on_match) -> None:
         out_dir = ROOT / "build" / "permuter" / fn.name
         shutil.rmtree(out_dir, ignore_errors=True)
         log(f"{fn.name}: permuter {args.permute_minutes:g} min sur le meilleur fichier ({best_score} diffs)")
-        run([sys.executable, "tools/permute.py", fn.name, "--source", str(src), "--minutes", str(args.permute_minutes),
+        run([sys.executable, str(TOOLS / "permute.py"), fn.name, "--source", str(src), "--minutes", str(args.permute_minutes),
              "-j", str(max(1, (os.cpu_count() or 4) // 2))])
         found = sorted(out_dir.glob("output-0-*"))
         if found:
@@ -708,10 +710,10 @@ def permute(fn: Fn, on_match) -> None:
 def make_drafts(names: list[str]) -> None:
     """Functions without a starting point get an m2c draft (tools/draft.py -> build/drafts/), instead of being
     skipped."""
-    if not names or not (ROOT / "tools" / "draft.py").exists():
+    if not names or not (TOOLS / "draft.py").exists():
         return
     for k in range(0, len(names), 40):
-        run([sys.executable, "tools/draft.py", *names[k:k + 40]])
+        run([sys.executable, str(TOOLS / "draft.py"), *names[k:k + 40]])
 
 
 def rank(fn: Fn, out: str, lines: list[str]) -> tuple[int, int]:
@@ -1030,10 +1032,10 @@ def multiply(names: list[str]) -> list[str]:
     auto_match with the real signatures they now have (tools/auto_match.py --neighbours). Each tool verifies the ROM
     itself. Returns the names they added (committed by the caller)."""
     added = []
-    if (ROOT / "tools" / "clone_match.py").exists():
+    if (TOOLS / "clone_match.py").exists():
         emit = WORK / "clones.json"
         emit.unlink(missing_ok=True)
-        r = run([sys.executable, "tools/clone_match.py", "--sources", ",".join(names), "--emit", str(emit)])
+        r = run([sys.executable, str(TOOLS / "clone_match.py"), "--sources", ",".join(names), "--emit", str(emit)])
         clones = [tuple(c) for c in json.loads(emit.read_text(encoding="utf-8"))] if emit.exists() else []
         if clones and integrate_and_verify(clones):  # one verify for all the clones of the batch
             added += [c[0] for c in clones]
@@ -1044,7 +1046,7 @@ def multiply(names: list[str]) -> list[str]:
             log(f"clone_match a echoue : {(r.stdout + r.stderr).strip().splitlines()[-1:]}")
     if not args.no_neighbours:
         before = set(p.stem for p in (ROOT / "src" / "auto").glob("*.c"))
-        r = run([sys.executable, "tools/auto_match.py", "--neighbours", ",".join(names + added)])
+        r = run([sys.executable, str(TOOLS / "auto_match.py"), "--neighbours", ",".join(names + added)])
         new = sorted(set(p.stem for p in (ROOT / "src" / "auto").glob("*.c")) - before)
         if new:
             log(f"VOISINS rematches par auto_match ({len(new)}) : {', '.join(new)}")
@@ -1056,11 +1058,11 @@ def preclone(names: list[str]) -> None:
     """Before any AI: the block's functions whose code is already matched elsewhere (in this game, or in another of
     our projects) are copied by tools/clone_match.py, in seconds. A model can spend an hour on a function that is
     an exact twin of one matched in another game (e.g. scalbn, MIi_CpuCopy16)."""
-    if not names or not (ROOT / "tools" / "clone_match.py").exists():
+    if not names or not (TOOLS / "clone_match.py").exists():
         return
     emit = WORK / "preclone.json"
     emit.unlink(missing_ok=True)
-    run([sys.executable, "tools/clone_match.py", "--other-games", "--names", ",".join(names), "--emit", str(emit)])
+    run([sys.executable, str(TOOLS / "clone_match.py"), "--other-games", "--names", ",".join(names), "--emit", str(emit)])
     clones = [tuple(c) for c in json.loads(emit.read_text(encoding="utf-8"))] if emit.exists() else []
     if not clones:
         return
