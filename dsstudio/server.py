@@ -3,6 +3,7 @@ import json
 import mimetypes
 import re
 import threading
+import time
 import traceback
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -11,8 +12,40 @@ from urllib.parse import parse_qs, urlparse
 from . import blocks, brief, config, difficulty, engine, gameenv, games, jobs, projects, toolsync, xp
 
 
-def overview():
+_games_cache = {"t": 0.0, "games": None, "busy": False}
+_games_lock = threading.Lock()
+GAMES_TTL = 5  # seconds: an older list is still answered at once, and recomputed in the background
+
+
+def _compute_games():
     gl = [{**g.info(), "tools_behind": toolsync.status(g)["behind"]} for g in games.all_games()]
+    _games_cache.update(t=time.time(), games=gl)
+    return gl
+
+
+def _refresh_games():
+    try:
+        _compute_games()
+    except Exception:
+        traceback.print_exc()
+    finally:
+        _games_cache["busy"] = False
+
+
+def games_list(fresh=False):
+    """Info of every game (~60: a few hundred ms of file dates). Served from memory; recomputed in the background
+    when older than GAMES_TTL, right away after an action that adds or removes a game (fresh=True)."""
+    if fresh or _games_cache["games"] is None:
+        with _games_lock:
+            return _compute_games()
+    if time.time() - _games_cache["t"] > GAMES_TTL and not _games_cache["busy"]:
+        _games_cache["busy"] = True
+        threading.Thread(target=_refresh_games, daemon=True).start()
+    return _games_cache["games"]
+
+
+def overview(fresh=False):
+    gl = games_list(fresh)
     return {"games": gl, "settings": config.settings(), "levels": difficulty.LEVELS, "kinds": blocks.KINDS,
             "queue": blocks.queue_overview(), "archived": projects.archived(),
             "jobdefs": {k: {"label": v[0], "scope": v[1], "desc": v[3]} for k, v in jobs.DEFS.items()}}
@@ -84,6 +117,10 @@ def warm_up():
                 toolsync.status(g)
         except Exception:
             traceback.print_exc()
+    try:
+        _compute_games()
+    except Exception:
+        traceback.print_exc()
 
 
 class H(BaseHTTPRequestHandler):
@@ -111,7 +148,7 @@ class H(BaseHTTPRequestHandler):
                 return self.send({"error": "not found"}, 404)
             p = u.path[5:]
             if p == "overview":
-                return self.send(overview())
+                return self.send(overview(q.get("fresh") == "1"))
             if p == "game":
                 return self.send(game_view(q["id"]))
             if p == "functions":
@@ -128,8 +165,8 @@ class H(BaseHTTPRequestHandler):
                 return self.send({**engine.cross_games(), "studios": engine.studios()})
             if p == "jobs":
                 return self.send({"jobs": jobs.view()})
-            if p == "log":
-                return self.send({"log": jobs.full_log(int(q["n"]))})
+            if p == "log":  # from=<size the page already has>: only the new end of the log
+                return self.send(jobs.log_since(int(q["n"]), int(q.get("from", -1))))
             if p == "xp":
                 done = sum(len(blocks.finished(g)) for g in games.all_games() if g.ready)
                 return self.send(xp.update(done))

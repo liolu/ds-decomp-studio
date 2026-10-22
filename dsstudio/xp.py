@@ -25,6 +25,7 @@ ACHIEVEMENTS = [
     ("multi", "Multi-jeux : 10 projets", lambda s: s["projects"] >= 10),
 ]
 _lock = threading.RLock()
+_last: dict = {}  # stamp of the previous update -> its result: nothing changed = no work, no 700 KB save.json write
 
 
 def rarity(size):
@@ -57,13 +58,14 @@ def _load():
 def update(blocks_done=0) -> dict:
     """Rewards the functions matched since the last call (whoever matched them)."""
     with _lock:
+        tables = [(g, *g._functions_and_summary()) for g in games.all_games() if g.ready]
+        stamp = (blocks_done,) + tuple((g.id, games._cache[("fns", g.id)][0]) for g, _r, _s in tables)
+        if _last.get("stamp") == stamp:
+            return _last["result"]
         save = _load()
         stats = {"matched": 0, "best_pct": 0.0, "legendary": 0, "projects": 0, "blocks_done": blocks_done}
         events, gain = [], 0
-        for g in games.all_games():
-            if not g.ready:
-                continue
-            rows = g.functions()
+        for g, rows, s in tables:
             now = {r["uid"] for r in rows if r["done"]}
             gs = save["games"].setdefault(g.id, {"known": None})
             if gs["known"] is None:
@@ -80,7 +82,6 @@ def update(blocks_done=0) -> dict:
                         events.append({"t": time.time(), "kind": "loot", "game": g.id, "name": r["name"],
                                        "size": r["size"], "rarity": rarity(r["size"]), "xp": x})
             gs["known"] = sorted(now, key=str)
-            s = g.summary()
             stats["matched"] += s["matched"]
             stats["best_pct"] = max(stats["best_pct"], s["pct_code"])
             stats["projects"] += 1
@@ -93,6 +94,8 @@ def update(blocks_done=0) -> dict:
                 save["events"].insert(0, {"t": time.time(), "kind": "achievement", "text": label})
         SAVE.write_text(json.dumps(save, ensure_ascii=False), encoding="utf-8")
         lvl, cur, need = level_of(save["xp"])
-        return {"level": lvl, "xp": save["xp"], "xp_in_level": cur, "xp_needed": need,
+        _last["stamp"] = stamp
+        _last["result"] = {"level": lvl, "xp": save["xp"], "xp_in_level": cur, "xp_needed": need,
                 "rank": RANKS[min(lvl // 5, len(RANKS) - 1)], "stats": stats, "events": save["events"][:50],
                 "achievements": [{"id": a, "label": l, "unlocked": a in save["achievements"]} for a, l, _ in ACHIEVEMENTS]}
+        return _last["result"]

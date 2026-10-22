@@ -47,7 +47,8 @@ function tabs() {
 }
 function go(t) { tab = t; location.hash = t; tabs(); render(); }
 
-async function loadOverview() { O = await api("overview"); }
+// fresh: after an action that adds or removes a game (else the server answers from its background-refreshed list)
+async function loadOverview(fresh) { const o = await api("overview" + (fresh ? "?fresh=1" : "")); if (o && !o.error) O = o; }
 async function loadXP() {
   const x = await api("xp"); if (!x || x.error) return;
   $("#lvl").textContent = x.level; $("#rank").textContent = x.rank;
@@ -113,9 +114,9 @@ function viewGames() {
 }
 async function archiveGame(id) {
   if (!confirm(`Retirer ${id} du studio ? Le dossier est deplace dans projets/_archive (recuperable).`)) return;
-  const r = await api("archive", {game: id}); if (r.ok) { toast("Jeu archive"); await loadOverview(); render(); }
+  const r = await api("archive", {game: id}); if (r.ok) { toast("Jeu archive"); await loadOverview(true); render(); }
 }
-async function restoreGame(n) { const r = await api("restore", {name: n}); if (r.ok) { toast("Jeu remis"); await loadOverview(); render(); } }
+async function restoreGame(n) { const r = await api("restore", {name: n}); if (r.ok) { toast("Jeu remis"); await loadOverview(true); render(); } }
 async function loadRoms() {
   $("#roms").innerHTML = '<p class="hint">Lecture des ROMs...</p>';
   const r = await api("roms");
@@ -130,7 +131,7 @@ async function addGame(code, rom) {
 }
 async function cloneGame() {
   const r = await api("clone", {url: $("#cloneurl").value});
-  if (r.ok) { toast(`${r.game} clone. ${r.next}`); await loadOverview(); render(); }
+  if (r.ok) { toast(`${r.game} clone. ${r.next}`); await loadOverview(true); render(); }
 }
 async function loadGithub() {
   $("#ghlist").innerHTML = '<p class="hint">Recherche...</p>';
@@ -155,7 +156,7 @@ async function viewGame() {
     <div style="min-width:260px">${pctBar(g.pct_code)}<div class="hint" style="text-align:right">${fmt(g.matched)} / ${fmt(g.functions)} fonctions${g.modules > 1 ? ` (${g.modules} modules, principal ${g.pct_main.toFixed(2)} %)` : ""}</div>
     ${g.left_manual ? `<div class="hint" style="text-align:right"><a href="#game" onclick="sub='functions';fnKind='manual';render();return false">${fmt(g.left_manual)} a faire a la main</a> (Thumb, overlays, ITCM : pas d'outil auto)</div>` : ""}</div></div>
     <h3 style="margin-top:12px">Taches machine sur ce jeu</h3><div class="btns">
-    ${["moulinette", "auto", "clone", "donors", "ghidra", "wb_commit", "names", "regroup", "cleanup", "progress", "verify", "culprits", "build", "dis", "status", "permute"].map(k => `<button class="btn small ${k === "moulinette" ? "" : "sec"}" title="${esc(JD(k).desc)}" onclick="runJob('${k}')">${esc(JD(k).label)}</button>`).join("")}
+    ${["moulinette", "auto", "ghidra", "wb_commit", "names", "regroup", "cleanup", "progress", "verify", "culprits", "build", "dis", "status", "permute"].map(k => `<button class="btn small ${k === "moulinette" ? "" : "sec"}" title="${esc(JD(k).desc)}" onclick="runJob('${k}')">${esc(JD(k).label)}</button>`).join("")}
     ${g.tools_behind && g.tools_behind.length ? `<button class="btn small" style="background:#b45309" title="${esc(g.tools_behind.join(", "))}" onclick="runJob('sync_tools',{})">Mettre a jour les outils (${g.tools_behind.length} en retard)</button>` : '<span class="tag ok">outils a jour</span>'}
     ${g.remote ? "" : `<button class="btn small green" onclick="publishGame()">Publier sur GitHub</button>`}
     </div></div>`;
@@ -372,7 +373,9 @@ const JOB_OPTS = {
     ["bisect", "Builds ninja max pour isoler les fichiers qui cassent la ROM (0 = tout annuler)", "number", 40],
     ["list", "Seulement lister les candidates (rapide, remplit le niveau Portable)", "check", false],
     ["dry_run", "Essai a blanc (ne change rien)", "check", false]],
-  auto: [["jobs", "Coeurs utilises (-j)", "number", 16], ["permute", "Permuter sur N near misses (0 = non)", "number", 0],
+  auto: [["jobs", "Coeurs utilises (-j)", "number", 16],
+    ["multi", "Multi recherche mwcc (chaque version aussi avec -O4,s / -O2 / -O3,p : plus lent)", "check", false],
+    ["batch", "Match par lot : N fonctions a la fois, integrees + verifiees a chaque lot (0 = un seul passage)", "number", 0], ["permute", "Permuter sur N near misses (0 = non)", "number", 0],
     ["minutes", "Minutes de permuter par fonction", "number", 2], ["fresh", "Tout refaire (ignorer le cache des echecs)", "check", false],
     ["dry_run", "Essai a blanc (ne change rien)", "check", false],
     ["cached_only", "Seulement integrer les matches deja trouves (reprise rapide)", "check", false], ["force", "Relancer meme si l'auto-match est marque termine", "check", false]],
@@ -478,19 +481,25 @@ async function refreshQueue() {
 async function cancelJob(n) { await api("cancel", {n}); toast("Tache arretee"); refreshQueue(); }
 async function showLog(n, refresh) {
   if (!refresh) { openLog = n; setHtml("jobsbox", jobsHtml()); }
-  const d = await api("log?n=" + n);
-  const box = $("#logbox"); if (!box) return;
   let pre = $("#logpre");
+  const have = refresh && pre && $("#logbox").dataset.n === String(n) ? +(pre.dataset.size || -1) : -1;
+  const d = await api(`log?n=${n}&from=${have}`);  // a refresh only gets the new end of the log
+  const box = $("#logbox"); if (!box || d.error) return;
+  pre = $("#logpre");
   if (!pre || box.dataset.n !== String(n)) {
     box.dataset.n = n;
     box.innerHTML = `<div class="btns" style="justify-content:space-between;margin-top:12px"><h3 style="margin:0">Log de la tache #${n}</h3>
       <button class="btn small sec" onclick="openLog=null;$('#logbox').innerHTML='';$('#logbox').dataset.n='';setHtml('jobsbox', jobsHtml())">Fermer</button></div><pre id="logpre"></pre>`;
     pre = $("#logpre");
   }
-  const text = d.log || "(pas encore de sortie : la tache demarre ou cherche encore, ca s'affiche des que possible)";
-  if (pre.textContent === text) return;
   const atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 30;  // follow the end only if already there
-  pre.textContent = text;
+  if (d.append && pre.dataset.size) {
+    if (!d.log) return;
+    pre.appendChild(document.createTextNode(d.log));
+  } else {
+    pre.textContent = d.log || "(pas encore de sortie : la tache demarre ou cherche encore, ca s'affiche des que possible)";
+  }
+  pre.dataset.size = d.log ? d.size : "";
   if (atBottom || !refresh) pre.scrollTop = pre.scrollHeight;
 }
 
@@ -557,5 +566,13 @@ async function saveSettings() {
     if (document.hidden || $("#modal").classList.contains("on")) return;
     if (tab === "queue") await refreshQueue();
   }, 4000);
+  // the games list follows the jobs (matches, new projects) without reloading the page; not while typing in it
+  setInterval(async () => {
+    if (document.hidden || tab !== "games" || $("#modal").classList.contains("on")) return;
+    const a = document.activeElement;
+    if (a && a.matches("input, select, textarea")) return;
+    const before = JSON.stringify(O.games); await loadOverview();
+    if (tab === "games" && JSON.stringify(O.games) !== before) render();
+  }, 15000);
   setInterval(() => { if (!document.hidden) loadXP(); }, 60000);
 })();

@@ -1,0 +1,28 @@
+[package]
+name = "ds-decomp-studio"
+version = "0.1.0"
+edition = "2021"
+description = "DS Decomp Studio in its own window: starts the Python backend (studio.py serve) and shows web/ in WebView2"
+
+[[bin]]
+name = "DSDecompStudio"
+path = "src/main.rs"
+
+[dependencies]
+tao = "0.37.1"
+wry = { version = "0.57.0", features = ["devtools"] }
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

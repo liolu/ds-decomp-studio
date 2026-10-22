@@ -50,15 +50,22 @@ STUDIOS = {  # who made the game: games of one studio often share an engine
 # ROM rebuild state seen during onboarding; `verify` jobs update data/health.json, which wins
 KNOWN_BROKEN = {}  # all fixed 2026-10-15: gametools rom_build.py (banner icon, DSProtect, empty files), delink_fix.py
 
-_cache: dict = {}
+_cache: dict = {}  # key -> (stamp, value): one entry per key, an outdated value is replaced (no growth over time)
 
 
 def _cached(key, path_or_mtime, fn):
     m = path_or_mtime.stat().st_mtime if isinstance(path_or_mtime, Path) else path_or_mtime
-    k = (key, m)
-    if k not in _cache:
-        _cache[k] = fn()
-    return _cache[k]
+    hit = _cache.get(key)
+    if hit is None or hit[0] != m:
+        hit = _cache[key] = (m, fn())
+    return hit[1]
+
+
+def _mtime(p: Path) -> float:
+    try:
+        return p.stat().st_mtime
+    except OSError:
+        return 0
 
 
 def health() -> dict:
@@ -186,14 +193,21 @@ class Game:
         """Every function of every ARM9 module (main, ITCM, DTCM, overlays; ARM and Thumb) with its state.
         `uid` identifies a function across modules: its address in the main module, "<module>:<addr>" elsewhere.
         The automatic tools (auto_match, donor_match) only handle ARM functions of the main module: `auto_tools`."""
-        mods, st = self.modules(), self.auto_status()
-        stamp = tuple((f / n).stat().st_mtime if (f / n).exists() else 0 for _m, f in mods
-                      for n in ("symbols.txt", "delinks.txt"))
-        fp = self.path / "build" / "clone" / "families.json"
-        stamp += (fp.stat().st_mtime if fp.exists() else 0,)
-        key = ("fns", self.id, hash(stamp), id(st))
-        if key in _cache:
-            return _cache[key]
+        return self._functions_and_summary()[0]
+
+    def _stamp(self, mods) -> tuple:
+        """Dates of every file functions() reads: unchanged stamp = same rows."""
+        b = self.path / "build"
+        return tuple(_mtime(f / n) for _m, f in mods for n in ("symbols.txt", "delinks.txt")) + (
+            _mtime(b / "clone" / "families.json"), _mtime(b / "auto" / "status.json"), _mtime(config.FPDB))
+
+    def _functions_and_summary(self):
+        mods = self.modules()
+        stamp = self._stamp(mods)
+        return _cached(("fns", self.id), stamp, lambda: self._compute(mods))
+
+    def _compute(self, mods):
+        st = self.auto_status()
         shared = shared_counts(FP_KEY.get(self.id))
         fam = clone_families(self)
         rows = []
@@ -209,11 +223,13 @@ class Game:
                              "auto": st.get(name, ""), "shared": shared.get(addr, 0) if main else 0,
                              "family": family_size(fam.get(name)) if main else 0,
                              "auto_tools": main and mode == "arm"})
-        _cache[key] = rows
-        return rows
+        return rows, self._summarize(rows)
 
     def summary(self) -> dict:
-        rows = self.functions() if self.ready else []
+        return self._functions_and_summary()[1] if self.ready else self._summarize([])
+
+    @staticmethod
+    def _summarize(rows) -> dict:
         tot, got = len(rows), sum(r["done"] for r in rows)
         tb, gb = sum(r["size"] for r in rows), sum(r["size"] for r in rows if r["done"])
         main = [r for r in rows if r["module"] == "main"]
