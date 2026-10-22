@@ -176,9 +176,10 @@ IMM_LS = lambda w: (w & 0x0E000000) == 0x04000000  # noqa: E731  ldr/str/ldrb/st
 IMM_LSH = lambda w: (w & 0x0E400090) == 0x00400090 and (w & 0x60)  # noqa: E731  ldrh/strh/ldrsb/ldrsh, immediate
 
 
-def shapes(code: bytes) -> tuple[str, str]:
+def shapes(code: bytes, ext: set[int] | None = None) -> tuple[str, str]:
     """(exact, template) fingerprints. exact: pool words and branches leaving the function masked, every other bit
-    kept. template: immediates masked too (constants, offsets), registers and opcodes kept."""
+    kept. template: immediates masked too (constants, offsets), registers and opcodes kept. `ext`: indexes of the
+    branches that leave the function when the code comes from an object (relocated branches, missdb)."""
     ws = words(code)
     pool = donorlib.pool_words(ws)
     ex, tp = [], []
@@ -187,7 +188,7 @@ def shapes(code: bytes) -> tuple[str, str]:
             ex.append("P")
             tp.append("P")
             continue
-        if external(w, i, len(ws)):
+        if (i in ext) if ext is not None else external(w, i, len(ws)):
             ex.append("%02xX" % (w >> 24))
             tp.append(ex[-1])
             continue
@@ -615,7 +616,7 @@ def integrate_verified(found: list[tuple[str, int, int, str]], log=print) -> lis
     return [p.stem for p in created]
 
 
-def commit(names: list[str], push: bool) -> None:
+def commit(names: list[str], push: bool, msg: str | None = None) -> None:
     """Commits exactly what this run added (sources, delinks.txt, compilers.txt), never anything else."""
     files = [f"src/auto/{n}.c" for n in names if (ROOT / "src" / "auto" / f"{n}.c").exists()]
     cfg = [p.relative_to(ROOT).as_posix() for p in (am.DELINKS, am.COMPILERS_TXT) if p.exists()]
@@ -625,7 +626,7 @@ def commit(names: list[str], push: bool) -> None:
     paths = files + cfg
     for k in range(0, len(paths), 100):  # in chunks: Windows limits the length of a command line
         run(["git", "add", "--", *paths[k:k + 100]])
-    msg = (f"clone_match: {len(names)} matching functions\n\nFunctions with the same code as functions already "
+    msg = msg or (f"clone_match: {len(names)} matching functions\n\nFunctions with the same code as functions already "
            "matched in this game or in another of our DS projects (tools/clone_match.py). VERIFY PASSED.\n")
     r = run(["git", "commit", "-q", "-m", msg])  # the index holds only these files (checked above)
     if r.returncode:

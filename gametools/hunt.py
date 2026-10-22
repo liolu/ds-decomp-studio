@@ -90,6 +90,7 @@ WB = None; CUR = None
 def _init(nodiff=False):
     global WB
     import workbench; WB = workbench
+    WB.MISS_SOURCE = 'hunt'
     if nodiff:  # objdump of target + candidate = ~2/3 of a judge; the diff TEXT is only needed for display
         WB.pc.disasm = lambda *a, **k: []
 
@@ -104,7 +105,7 @@ def _module(name):
             if CUR is not None:  # select_module rebinds globals of project/auto_match/probe_compiler: reload them all
                 import project, probe_compiler, auto_match
                 for m in (project, probe_compiler, auto_match): importlib.reload(m)
-                WB = importlib.reload(WB)
+                WB = importlib.reload(WB); WB.MISS_SOURCE = 'hunt'
         else: WB.select_module(name)
         CUR = mod
 
@@ -426,6 +427,10 @@ def cmd_sweep(a):
             print(f'[{k + 1}/{len(rows)} {time.time() - t0:.0f}s] {name} {prev[name]} -> {best["status"]} '
                   f'{best.get("diffs")} {" + ".join(trail[1:])}{"  MATCH" if best.get("match") else ""}', flush=True)
     print(f'{nm} matches -> {MATCHED} (python tools/workbench.py submit-many build/hunt/matched)')
+    # the misses of this sweep (and of every earlier job) on all the other unmatched functions: matches -> matched/
+    import subprocess
+    subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'missdb.py'), 'replay',
+                    '--to', str(MATCHED), '-j', str(a.j)])
 
 
 def _sweep_one(job):

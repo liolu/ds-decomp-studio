@@ -44,6 +44,10 @@ python ../../studio/gametools/ghidra_draft.py --names a,b            # Ghidra dr
 5. `.studio/` is written by the studio only (through the commands above).
 6. Level "Portable" functions have an identical twin already matched in another game: the brief names the source
    file to copy.
+7. Judge every try with `workbench.py judge` (or the MCP compile_and_diff), never with your own compiler call:
+   each C that compiles but misses is recorded in the miss database (`gametools/missdb.py`, one
+   `decomp ds/missdb.sqlite` for all games) and replayed on every unmatched function of every game. A miss of
+   function A is often the exact C of a sibling B, here or in another game.
 
 ## Layout
 
@@ -59,3 +63,8 @@ python ../../studio/gametools/ghidra_draft.py --names a,b            # Ghidra dr
   `gametools/clone_match.py` multiplies matches without AI: same code (or same code with other constants) as a
   matched function, in this game or another of our projects; `--list` writes build/clone/families.json, which
   the studio reads for level 0 and to put the functions worth several matches first in the queue.
+  `gametools/missdb.py` is the miss database: `workbench.judge` and `qwen_block` record every miss (C, profile,
+  error, fingerprint of the compiled code); `replay` looks each miss's fingerprint up among the unmatched
+  functions (no compile), renames calls/symbols and constants like clone_match, then checks and integrates.
+  It runs by itself at the end of every Qwen job (`--all-games`) and of every `hunt.py sweep` (`--to
+  build/hunt/matched`); Studio jobs `misses` (one game) and `misses_all` (misses of every game on every game).

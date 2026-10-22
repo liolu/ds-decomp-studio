@@ -37,6 +37,7 @@ from project import ROOT  # noqa: E402  (the game: DSD_PROJECT or the current fo
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import project  # noqa: E402
 import probe_compiler as pc  # noqa: E402
+import missdb  # noqa: E402
 import auto_match as am  # noqa: E402
 from fakematch import fake_match  # noqa: E402
 from pipeline_lock import journal_begin, journal_created, journal_end, pipeline_lock  # noqa: E402
@@ -50,6 +51,7 @@ RELOCS = project.ARM9 / "relocs.txt" if hasattr(project, "ARM9") else project.SY
 OVL_DIR = project.ARM9 / "overlays"
 _OVL_INDEX = None
 MODULE = "main"
+MISS_SOURCE = "workbench"  # who is judging, kept with each miss (hunt, import... set it)
 # what select_module() must put back when it returns to the main module
 _MAIN_STATE = (project.SYMBOLS, project.DELINKS, getattr(pc, "ARM9_BIN", None), getattr(pc, "ARM9_BASE", None),
                am.MAIN_TEXT)
@@ -438,6 +440,10 @@ def judge(name: str, source: str, profile: str | None = None) -> dict:
                         r["diff"] = compact_diff(pc.disasm(target, addr, thumb), pc.disasm(cand, addr, thumb))
                         if os.environ.get("WB_FULL"):  # both listings, for tools/mdiff.py (structural diff)
                             r["full"] = {"t": pc.disasm(target, addr, thumb), "c": pc.disasm(cand, addr, thumb)}
+            if not r["match"]:  # every miss goes to the miss database (replayed on the other functions)
+                missdb.record(name, source, prof, r["status"], diffs=r.get("diffs"), total=r.get("total"),
+                              error=r.get("errors", ""), source=MISS_SOURCE, obj=obj, module=MODULE, addr=addr,
+                              size=size)
         finally:
             tmp.cleanup()
         rank = lambda x: ({"match": 0, "near": 1, "size": 2, "compile": 3}[x["status"]], x.get("diffs", 0))  # noqa

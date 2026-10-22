@@ -41,6 +41,12 @@ DEFS = {
               "de nos jeux : C copie + renomme, compile + compare, puis verify"),
     "clone_all": ("Cloner les jumelles dans tous les jeux", "global", 7200,
                   "le clonage dans chaque jeu (1 match dans un jeu = 1 match dans chaque jeu qui a la meme fonction), verify, puis commit + push des jeux qui passent"),
+    "misses": ("Rejouer les essais rates", "game", 1800,
+               "base des essais rates (missdb : Qwen, hunt, Claude, editeur) : chaque C rate est essaye sur toutes les "
+               "fonctions non matchees du jeu qui ont la meme forme, misses de TOUS nos jeux, puis verify + commit"),
+    "misses_all": ("Rejouer les essais rates dans tous les jeux", "global", 7200,
+                   "les essais rates de chaque jeu (A) essayes sur tous les autres jeux (B, C, D...) : import des "
+                   "anciens essais, rejeu, verify, commit + push des jeux qui passent"),
     "dataset": ("Exporter le jeu de donnees (LoRA)", "global", 120,
                 "paires assembleur -> C exact de tous les jeux, au format d'entrainement (datasets/*.jsonl)"),
     "examples": ("Indexer les exemples pour l'IA", "global", 400,
@@ -187,6 +193,22 @@ def command(jid: str, game, p: dict) -> str:
         return "; ".join(f"echo {_q('== projets/' + g.id)}; (cd {_q('projets/' + g.id)} && "
                          f"python {_t(g, 'clone_match.py')} --other-games --commit --push)"
                          for g in games.all_games() if g.ready and config.game_tool(g.path, "clone_match.py").exists())
+    if jid == "misses":
+        cmd = f"python {_t(game, 'missdb.py')}"
+        pre = f"{cmd} import; " if p.get("import", True) else ""
+        cmd = pre + f"{cmd} replay" + ("" if p.get("this_game") else " --all-games")
+        if p.get("block"):
+            cmd += " --names " + _q(",".join(_block_functions(game, p["block"])))
+        if p.get("dry_run"):
+            return cmd + " --dry-run"
+        return cmd + " --commit" + (" --push" if p.get("push", True) else "")
+    if jid == "misses_all":
+        # 1) every game records its older tries, 2) every game replays the misses of all games
+        ready = [g for g in games.all_games() if g.ready and config.game_tool(g.path, "missdb.py").exists()]
+        imp = "; ".join(f"(cd {_q('projets/' + g.id)} && python {_t(g, 'missdb.py')} import)" for g in ready)
+        rep = "; ".join(f"echo {_q('== projets/' + g.id)}; (cd {_q('projets/' + g.id)} && "
+                        f"python {_t(g, 'missdb.py')} replay --all-games --commit --push)" for g in ready)
+        return f"{imp}; {rep}; python {_t(ready[0], 'missdb.py')} stats" if ready else "echo aucun jeu"
     if jid == "donors":
         # by block (the functions of one block), by batch (--max N matches), or only the list of candidates
         cmd = f"python {_t(game, 'donor_match.py')}"
