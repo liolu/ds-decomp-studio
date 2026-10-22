@@ -122,6 +122,10 @@ def record(name: str, code: str, profile: str, status: str, *, diffs=None, total
                fp.get("words"), fp.get("relocs"), time.time())
         with _lock:
             c = db()
+            if fp and c.execute("SELECT 1 FROM misses WHERE game = ? AND func = ? AND profile = ? AND fp_exact = ? "
+                                "AND words = ? LIMIT 1", (ROOT.name, name, profile or "", fp["fp_exact"],
+                                                         fp["words"])).fetchone():
+                return  # same machine code as a miss already kept: nothing new to replay
             c.execute("INSERT OR IGNORE INTO misses (game, func, module, addr, size, profile, code_hash, code, status, "
                       "diffs, total, error, source, out_size, fp_exact, fp_tpl, words, relocs, created) "
                       "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", row)
