@@ -10,21 +10,24 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 ## Avancement des jeux
 
 <!-- games:start -->
-62 jeux, 21 publiés · 73427/453238 fonctions matchées au total · mis à jour le 2026-10-22 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
+62 jeux, 21 publiés · 79170/453238 fonctions matchées au total · mis à jour le 2026-10-22 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
 
 | Jeu | Version | Studio | Code matché | Fonctions | ROM | Dépôt |
 |---|---|---|---|---|---|---|
 | Rayman Raving Rabbids | usa AR5E | Ubisoft Casablanca | `█████░░░░░` 47.23% | 2560/3607 | ✅ | [Rayman-RR-usa-decomp](https://github.com/liolu/Rayman-RR-usa-decomp) |
 | Tom and Jerry Tales | eu AJTP | Sensory Sweep | `████░░░░░░` 41.00% | 1251/1921 | ✅ | local (pas encore de match) |
+| Spider-Man 2 | usa AS2E |  | `███░░░░░░░` 32.97% | 1472/2837 | ✅ | local (pas encore de match) |
 | Ultimate Spider-Man | fra AUSF | Vicarious Visions | `███░░░░░░░` 32.86% | 2503/4592 | ✅ | [ultimate-spider-man-decomp](https://github.com/liolu/ultimate-spider-man-decomp) |
+| Heroes of Mana | eu AHEP | Brownie Brown | `███░░░░░░░` 26.22% | 5598/9264 | ✅ | [heroes-of-mana-decomp](https://github.com/liolu/heroes-of-mana-decomp) |
 | Farm Frenzy | usa BFZE | Alawar | `███░░░░░░░` 26.13% | 876/1208 | ✅ | [farm-frenzy-decomp](https://github.com/liolu/farm-frenzy-decomp) |
 | Powerpuff Girls Z | jp YPPJ | Bandai Namco | `███░░░░░░░` 26.01% | 1489/2359 | ✅ | [powerpuff-girls-z-decomp](https://github.com/liolu/powerpuff-girls-z-decomp) |
-| Heroes of Mana | eu AHEP | Brownie Brown | `███░░░░░░░` 25.28% | 5510/9264 | ✅ | [heroes-of-mana-decomp](https://github.com/liolu/heroes-of-mana-decomp) |
 | LEGO Star Wars II | usa AL7E | Amaze Entertainment | `██░░░░░░░░` 24.46% | 3208/4763 | ✅ | [lego-star-wars-ii-the-original-trilogy-decomp](https://github.com/liolu/lego-star-wars-ii-the-original-trilogy-decomp) |
+| SimCity Creator | eu YC2P | EA | `██░░░░░░░░` 22.11% | 3619/6580 | ✅ | local (pas encore de match) |
 | Madagascar | eu AMGP | Vicarious Visions | `██░░░░░░░░` 22.02% | 1803/3444 | ✅ | local (pas encore de match) |
 | Dragon Ball Origins | eu CDZP | Game Republic | `██░░░░░░░░` 20.93% | 3052/5118 | ✅ | [dragon-ball-origins-decomp](https://github.com/liolu/dragon-ball-origins-decomp) |
 | Nintendogs Dachshund | usa ADGE | Nintendo EAD | `██░░░░░░░░` 20.87% | 3708/8609 | ✅ | [nintendogs-dachshund-decomp](https://github.com/liolu/nintendogs-dachshund-decomp) |
 | Luminousarc2 | eu YL2P |  | `██░░░░░░░░` 18.72% | 2878/7441 | ✅ | local (pas encore de match) |
+| Pokemon_Dash | usa APDE |  | `██░░░░░░░░` 16.11% | 1582/3279 | ✅ | local (pas encore de match) |
 | Blue Dragon: Awakened Shadow | ger YBUD | Brownie Brown | `██░░░░░░░░` 15.38% | 4173/11800 | ✅ | [blue-dragon-awakened-shadow-decomp](https://github.com/liolu/blue-dragon-awakened-shadow-decomp) |
 | Cooking Mama | usa ACCE | Office Create | `██░░░░░░░░` 15.35% | 1034/2551 | ✅ | [cooking-mama-decomp](https://github.com/liolu/cooking-mama-decomp) |
 | Spyro: Shadow Legacy | usa ASSE | Amaze Entertainment | `█░░░░░░░░░` 13.62% | 1708/3697 | ✅ | [spyro-shadow-legacy-decomp](https://github.com/liolu/spyro-shadow-legacy-decomp) |
@@ -34,7 +37,6 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Code Lyoko | usa AL5E | Game Machine Studios | `█░░░░░░░░░` 11.02% | 2114/7474 | ✅ | [code-lyoko-decomp](https://github.com/liolu/code-lyoko-decomp) |
 | Harvest Moon DS | usa ABCE | Marvelous | `█░░░░░░░░░` 10.38% | 2719/5133 | ✅ | [harvest-moon-ds-decomp](https://github.com/liolu/harvest-moon-ds-decomp) |
 | Spider-Man: Web of Shadows | x CS5X | Amaze Entertainment | `█░░░░░░░░░` 9.57% | 2486/5846 | ✅ | [spider-man-web-of-shadows-decomp](https://github.com/liolu/spider-man-web-of-shadows-decomp) |
-| SimCity Creator | eu YC2P | EA | `█░░░░░░░░░` 9.38% | 1736/6580 | ✅ | local (pas encore de match) |
 | The Simpsons Game | usa YSZE | Amaze Entertainment | `█░░░░░░░░░` 9.19% | 2975/8968 | ✅ | [simpsons-game-decomp](https://github.com/liolu/simpsons-game-decomp) |
 | SimAnimals | eu CM3P | EA | `█░░░░░░░░░` 8.54% | 707/2923 | ✅ | local (pas encore de match) |
 | Nintendogs | jp AD2J |  | `█░░░░░░░░░` 7.38% | 1477/8614 | ✅ | local (pas encore de match) |
@@ -42,18 +44,20 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Livly Garden | jp BLIJ | Brownie Brown | `█░░░░░░░░░` 5.76% | 1281/9012 | ✅ | [livly-garden-decomp](https://github.com/liolu/livly-garden-decomp) |
 | Star Wars: Lethal Alliance | eu AWUP | Ubisoft | `░░░░░░░░░░` 4.58% | 1306/8569 | ✅ | local (pas encore de match) |
 | Spore Creatures | usa YSPE | Amaze Entertainment | `░░░░░░░░░░` 4.45% | 1554/12008 | ✅ | local (pas encore de match) |
-| Poke Ranger | usa ARGE |  | `░░░░░░░░░░` 4.21% | 1084/7304 | ✅ | local (pas encore de match) |
+| Poke Ranger | usa ARGE |  | `░░░░░░░░░░` 4.21% | 1104/7304 | ✅ | local (pas encore de match) |
 | Craftingmama | usa BQ8E |  | `░░░░░░░░░░` 3.67% | 1272/6423 | ✅ | local (pas encore de match) |
 | Dinosaurs | usa CD5E |  | `░░░░░░░░░░` 3.18% | 528/10536 | ✅ | local (pas encore de match) |
 | Eyeshield 21 | jp AE4J | Eighting | `░░░░░░░░░░` 2.90% | 1328/21940 | ✅ | [eyeshield-21-decomp](https://github.com/liolu/eyeshield-21-decomp) |
 | Fairy Tail: Madoushi | jp BH6J | Konami | `░░░░░░░░░░` 2.53% | 1352/11096 | ✅ | [fairy-tail-madoushi-decomp](https://github.com/liolu/fairy-tail-madoushi-decomp) |
 | Professor Layton and the Spectre's Call | eu BLFP | Level-5 | `░░░░░░░░░░` 2.37% | 568/8430 | ✅ | local (pas encore de match) |
 | Star Wars Episode III | eu ASTP | Ubisoft | `░░░░░░░░░░` 2.35% | 805/6518 | ✅ | local (pas encore de match) |
-| Ntr-P-Yybp | eu YYBP |  | `░░░░░░░░░░` 2.12% | 630/16145 | ✅ | local (pas encore de match) |
+| Ntr-P-Yybp | eu YYBP |  | `░░░░░░░░░░` 2.13% | 639/16145 | ✅ | local (pas encore de match) |
 | Fairy Tail: Kardia | jp TFTJ | Konami | `░░░░░░░░░░` 2.01% | 1454/12899 | ✅ | [fairy-tail-kardia-decomp](https://github.com/liolu/fairy-tail-kardia-decomp) |
 | Club House Games | usa ATDE | Agenda | `░░░░░░░░░░` 1.41% | 477/8314 | ✅ | local (pas encore de match) |
 | Saga3 | jp BZ3J |  | `░░░░░░░░░░` 0.91% | 163/10835 | ✅ | local (pas encore de match) |
-| Childrenmana | usa ASEE |  | `░░░░░░░░░░` 0.00% | 0/9011 | ✅ | local (pas encore de match) |
+| Sw:Cw-Rh | usa BW9E |  | `░░░░░░░░░░` 0.66% | 86/6665 | ✅ | local (pas encore de match) |
+| Vivapinatads | usa CP3E |  | `░░░░░░░░░░` 0.40% | 77/6802 | ✅ | local (pas encore de match) |
+| Childrenmana | usa ASEE |  | `░░░░░░░░░░` 0.39% | 526/9011 | ✅ | local (pas encore de match) |
 | Db Kai Rpg | eu BRPP |  | `░░░░░░░░░░` 0.00% | 0/2127 | ✅ | local (pas encore de match) |
 | Doh | usa CIEE |  | `░░░░░░░░░░` 0.00% | 0/9688 | ✅ | local (pas encore de match) |
 | Harrypottera | usa B7HE |  | `░░░░░░░░░░` 0.00% | 0/6418 | ✅ | local (pas encore de match) |
@@ -62,19 +66,15 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Myst | usa YMYE |  | `░░░░░░░░░░` 0.00% | 0/2585 | ✅ | local (pas encore de match) |
 | Nintendogs | jp ADGJ |  | `░░░░░░░░░░` 0.00% | 0/8614 | ✅ | local (pas encore de match) |
 | Nintendogs | jp AD3J |  | `░░░░░░░░░░` 0.00% | 0/8614 | ✅ | local (pas encore de match) |
-| Pokemon_Dash | usa APDE |  | `░░░░░░░░░░` 0.00% | 0/3279 | ✅ | local (pas encore de match) |
 | Pvz | usa BWBE |  | `░░░░░░░░░░` 0.00% | 0/5614 | ✅ | local (pas encore de match) |
 | Pvz         | eu BWBY |  | `░░░░░░░░░░` 0.00% | 0/5647 | ✅ | local (pas encore de match) |
 | Pvz         | eu BWBX |  | `░░░░░░░░░░` 0.00% | 0/5647 | ✅ | local (pas encore de match) |
 | Rrr2 Ds | usa YRRE |  | `░░░░░░░░░░` 0.00% | 0/6201 | ✅ | local (pas encore de match) |
 | Shrek Forever After | eu VSKV | Griptonite Games | `░░░░░░░░░░` 0.00% | 1/12253 | ✅ | local (pas encore de match) |
 | Spider-Man 2 | eu AS2P |  | `░░░░░░░░░░` 0.00% | 0/2847 | ✅ | local (pas encore de match) |
-| Spider-Man 2 | usa AS2E |  | `░░░░░░░░░░` 0.00% | 0/2837 | ✅ | local (pas encore de match) |
 | Spider_Mansd | eu B3PP |  | `░░░░░░░░░░` 0.00% | 0/10144 | ✅ | local (pas encore de match) |
-| Sw:Cw-Rh | usa BW9E |  | `░░░░░░░░░░` 0.00% | 0/6665 | ✅ | local (pas encore de match) |
 | The Penguins of Madagascar | eu VPEV | Griptonite Games | `░░░░░░░░░░` 0.00% | 5/8879 | ✅ | local (pas encore de match) |
 | Toy Story 3 | eu VT3V |  | `░░░░░░░░░░` 0.00% | 0/5745 | ✅ | local (pas encore de match) |
-| Vivapinatads | usa CP3E |  | `░░░░░░░░░░` 0.00% | 0/6802 | ✅ | local (pas encore de match) |
 | Wheelfortune | usa BW7E |  | `░░░░░░░░░░` 0.00% | 0/7389 | ✅ | local (pas encore de match) |
 
 *Code matché : part du code des fonctions (ARM9, ITCM, DTCM, overlays) qui recompile à l'octet près. ROM ✅ : la ROM se reconstruit identique à l'originale.*
