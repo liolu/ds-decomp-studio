@@ -92,6 +92,7 @@ ROOT = args.project.resolve()
 os.environ["DSD_PROJECT"] = str(ROOT)  # gametools/project.py: this game, whatever the cwd
 TOOLS = Path(__file__).resolve().parent.parent / "gametools"  # the matching tools (only build tools are in the game)
 sys.path.insert(0, str(TOOLS))
+import missdb  # noqa: E402  (every miss of this job is kept: gametools/missdb.py)
 VERSION = next(p.name for p in sorted((ROOT / "config").iterdir()) if (p / "arm9" / "symbols.txt").exists())
 WORK = ROOT / "build" / "qwen_auto"
 WORK.mkdir(parents=True, exist_ok=True)
@@ -510,11 +511,16 @@ def compile_versions(fn: Fn, codes: list[str], profile: str) -> list[tuple[bool,
                 bad, n = pc.compare(fn.target, cand)
                 tag = "MATCH" if bad == 0 else f"{bad}/{n} diff" + ("" if len(cand) == fn.size else f" (size 0x{len(cand):x})")
                 out[i] = (bad == 0, f"{version:14} | {FLAGS}: {tag}", [] if bad == 0 else pc.disasm(cand, fn.addr))
+                if bad:  # every miss goes to the miss database (replayed on all unmatched functions after the job)
+                    missdb.record(fn.name, codes[i], profile, "near" if len(cand) == fn.size else "size", diffs=bad,
+                                  total=n, source="qwen", obj=t / "objs" / f"v{i}.o", addr=fn.addr, size=fn.size)
             if not missing:
                 break
             # the compiler stops at the first file with an error: that one failed, the next ones were not compiled
             err = "\n".join((r.stdout + r.stderr).strip().splitlines()[:12])
             out[missing[0]] = (False, f"{err}\n{version:14} | {FLAGS}: compile error", [])
+            missdb.record(fn.name, codes[missing[0]], profile, "compile", error=err, source="qwen", addr=fn.addr,
+                          size=fn.size)
             pending = missing[1:]
     return [out.get(i, (False, f"{version:14} | {FLAGS}: compile error", [])) for i in range(len(codes))]
 
@@ -1402,3 +1408,9 @@ if __name__ == "__main__":
             main()
     else:
         main()
+    # the job is over: every miss kept (this job and all earlier ones, all games) is tried on every unmatched
+    # function of this game; matches are verified, committed (and pushed)
+    if not STOP.exists():
+        log("missdb : les essais rates sont rejoues sur toutes les fonctions non matchees du jeu...")
+        subprocess.run([sys.executable, str(TOOLS / "missdb.py"), "replay", "--all-games", "--commit"]
+                       + ([] if args.no_push else ["--push"]), cwd=ROOT)

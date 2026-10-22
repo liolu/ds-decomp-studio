@@ -9,7 +9,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import blocks, brief, config, difficulty, engine, gameenv, games, jobs, projects, toolsync, xp
+from . import blocks, brief, config, data, difficulty, engine, gameenv, games, jobs, misses, projects, toolsync, xp
 
 
 _games_cache = {"t": 0.0, "games": None, "busy": False}
@@ -60,7 +60,8 @@ def game_view(gid):
         e["blocks"] += 1
         e["left"] += b["left"]
         e["free" if b["state"] in ("free", "expired") else b["state"]] += 1
-    return {"game": {**g.info(), "tools_behind": toolsync.status(g)["behind"]}, "blocks": bl, "per_level": per_level, "generation": blocks.load(g).get("generation", 0)}
+    return {"game": {**g.info(), "tools_behind": toolsync.status(g)["behind"]}, "blocks": bl, "per_level": per_level, "generation": blocks.load(g).get("generation", 0),
+            "misses": misses.stats(g.id), "data": data.summary(g) if g.ready else None}
 
 
 KINDS_FILTER = {  # "what is left" split by what can work on it
@@ -159,6 +160,9 @@ class H(BaseHTTPRequestHandler):
                 return self.send({"functions": blocks.functions_of(g, q["id"]), "brief": brief.brief(g, q["id"])})
             if p == "asm":
                 return self.send({"asm": asm_of(q["game"], q["name"])})
+            if p == "data":  # the data symbols of every module (state todo/done/all, section, module, q)
+                return self.send(data.listing(q["game"], q.get("state", "todo"), q.get("section", ""),
+                                              q.get("module", ""), q.get("q", ""), int(q.get("limit", 400))))
             if p == "map":
                 return self.send(engine.memory_map(games.get(q["game"])))
             if p == "engine":

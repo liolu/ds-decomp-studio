@@ -9,6 +9,7 @@ const ST = {free: "libre", claimed: "pris", expired: "expire", done: "termine", 
   failed: "echec", stopped: "arrete", interrupted: "interrompu", cancelled: "annule"};
 let O = null, G = null, J = [], tab = location.hash.slice(1) || "games", sub = "blocks";
 let fLevel = null, fState = "open", fnLevel = "", fnQuery = "", fnState = "todo", fnKind = "", openLog = null;
+let dState = "todo", dSection = "", dModule = "", dQuery = "";
 let gSort = (() => { try { return JSON.parse(localStorage.getItem("gSort")) || ["pct", -1]; } catch (e) { return ["pct", -1]; } })();
 const G_SORTS = {title: g => g.title.toLowerCase(), studio: g => (g.studio || "~").toLowerCase(), rom: g => g.rom.ok ? 0 : 1,
   functions: g => g.functions, matched: g => g.matched, pct: g => g.pct_code, left: g => g.functions - g.matched, github: g => g.remote ? 0 : 1};
@@ -154,9 +155,11 @@ async function viewGame() {
       <a class="tag" target="_blank" title="Page ByteMatch du jeu. Pas encore listee ? Bouton ajouter : choisir le depot, le rapport est publie automatiquement par la CI (artefact ${esc(g.code || g.version)}_report, job Publier l'avancement)" href="https://bytematch.dev/${esc(g.remote.replace(/^.*github\.com[:/]/, "").replace(/\.git$/, ""))}">ByteMatch</a>
       <a class="tag" target="_blank" title="Ajouter ce depot sur ByteMatch (une fois) : la CI y publie le rapport a chaque avancement" href="https://bytematch.dev/manage/new">+ ByteMatch</a>` : '<span class="tag">local</span>'}</span></div>
     <div style="min-width:260px">${pctBar(g.pct_code)}<div class="hint" style="text-align:right">${fmt(g.matched)} / ${fmt(g.functions)} fonctions${g.modules > 1 ? ` (${g.modules} modules, principal ${g.pct_main.toFixed(2)} %)` : ""}</div>
+    ${G.data && G.data.bytes ? `<div class="hint" style="text-align:right"><a href="#game" onclick="sub='data';render();return false">donnees ${G.data.pct.toFixed(2)} %</a> : ${fmt(G.data.matched)} / ${fmt(G.data.symbols)} symboles (.data, .rodata, .bss)</div>` : ""}
     ${g.left_manual ? `<div class="hint" style="text-align:right"><a href="#game" onclick="sub='functions';fnKind='manual';render();return false">${fmt(g.left_manual)} a faire a la main</a> (Thumb, overlays, ITCM : pas d'outil auto)</div>` : ""}</div></div>
+    ${G.misses && (G.misses.misses || G.misses.won_here) ? `<div class="hint" style="margin-top:8px" title="base des essais rates (missdb.sqlite) : chaque C qui compile sans matcher (Qwen, hunt, Claude, editeur, auto-match) est rejoue sur les fonctions non matchees de tous les jeux">Essais rates gardes : <b>${fmt(G.misses.misses)}</b> (${fmt(G.misses.functions)} fonctions, ${fmt(G.misses.replayable)} rejouables) &middot; matchs gagnes ici grace aux essais rates : <b>${fmt(G.misses.won_here)}</b> &middot; donnes aux autres jeux : <b>${fmt(G.misses.given)}</b></div>` : ""}
     <h3 style="margin-top:12px">Taches machine sur ce jeu</h3><div class="btns">
-    ${["moulinette", "auto", "ghidra", "wb_commit", "names", "regroup", "cleanup", "progress", "verify", "culprits", "build", "dis", "status", "permute"].map(k => `<button class="btn small ${k === "moulinette" ? "" : "sec"}" title="${esc(JD(k).desc)}" onclick="runJob('${k}')">${esc(JD(k).label)}</button>`).join("")}
+    ${["moulinette", "auto", "ghidra", "wb_commit", "names", "regroup", "cleanup", "progress", "verify", "culprits", "build", "dis", "status", "permute", "misses"].map(k => `<button class="btn small ${k === "moulinette" ? "" : "sec"}" title="${esc(JD(k).desc)}" onclick="runJob('${k}')">${esc(JD(k).label)}</button>`).join("")}
     ${g.tools_behind && g.tools_behind.length ? `<button class="btn small" style="background:#b45309" title="${esc(g.tools_behind.join(", "))}" onclick="runJob('sync_tools',{})">Mettre a jour les outils (${g.tools_behind.length} en retard)</button>` : '<span class="tag ok">outils a jour</span>'}
     ${g.remote ? "" : `<button class="btn small green" onclick="publishGame()">Publier sur GitHub</button>`}
     </div></div>`;
@@ -166,11 +169,11 @@ async function viewGame() {
       <div class="n">${fmt(p.left)}</div><div class="hint">fonctions restantes &middot; ${p.free} blocs libres, ${p.claimed} pris</div>
       <div class="hint">${esc(l.hint)}</div></div>`;
   }).join("") + `</div>`;
-  h += `<nav style="margin-bottom:12px">${[["blocks", "Blocs de 50"], ["functions", "Fonctions par difficulte"], ["map", "Carte memoire"]].map(([k, l]) =>
+  h += `<nav style="margin-bottom:12px">${[["blocks", "Blocs de 50"], ["functions", "Fonctions par difficulte"], ["data", "Donnees"], ["map", "Carte memoire"]].map(([k, l]) =>
     `<button class="${sub === k ? "on" : ""}" onclick="sub='${k}';render()">${l}</button>`).join("")}</nav><div id="sub"></div>`;
   return h;
 }
-function afterGame() { if (!G || G.error) return; if (sub === "blocks") subBlocks(); else if (sub === "functions") subFunctions(); else subMap(); }
+function afterGame() { if (!G || G.error) return; if (sub === "blocks") subBlocks(); else if (sub === "functions") subFunctions(); else if (sub === "data") subData(); else subMap(); }
 function setLevel(n) { fLevel = fLevel === n ? null : n; fnLevel = fLevel === null ? "" : String(fLevel); render(); }
 
 function subBlocks() {
@@ -336,6 +339,41 @@ async function subFunctions() {
     ${d.rows.map(f => `<tr class="click" onclick="${f.mode === "arm" && f.module === "main" ? "openEditor" : "showAsm"}('${esc(f.name)}')" title="${f.mode === "arm" && f.module === "main" ? "ouvrir l'editeur C" : "assembleur (l'editeur gere le module principal ARM)"}"><td><b>${esc(f.name)}</b></td><td class="hint">${hex(f.addr)}</td><td class="num">${f.size}</td>
     <td class="hint">${f.mode}${f.module !== "main" ? " &middot; " + esc(f.module) : ""}</td><td>${f.done ? (esc(f.file || "")) : `<span class="c${f.level}">${esc(LV(f.level).label)}</span>`}</td><td class="hint">${esc(f.auto || "")}</td>
     <td class="hint">${esc(f.block || "")}</td><td class="hint">${f.port ? portNote(f.port) : f.shared >= 2 ? "SDK (" + f.shared + ")" : ""}</td></tr>`).join("")}</table>`;
+}
+
+// ---- data: every .data / .rodata / .bss symbol of every module, matched or not; a click shows its bytes and a C
+async function subData() {
+  const S = G.data && G.data.sections || {};
+  const secBars = Object.entries(S).map(([k, v]) => `<div style="flex:1;min-width:180px"><b>${esc(k)}</b> ${pctBar(v.bytes ? 100 * v.matched_bytes / v.bytes : 0)}
+    <div class="hint">${fmt(v.matched)} / ${fmt(v.symbols)} symboles &middot; ${fmt(v.matched_bytes)} / ${fmt(v.bytes)} octets</div></div>`).join("");
+  $("#sub").innerHTML = `<div class="card"><div class="btns" style="gap:16px;margin-bottom:12px">${secBars || '<span class="hint">Aucune section de donnees.</span>'}</div>
+    <div class="btns" style="margin-bottom:10px">
+    <select onchange="dState=this.value;subData()">${[["todo", "A faire"], ["done", "Deja matchees"], ["all", "Toutes"]].map(([k, l]) => `<option value="${k}" ${dState === k ? "selected" : ""}>${l}</option>`).join("")}</select>
+    <select onchange="dSection=this.value;subData()"><option value="">Toutes sections</option>${[".data", ".rodata", ".bss"].map(k => `<option ${dSection === k ? "selected" : ""}>${k}</option>`).join("")}</select>
+    <select id="dmod" onchange="dModule=this.value;subData()"><option value="">Tous modules</option></select>
+    <input placeholder="nom..." value="${esc(dQuery)}" onchange="dQuery=this.value;subData()"><span class="hint" id="dcount"></span>
+    <span style="flex:1"></span>
+    <button class="btn small sec" title="${esc(JD("misses").desc)}" onclick="runJob('misses',{})">Rejouer les essais rates (fonctions + donnees)</button></div>
+    <div id="dtable" class="hint">Chargement...</div></div>`;
+  const d = await api(`data?game=${encodeURIComponent(game())}&state=${dState}&section=${encodeURIComponent(dSection)}&module=${encodeURIComponent(dModule)}&q=${encodeURIComponent(dQuery)}&limit=400`);
+  if (d.error) return;
+  $("#dmod").innerHTML = `<option value="">Tous modules</option>` + d.modules.map(m => `<option ${dModule === m ? "selected" : ""}>${esc(m)}</option>`).join("");
+  $("#dcount").textContent = `${fmt(d.total)} symboles${d.total > d.rows.length ? " (400 premiers)" : ""}`;
+  $("#dtable").innerHTML = d.rows.length ? `<table><tr><th>Donnee</th><th>Module</th><th>Section</th><th>Adresse</th><th class="num">Taille</th><th>Fichier</th><th class="num">Essais rates</th></tr>
+    ${d.rows.map(r => `<tr class="click" onclick="showData('${esc(r.name)}')" title="octets decodes, pointeurs, qui l'utilise, et une declaration C"><td><b>${esc(r.name)}</b></td><td class="hint">${esc(r.module)}</td><td class="hint">${esc(r.section)}</td>
+    <td class="hint">${hex(r.addr)}</td><td class="num">${fmt(r.size)}</td><td class="hint">${r.done ? esc(r.file) : "-"}</td><td class="num">${r.misses || ""}</td></tr>`).join("")}</table>` : '<p class="hint">Rien ici.</p>';
+}
+async function showData(name) {
+  modal('<p class="hint">Chargement...</p>');
+  const d = await api(`wb/data?game=${encodeURIComponent(game())}&name=${encodeURIComponent(name)}`);
+  if (d.error) return modal(`<p>${esc(d.error)}</p>`);
+  modal(`<h3 style="margin-top:0">${esc(d.name)} <span class="hint">${esc(d.addr)} &middot; ${esc(d.section || "")} &middot; ${fmt(d.size)} octets</span></h3>
+    <p class="hint">${d.file ? "Fichier : " + esc(d.file) : "Pas encore dans un fichier source"}${d.used_by && d.used_by.length ? " &middot; utilisee par " + d.used_by.slice(0, 8).map(esc).join(", ") : ""}</p>
+    ${d.string ? `<p>Texte : <code>${esc(d.string)}</code></p>` : ""}
+    ${d.pointers && d.pointers.length ? `<p class="hint">Pointeurs : ${d.pointers.slice(0, 20).map(esc).join(", ")}</p>` : ""}
+    ${d.words && d.words.length ? `<h4>Contenu</h4><pre style="max-height:220px;overflow:auto">${esc(d.words.join("\n"))}</pre>` : ""}
+    <h4>Declaration C (exacte)</h4><pre style="max-height:260px;overflow:auto">${esc(d.c || "")}</pre>
+    <div class="btns"><button class="btn small sec" onclick="navigator.clipboard.writeText(${esc(JSON.stringify(d.c || ""))}).then(()=>toast('Copie'))">Copier le C</button><button class="btn small sec" onclick="closeModal()">Fermer</button></div>`);
 }
 
 async function subMap() {
@@ -512,7 +550,7 @@ async function viewEngine() {
   h += `<div class="split"><div class="card"><h3>Jeux indexes (base d'empreintes)</h3><p class="hint">SDK = code Nintendo present dans 5 jeux ou plus. Unique = code propre au jeu.</p>
     <table><tr><th>Jeu</th><th class="num">Fonctions</th><th class="num">SDK</th><th class="num">Unique</th></tr>
     ${d.games.map(g => `<tr><td>${esc(g.title)}<div class="hint">${esc(g.studio)}</div></td><td class="num">${fmt(g.functions)}</td><td class="num">${fmt(g.sdk)}</td><td class="num">${fmt(g.unique)}</td></tr>`).join("")}</table>
-    <div class="btns" style="margin-top:10px"><button class="btn small sec" onclick="api('run',{id:'scan'}).then(r=>r.n&&toast('Indexation lancee'))">Re-indexer les empreintes</button><button class="btn small sec" title="compile les depots de decomps-externes/ (NitroSDK, pret...)" onclick="api('run',{id:'donors_index'}).then(r=>r.n&&toast('Indexation lancee'))">Indexer les decomps externes</button><button class="btn small sec" title="${esc(JD('dataset').desc)}" onclick="api('run',{id:'dataset'}).then(r=>r.n&&toast('Export lance'))">Exporter le jeu de donnees (LoRA)</button><button class="btn small sec" title="${esc(JD('examples').desc)}" onclick="api('run',{id:'examples'}).then(r=>r.n&&toast('Indexation lancee'))">Indexer les exemples pour l'IA</button><button class="btn small sec" title="${esc(JD('clone_all').desc)}" onclick="api('run',{id:'clone_all'}).then(r=>r.n&&toast('Clonage lance'))">Cloner les jumelles dans tous les jeux</button></div></div>
+    <div class="btns" style="margin-top:10px"><button class="btn small sec" onclick="api('run',{id:'scan'}).then(r=>r.n&&toast('Indexation lancee'))">Re-indexer les empreintes</button><button class="btn small sec" title="compile les depots de decomps-externes/ (NitroSDK, pret...)" onclick="api('run',{id:'donors_index'}).then(r=>r.n&&toast('Indexation lancee'))">Indexer les decomps externes</button><button class="btn small sec" title="${esc(JD('dataset').desc)}" onclick="api('run',{id:'dataset'}).then(r=>r.n&&toast('Export lance'))">Exporter le jeu de donnees (LoRA)</button><button class="btn small sec" title="${esc(JD('examples').desc)}" onclick="api('run',{id:'examples'}).then(r=>r.n&&toast('Indexation lancee'))">Indexer les exemples pour l'IA</button><button class="btn small sec" title="${esc(JD('clone_all').desc)}" onclick="api('run',{id:'clone_all'}).then(r=>r.n&&toast('Clonage lance'))">Cloner les jumelles dans tous les jeux</button><button class="btn small sec" title="${esc(JD('misses_all').desc)}" onclick="api('run',{id:'misses_all'}).then(r=>r.n&&toast('Rejeu lance'))">Rejouer les essais rates dans tous les jeux</button></div></div>
     <div class="card"><h3>Moteurs partages entre jeux</h3><p class="hint">Fonctions identiques entre deux jeux, hors SDK : du code moteur reutilise. Un match dans un jeu = gratuit dans l'autre (niveau "Portable").</p>
     <table><tr><th>Jeu A</th><th>Jeu B</th><th class="num">Moteur commun</th><th class="num">SDK commun</th></tr>
     ${d.pairs.slice(0, 40).map(p => `<tr><td>${esc(p.a)}</td><td>${esc(p.b)}</td><td class="num"><b>${fmt(p.engine)}</b></td><td class="num hint">${fmt(p.sdk)}</td></tr>`).join("")}</table></div></div>`;

@@ -44,6 +44,10 @@ python ../../studio/gametools/ghidra_draft.py --names a,b            # Ghidra dr
 5. `.studio/` is written by the studio only (through the commands above).
 6. Level "Portable" functions have an identical twin already matched in another game: the brief names the source
    file to copy.
+7. Judge every try with `workbench.py judge` (or the MCP compile_and_diff), never with your own compiler call:
+   each C that compiles but misses is recorded in the miss database (`gametools/missdb.py`, one
+   `decomp ds/missdb.sqlite` for all games) and replayed on every unmatched function of every game. A miss of
+   function A is often the exact C of a sibling B, here or in another game.
 
 ## Layout
 
@@ -59,3 +63,18 @@ python ../../studio/gametools/ghidra_draft.py --names a,b            # Ghidra dr
   `gametools/clone_match.py` multiplies matches without AI: same code (or same code with other constants) as a
   matched function, in this game or another of our projects; `--list` writes build/clone/families.json, which
   the studio reads for level 0 and to put the functions worth several matches first in the queue.
+  `gametools/missdb.py` is the miss database: `workbench.judge` and `qwen_block` record every miss (C, profile,
+  error, fingerprint of the compiled code; ARM and Thumb, any module), auto_match its near misses (`import`);
+  `replay` looks each miss's fingerprint up among the unmatched functions of every module (main, ITCM,
+  overlays; no compile), renames calls/symbols (other overlays through relocs.txt) and constants like
+  clone_match, then checks word by word. Main-module ARM matches: clone_match.integrate_verified; overlay,
+  ITCM, Thumb and -profile ones: `workbench.py submit-many` (ROM rebuilt, byte-identical or dropped).
+  It runs by itself at the end of every Qwen job (`--all-games`), of the auto job and of every `hunt.py sweep`
+  (`--to build/hunt/matched`); Studio jobs `misses` (one game) and `misses_all` (misses of every game on every
+  game). The game page shows how many misses are kept and how many matches they gave.
+  DATA (`gametools/missdata.py`): `workbench.py datacheck` records every object that differs (its C alone, the
+  bytes it compiled to, its pointers); `replay` also gives the unmatched .data / .rodata of every module the C of
+  a data miss or of the same data matched in another of our games (`--all-games`; fingerprint = section + size
+  + bytes, pointers masked then renamed), one file per object (src/data/<module>_<section>_<addr>.c), ROM rebuilt.
+  `--no-data` / `--data-only`. The game page has a Donnees tab (dsstudio/data.py: every data symbol, matched or
+  not, its bytes and an exact C declaration).

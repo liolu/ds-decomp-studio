@@ -43,6 +43,7 @@ WORK = ROOT / "build" / "clone"
 FAMILIES = WORK / "families.json"
 ARM9_BASE = 0x02000000
 FUNC_RE = re.compile(r"^(\S+) kind:function\(arm,size=0x([0-9a-f]+)\).*?addr:0x([0-9a-f]+)", re.M)
+THUMB_RE = re.compile(r"^(\S+) kind:function\(thumb,size=0x([0-9a-f]+)\).*?addr:0x([0-9a-f]+)", re.M)
 SYM_RE = re.compile(r"^(\S+) kind:(function|data|bss)\S* addr:0x([0-9a-f]+)", re.M)
 DELINK_RE = re.compile(r"^(src/\S+):\n((?:[ \t]+\S.*\n?)+)", re.M)
 TEXT_RE = re.compile(r"\.text\s+start:0x([0-9a-f]+) end:0x([0-9a-f]+)")
@@ -58,20 +59,37 @@ def _configure_value(root: Path, var: str, default: str) -> str:
 class Image:
     """Functions, symbols, matched files and code bytes of the ARM9 main module of a project."""
 
-    def __init__(self, root: Path):
-        self.root = root
+    def __init__(self, root: Path, module: str = "main"):
+        """module: "main" (the ARM9 main module), "itcm" or "ovNNN" (an overlay)."""
+        self.root, self.module = root, module
         vers = sorted(p.name for p in (root / "config").iterdir() if (p / "arm9" / "symbols.txt").exists())
         self.version = vers[0]
-        cfg = root / "config" / self.version / "arm9"
+        arm9 = root / "config" / self.version / "arm9"
+        extract = root / "extract" / self.version
+        cfg = {"main": arm9, "itcm": arm9 / "itcm"}.get(module) or arm9 / "overlays" / module
         sym_text = (cfg / "symbols.txt").read_text(encoding="utf-8", errors="replace")
-        self.bin = (root / "extract" / self.version / "arm9" / "arm9.bin").read_bytes()
+        self.bin = ({"main": extract / "arm9" / "arm9.bin", "itcm": extract / "arm9" / "itcm.bin"}.get(module)
+                    or extract / "arm9_overlays" / f"{module}.bin").read_bytes()
         self.addr_of, self.name_at = {}, {}
-        for name, _kind, a in SYM_RE.findall(sym_text):
-            a = int(a, 16)
-            self.addr_of.setdefault(name, a)
-            self.name_at.setdefault(a, name)
+        # an overlay / the ITCM calls the main module (and everything calls the ITCM): their symbols name the
+        # calls too, after the module's own ones
+        others = [arm9 / "symbols.txt", arm9 / "itcm" / "symbols.txt"]
+        for text in [sym_text] + [p.read_text(encoding="utf-8", errors="replace")
+                                  for p in others if p.exists() and p != cfg / "symbols.txt"]:
+            for name, _kind, a in SYM_RE.findall(text):
+                a = int(a, 16)
+                self.addr_of.setdefault(name, a)
+                self.name_at.setdefault(a, name)
+        self.cfg = cfg
+        self._relocs = None
+        # every name of every module: a call to another overlay links (the linker resolves it by name)
+        self.known = set(self.addr_of)
+        for p in (arm9 / "overlays").glob("ov*/symbols.txt") if module != "main" else []:
+            self.known.update(re.findall(r"^(\S+) kind:", p.read_text(encoding="utf-8", errors="replace"), re.M))
         dl = (cfg / "delinks.txt").read_text(encoding="utf-8", errors="replace")
         head, _, files = dl.partition("\n\n")
+        first = re.search(r"start:0x([0-9a-f]+)", head)
+        self.base = ARM9_BASE if module == "main" or not first else int(first.group(1), 16)
         m = TEXT_RE.search(head)
         self.text = (int(m.group(1), 16), int(m.group(2), 16)) if m else (ARM9_BASE, ARM9_BASE)
         self.files = []  # (start, end, source path) of the complete .text ranges
@@ -80,11 +98,16 @@ class Image:
                 for a, b in TEXT_RE.findall(body):
                     self.files.append((int(a, 16), int(b, 16), path))
         self.files.sort()
-        self.funcs = {}  # name -> (addr, size)
+        self.funcs = {}  # name -> (addr, size) of the ARM functions
         for name, size, addr in FUNC_RE.findall(sym_text):
             addr, size = int(addr, 16), int(size, 16)
-            if self.text[0] <= addr < self.text[1] and size >= 8 and addr + size - ARM9_BASE <= len(self.bin):
+            if self.text[0] <= addr < self.text[1] and size >= 8 and addr + size - self.base <= len(self.bin):
                 self.funcs[name] = (addr, size)
+        self.thumb = {}  # name -> (addr, size) of the Thumb functions (missdb replays them, clone_match does not)
+        for name, size, addr in THUMB_RE.findall(sym_text):
+            addr, size = int(addr, 16), int(size, 16)
+            if self.text[0] <= addr < self.text[1] and size >= 4 and addr + size - self.base <= len(self.bin):
+                self.thumb[name] = (addr, size)
         self.default_cc = _configure_value(root, "MWCC_VERSION", "2.0/sp1p5")
         self.compilers = {}
         ct = root / "config" / self.version / "compilers.txt"
@@ -95,8 +118,38 @@ class Image:
                     self.compilers[path] = prof.strip()
 
     def code(self, name: str) -> bytes:
-        a, s = self.funcs[name]
-        return self.bin[a - ARM9_BASE: a - ARM9_BASE + s]
+        a, s = self.funcs.get(name) or self.thumb[name]
+        return self.bin[a - self.base: a - self.base + s]
+
+    def reloc_name(self, at: int) -> str | None:
+        """Name of what the relocation at address `at` points to, in whatever module (relocs.txt: a call to another
+        overlay has no symbol in this module)."""
+        if self._relocs is None:
+            self._relocs = {}
+            f = self.cfg / "relocs.txt"
+            if f.exists():
+                for m in re.finditer(r"^from:0x([0-9a-f]+) kind:\w+ to:0x([0-9a-f]+) module:(\S+)",
+                                     f.read_text(encoding="utf-8", errors="replace"), re.M):
+                    self._relocs[int(m.group(1), 16)] = (int(m.group(2), 16), m.group(3))
+        r = self._relocs.get(at)
+        if r is None:
+            return None
+        to, mod = r
+        m = re.match(r"overlays?\((\d+)", mod)
+        if not m:
+            return self.name_at.get(to) or self.name_at.get(to & ~1)
+        key = (str(self.root), f"ov{int(m.group(1)):03d}")
+        if key not in Image._ovl_names:
+            p = self.root / "config" / self.version / "arm9" / "overlays" / key[1] / "symbols.txt"
+            text = p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""
+            Image._ovl_names[key] = {int(a, 16): n for n, _k, a in SYM_RE.findall(text)}
+        names = Image._ovl_names[key]
+        return names.get(to) or names.get(to & ~1)
+
+    _ovl_names: dict = {}
+
+    def where(self, name: str) -> tuple[int, int]:
+        return self.funcs.get(name) or self.thumb[name]
 
     def file_of(self, addr: int) -> str | None:
         lo, hi = 0, len(self.files)
@@ -176,9 +229,10 @@ IMM_LS = lambda w: (w & 0x0E000000) == 0x04000000  # noqa: E731  ldr/str/ldrb/st
 IMM_LSH = lambda w: (w & 0x0E400090) == 0x00400090 and (w & 0x60)  # noqa: E731  ldrh/strh/ldrsb/ldrsh, immediate
 
 
-def shapes(code: bytes) -> tuple[str, str]:
+def shapes(code: bytes, ext: set[int] | None = None) -> tuple[str, str]:
     """(exact, template) fingerprints. exact: pool words and branches leaving the function masked, every other bit
-    kept. template: immediates masked too (constants, offsets), registers and opcodes kept."""
+    kept. template: immediates masked too (constants, offsets), registers and opcodes kept. `ext`: indexes of the
+    branches that leave the function when the code comes from an object (relocated branches, missdb)."""
     ws = words(code)
     pool = donorlib.pool_words(ws)
     ex, tp = [], []
@@ -187,7 +241,7 @@ def shapes(code: bytes) -> tuple[str, str]:
             ex.append("P")
             tp.append("P")
             continue
-        if external(w, i, len(ws)):
+        if (i in ext) if ext is not None else external(w, i, len(ws)):
             ex.append("%02xX" % (w >> 24))
             tp.append(ex[-1])
             continue
@@ -351,7 +405,7 @@ def with_constants(source: str, nums: dict[int, set[int]]) -> list[str]:
 CC_FLAGS = _configure_value(ROOT, "CC_FLAGS", "-O4,p " + am.pc.BASE_FLAGS)
 
 
-def check(img: Image, name: str, source: str, profile: str) -> str:
+def check(img: Image, name: str, source: str, profile: str, allow_data: bool = False) -> str:
     """"" if the source compiles (as ninja would) to exactly this function, calls and loaded addresses included,
     and to nothing else; else why not."""
     version, _, flags = profile.partition(" ")
@@ -359,7 +413,8 @@ def check(img: Image, name: str, source: str, profile: str) -> str:
     if not mwcc.exists():
         return f"no compiler {version}"
     target = img.code(name)
-    addr = img.funcs[name][0]
+    addr = img.where(name)[0]
+    want_thumb = name in img.thumb
     with tempfile.TemporaryDirectory() as tmp:
         t = Path(tmp)
         (t / "f.c").write_text(source, encoding="utf-8")
@@ -372,9 +427,11 @@ def check(img: Image, name: str, source: str, profile: str) -> str:
         if fn is None:
             return "function not in the object"
         _n, shndx, off, size, thumb = fn
-        if thumb or size != len(target):
+        if bool(thumb) != want_thumb or size != len(target):
             return "size"
         extra = [s for s in obj.nonempty_sections() if not s.startswith(".text")]
+        if allow_data:  # -profile code: its .data name record (workbench / profrec integrate it, the ROM decides)
+            extra = [s for s in extra if s != ".data"]
         if extra:
             return f"extra section {extra[0]}"
         if any(s[4] == 0xFFF2 for s in obj.syms):
@@ -384,6 +441,8 @@ def check(img: Image, name: str, source: str, profile: str) -> str:
         code = obj.section_bytes(shndx)[off: off + size]
         relocs = {o: (typ, sym, add) for o, typ, sym, add in obj.function_relocs(shndx, off, size)}
         local = {s[0] for s in obj.syms if s[0] and 0 < s[4] < 0xFF00}  # defined in the object itself
+    if want_thumb:
+        return check_thumb(img, target, code, relocs, local, addr)
     tw, cw = words(target), words(code)
     for i, (a, b) in enumerate(zip(tw, cw)):
         if 4 * i not in relocs:
@@ -391,7 +450,7 @@ def check(img: Image, name: str, source: str, profile: str) -> str:
                 return f"word {i} differs"
             continue
         typ, sym, add = relocs[4 * i]
-        if sym and sym not in img.addr_of and sym not in local:
+        if sym and sym not in img.known and sym not in local:
             return f"uses {sym}, which this game does not have (the link would fail)"
         if typ == donorlib.R_ARM_ABS32:
             want = img.addr_of.get(sym)
@@ -400,9 +459,54 @@ def check(img: Image, name: str, source: str, profile: str) -> str:
         else:
             if (a ^ b) & 0xFE000000 and not ((a >> 28) == 0xF or (b >> 28) == 0xF):
                 return f"word {i} differs"
-            want = resolve(img, branch_target(a, addr + 4 * i))
+            want = resolve(img, branch_target(a, addr + 4 * i)) or img.reloc_name(addr + 4 * i)
             if sym and want and sym != want:
                 return f"calls {sym} instead of {want}"
+    return ""
+
+
+R_ARM_THM_CALL = 10
+
+
+def thumb_bl_target(code: bytes, o: int, at: int) -> int | None:
+    """Destination of the Thumb bl / blx pair at offset o of code that starts at address `at`."""
+    if o + 4 > len(code):
+        return None
+    h1, h2 = struct.unpack_from("<HH", code, o)
+    if (h1 & 0xF800) != 0xF000 or (h2 & 0xE800) != 0xE800:
+        return None
+    off = ((h1 & 0x7FF) << 12) | ((h2 & 0x7FF) << 1)
+    if off & 0x400000:
+        off -= 0x800000
+    t = at + o + 4 + off
+    return t & ~3 if (h2 & 0xF800) == 0xE800 else t  # blx: an ARM function
+
+
+def check_thumb(img: Image, target: bytes, code: bytes, relocs: dict, local: set, addr: int) -> str:
+    """check() for Thumb code: every byte outside the relocations equal, every relocation to the right symbol (a
+    bl the linker turns into blx for an ARM function is the same call)."""
+    covered = set()
+    for o, (typ, sym, add) in relocs.items():
+        covered.update(range(o, o + 4))
+        if sym and sym not in img.known and sym not in local:
+            return f"uses {sym}, which this game does not have (the link would fail)"
+        if typ == donorlib.R_ARM_ABS32:
+            a = int.from_bytes(target[o:o + 4], "little")
+            want = img.addr_of.get(sym)
+            if sym and want is not None and a not in (want + add, (want + add) | 1):
+                return f"loads {sym}+{add} instead of 0x{a:08x}"
+        elif typ == R_ARM_THM_CALL:
+            t = thumb_bl_target(target, o, addr)
+            if t is None:
+                return f"halfword {o // 2} differs"
+            want = resolve(img, t) or img.reloc_name(addr + o)
+            if sym and want and sym != want:
+                return f"calls {sym} instead of {want}"
+        else:
+            return f"relocation type {typ}"
+    for i, (a, b) in enumerate(zip(target, code)):
+        if i not in covered and a != b:
+            return f"halfword {i // 2} differs"
     return ""
 
 
@@ -615,7 +719,7 @@ def integrate_verified(found: list[tuple[str, int, int, str]], log=print) -> lis
     return [p.stem for p in created]
 
 
-def commit(names: list[str], push: bool) -> None:
+def commit(names: list[str], push: bool, msg: str | None = None) -> None:
     """Commits exactly what this run added (sources, delinks.txt, compilers.txt), never anything else."""
     files = [f"src/auto/{n}.c" for n in names if (ROOT / "src" / "auto" / f"{n}.c").exists()]
     cfg = [p.relative_to(ROOT).as_posix() for p in (am.DELINKS, am.COMPILERS_TXT) if p.exists()]
@@ -625,7 +729,7 @@ def commit(names: list[str], push: bool) -> None:
     paths = files + cfg
     for k in range(0, len(paths), 100):  # in chunks: Windows limits the length of a command line
         run(["git", "add", "--", *paths[k:k + 100]])
-    msg = (f"clone_match: {len(names)} matching functions\n\nFunctions with the same code as functions already "
+    msg = msg or (f"clone_match: {len(names)} matching functions\n\nFunctions with the same code as functions already "
            "matched in this game or in another of our DS projects (tools/clone_match.py). VERIFY PASSED.\n")
     r = run(["git", "commit", "-q", "-m", msg])  # the index holds only these files (checked above)
     if r.returncode:

@@ -37,6 +37,7 @@ from project import ROOT  # noqa: E402  (the game: DSD_PROJECT or the current fo
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import project  # noqa: E402
 import probe_compiler as pc  # noqa: E402
+import missdb  # noqa: E402
 import auto_match as am  # noqa: E402
 from fakematch import fake_match  # noqa: E402
 from pipeline_lock import journal_begin, journal_created, journal_end, pipeline_lock  # noqa: E402
@@ -50,6 +51,7 @@ RELOCS = project.ARM9 / "relocs.txt" if hasattr(project, "ARM9") else project.SY
 OVL_DIR = project.ARM9 / "overlays"
 _OVL_INDEX = None
 MODULE = "main"
+MISS_SOURCE = "workbench"  # who is judging, kept with each miss (hunt, import... set it)
 # what select_module() must put back when it returns to the main module
 _MAIN_STATE = (project.SYMBOLS, project.DELINKS, getattr(pc, "ARM9_BIN", None), getattr(pc, "ARM9_BASE", None),
                am.MAIN_TEXT)
@@ -438,6 +440,10 @@ def judge(name: str, source: str, profile: str | None = None) -> dict:
                         r["diff"] = compact_diff(pc.disasm(target, addr, thumb), pc.disasm(cand, addr, thumb))
                         if os.environ.get("WB_FULL"):  # both listings, for tools/mdiff.py (structural diff)
                             r["full"] = {"t": pc.disasm(target, addr, thumb), "c": pc.disasm(cand, addr, thumb)}
+            if not r["match"]:  # every miss goes to the miss database (replayed on the other functions)
+                missdb.record(name, source, prof, r["status"], diffs=r.get("diffs"), total=r.get("total"),
+                              error=r.get("errors", ""), source=MISS_SOURCE, obj=obj, module=MODULE, addr=addr,
+                              size=size)
         finally:
             tmp.cleanup()
         rank = lambda x: ({"match": 0, "near": 1, "size": 2, "compile": 3}[x["status"]], x.get("diffs", 0))  # noqa
@@ -789,10 +795,21 @@ def cmd_datacheck(a) -> None:
     source = Path(a.file).read_text(encoding="utf-8", errors="replace")
     prof = source.split("*/")[0][len(am.MARKER):].strip() if source.startswith(am.MARKER) else \
         f"{am.COMPILERS[0][0]} {am.COMPILERS[0][1]}".strip()
-    objbytes, msg, _obj, tmp = compile_one(source, prof)
-    tmp.cleanup()
+    objbytes, msg, obj, tmp = compile_one(source, prof)
     if objbytes is None:
+        tmp.cleanup()
         return out({"ok": False, "error": "does not compile", "errors": msg[-3000:]})
+    try:
+        r = datacheck(source, objbytes, prof)
+        import missdata  # every data object that differs goes to the miss database (replayed on all games)
+        missdata.record(source, obj, r["symbols"], prof, MODULE)
+    finally:
+        tmp.cleanup()
+    out(r)
+
+
+def datacheck(source: str, objbytes: bytes, prof: str) -> dict:
+    """What cmd_datacheck prints: every data object of the compiled file compared with the game."""
     d = objbytes
     secs = elf_sections(d)
     syms = elf_symbols(d, secs)
@@ -856,8 +873,8 @@ def cmd_datacheck(a) -> None:
                              "(the linker keeps the object's order: change the order of the definitions, or what "
                              "initializes them, until it follows the game)")
     all_ok &= not order
-    out({"ok": all_ok, "profile": prof, "symbols": report, "order": order,
-         "note": "pointers are compared by what they point at; data that is not in symbols.txt cannot be checked"})
+    return {"ok": all_ok, "profile": prof, "symbols": report, "order": order,
+            "note": "pointers are compared by what they point at; data that is not in symbols.txt cannot be checked"}
 
 
 # ---------------------------------------------------------------- shared header
