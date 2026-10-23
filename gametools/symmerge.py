@@ -27,7 +27,7 @@ SYM = re.compile(r"^(\S+) kind:(data|bss)\S* addr:0x([0-9a-f]+)", re.M)
 def code_names() -> collections.Counter:
     """Identifiers used by C code outside src/data (data files are rewritten instead)."""
     c = collections.Counter()
-    for p in (ROOT / "src").rglob("*.c"):
+    for p in list((ROOT / "src").rglob("*.c")) + list((ROOT / "src").rglob("*.cpp")) + list((ROOT / "include").rglob("*.h")):
         if p.parent.name == "data":
             continue
         c.update(set(re.findall(r"\b(data_\w+)\b", p.read_text(encoding="utf-8", errors="replace"))))
@@ -99,7 +99,8 @@ def main() -> None:
             s = f / "symbols.txt"
             s.write_text("".join(l for l in s.read_text(encoding="utf-8").splitlines(True)
                                  if l.split(" ", 1)[0] not in mine), encoding="utf-8", newline="\n")
-    pat = re.compile(r"\(u32\)(?:\(\(u8 \*\))?&(" + "|".join(map(re.escape, names)) + r")\b(?: \+ 0x([0-9a-f]+)\))?")
+    # clang-format may have written `(u32) &sym` / `(u32) ((u8 *) &sym + 0x2)`: the spaces are optional
+    pat = re.compile(r"\(u32\) ?(?:\(\(u8 \*\) ?)?&(" + "|".join(map(re.escape, names)) + r")\b(?: \+ 0x([0-9a-f]+)\))?")
     fixed = 0
     for c in (ROOT / "src" / "data").glob("*.c"):
         t = c.read_text(encoding="utf-8")
@@ -115,7 +116,7 @@ def main() -> None:
         t = re.sub(r"^extern u8 (" + "|".join(map(re.escape, names)) + r")\[\];\n", "", t, flags=re.M)
         for bn in sorted(bases):
             if not re.search(rf"\b{bn}\[", t):
-                t = t.replace('#include "m2c.h"\n\n', f'#include "m2c.h"\n\nextern u8 {bn}[];\n', 1)
+                t = re.sub(r'(#include "m2c.h"\n)', lambda m: m[1] + f"extern u8 {bn}[];\n", t, count=1)
         c.write_text(t, encoding="utf-8", newline="\n")
         fixed += 1
     print(f"rewrote {nrel} relocations, fixed {fixed} data files")
