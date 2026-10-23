@@ -123,7 +123,11 @@ def check(a) -> None:
         if st.get("done"):
             continue
         got = {nm: placed.get(nm) for nm in st["order"]}
-        if all(got[nm] == st["addr"][nm] for nm in st["order"]):
+        # judged on the layout inside the file: a wrong file earlier in the section shifts every later one, which
+        # is no fault of theirs (the final `match.py verify` checks the absolute addresses once the wrong ones are gone)
+        first = st["order"][0]
+        delta = (got[first] - st["addr"][first]) if got[first] is not None else None
+        if delta is not None and all(got[nm] is not None and got[nm] - delta == st["addr"][nm] for nm in st["order"]):
             st["done"] = True
             ok += 1
             continue
