@@ -83,9 +83,9 @@ def main() -> None:
             p.write_text("".join(l for l in p.read_text(encoding="utf-8").splitlines(True) if l.split(" ", 1)[0] not in mine),
                          encoding="utf-8", newline="\n")
     # C files that wrote a fake pointer as (u32)&sym get the raw value back
-    pat = re.compile(r"\(u32\)(?:\(\(u8 \*\))?&(" + "|".join(map(re.escape, names)) + r")(?: \+ 0x([0-9a-f]+)\))?") if names else None
+    pat = re.compile(r"\(u32\) ?(?:\(\(u8 \*\) ?)?&(" + "|".join(map(re.escape, names)) + r")(?: \+ 0x([0-9a-f]+)\))?") if names else None
     fixed = 0
-    for c in (ROOT / "src").rglob("*.c") if pat else []:
+    for c in (list((ROOT / "src").rglob("*.c")) + list((ROOT / "src").rglob("*.cpp"))) if pat else []:
         t = c.read_text(encoding="utf-8")
         if not pat.search(t):
             continue

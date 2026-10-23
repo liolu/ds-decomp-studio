@@ -48,6 +48,12 @@ python ../../studio/gametools/ghidra_draft.py --names a,b            # Ghidra dr
    each C that compiles but misses is recorded in the miss database (`gametools/missdb.py`, one
    `decomp ds/missdb.sqlite` for all games) and replayed on every unmatched function of every game. A miss of
    function A is often the exact C of a sibling B, here or in another game.
+8. Put your misses in the right place. The game a miss belongs to is the name of the folder you run from, so run
+   `workbench.py` from `projets/<game>/` itself (or set `DSD_PROJECT` to it), never from a worktree, a copy or a
+   scratch folder. Never set `MISSDB` and never make another copy of `missdb.sqlite`: the only database is
+   `decomp ds/missdb.sqlite`. A try you could not judge (compiler error in your own harness, session cut short)
+   goes to `projets/<game>/build/hunt/best/<function>.c`, the file named exactly after the function, where
+   `missdb.py import` picks it up. Never leave misses in /tmp, a scratchpad, notes or the game repository.
 
 ## Layout
 

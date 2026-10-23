@@ -43,3 +43,8 @@ equal-size runs -> `datagap.py --name-nosym` + `datagen.py` for unreferenced dat
 mwcc facts: one element type per run; arrays get a section each (aligned 4 by the linker) but 1-2 byte scalars are
 packed in one section (so tiegen writes scalars); const all-zero data stays in .rodata, non-const goes to .bss;
 thumb function pointers are written `(u32)&f` (the linker sets bit 0).
+When `ninja` fails its symbol check after datagen/bssgen: `datashift.py` prints only the objects where the offset
+CHANGES (root causes; the overlays start AFTER(ARM9), so a shifted main .bss moves them all). Seen on The Sims 2: an odd
+3-byte symbol (neither scalar nor array = a field) -> `symmerge.py --min-size 3 --apply`; false pointers that symmerge
+turned into `to:obj add:0x1` (0x0212_0001-like table entries) make objdiff report 9x% on a pointer-free table -> delete
+those relocs.txt lines by hand.

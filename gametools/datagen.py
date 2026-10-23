@@ -137,7 +137,9 @@ def main() -> None:
             runs, cur = [], []
             for it in items:
                 ad, _n, size, decl, _e = it
-                fits = decl is not None and (ad % 4 == 0 or size < 4)
+                # every array gets a section of its own that the linker aligns to 4, so an object that does not
+                # start on a 4-byte boundary cannot follow another one in a file (tiegen writes 1-2 byte scalars)
+                fits = decl is not None and ad % 4 == 0
                 same_type = cur and decl is not None and cur[-1][3].split("[")[0].split()[-2] == decl.split("[")[0].split()[-2]
                 if cur and fits and same_type and cur[-1][0] + cur[-1][2] == ad and size > cur[-1][2]:  # linker sorts by size
                     cur.append(it)
