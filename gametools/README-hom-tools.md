@@ -41,7 +41,8 @@ Order: `datagap.py` (what is left and why) -> `fakeptr.py --apply` (false pointe
 by auto_match.integrate, file removed at `workbench commit`) -> `tiegen.py gen`, ninja, `tiegen.py check` (twice) for
 equal-size runs -> `datagap.py --name-nosym` + `datagen.py` for unreferenced data -> `match.py verify`.
 mwcc facts: one element type per run; arrays get a section each (aligned 4 by the linker) but 1-2 byte scalars are
-packed in one section (so tiegen writes scalars); const all-zero data stays in .rodata, non-const goes to .bss;
+packed in one section (so tiegen writes scalars); const all-zero data stays in .rodata, non-const goes to .bss unless the file has `#pragma explicit_zero_data on`
+(datagen writes it, so all-zero .data is matched too);
 thumb function pointers are written `(u32)&f` (the linker sets bit 0).
 When `ninja` fails its symbol check after datagen/bssgen: `datashift.py` prints only the objects where the offset
 CHANGES (root causes; the overlays start AFTER(ARM9), so a shifted main .bss moves them all). Seen on The Sims 2: an odd
