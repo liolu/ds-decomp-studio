@@ -159,14 +159,7 @@ def compile_profiles(pre: str, dname: str, rename: dict, name: str, size: int, a
 
 
 def game_symbols() -> dict[int, str]:
-    out = {}
-    for line in project.SYMBOLS.read_text().splitlines():
-        m = SYM_RE.match(line)
-        if m:
-            addr = int(m.group(3), 16)
-            if m.group(2) == "function" or addr not in out:
-                out[addr] = m.group(1)
-    return out
+    return _project_symbols(project.SYMBOLS)
 
 
 # ---------------------------------------------------------------- data symbols created on demand
@@ -188,9 +181,26 @@ def data_ranges() -> list[tuple[int, int, str]]:
     return _DATA_RANGES
 
 
+_C_DATA = None
+
+
+def c_data_ranges() -> list[tuple[int, int]]:
+    """[(start, end)] of the data already given to C files (data sections of delinks.txt file entries)."""
+    global _C_DATA
+    if _C_DATA is None:
+        body = project.DELINKS.read_text(encoding="utf-8").split("\n\n", 1)[-1]
+        _C_DATA = [(int(m.group(1), 16), int(m.group(2), 16))
+                   for m in re.finditer(r"^\s+\.(?:data|rodata|bss|sbss|sdata)\S*\s+start:0x([0-9a-f]+) "
+                                        r"end:0x([0-9a-f]+)", body, re.M)]
+    return _C_DATA
+
+
 def data_symbol(addr: int, syms: dict[int, str]) -> str | None:
     """A game symbol for a data address the donor's code loads (a variable, a table...) when the game has none yet:
-    data_<address>, added to symbols.txt with the matches that use it. None outside the module's data."""
+    data_<address>, added to symbols.txt with the matches that use it. None outside the module's data, and None
+    inside data a C file already defines (no object would define the new label: check symbols fails)."""
+    if any(start < addr < end for start, end in c_data_ranges()):
+        return None
     for start, end, kind in data_ranges():
         if start <= addr < end:
             with _new_syms_lock:
@@ -200,6 +210,45 @@ def data_symbol(addr: int, syms: dict[int, str]) -> str | None:
                     syms[addr] = name
                 return syms[addr]
     return None
+
+
+# Calls the compiler adds by itself (`_u32_div_f`, `_ddiv`...) are not in the source, so they cannot be renamed to
+# the game's symbol: the game's symbol takes the runtime name instead (only an automatic func_/data_ name), at
+# integration. Only functions: a data symbol keeps its name (renaming one changes the order of size ties).
+# {our function: {game symbol: runtime name}}
+_RUNTIME: dict[str, dict[str, str]] = {}
+AUTO_NAME = re.compile(r"(func|data)_(ov\d+_)?[0-9a-f]{8}$")
+AUTO_FUNC = re.compile(r"func_(ov\d+_)?[0-9a-f]{8}$")
+
+
+def runtime_calls(name: str, rename: dict, pre: str | None, syms: dict[int, str]) -> str:
+    """Makes `rename` keep the runtime names the source does not spell (implicit calls) and remembers the game
+    symbols to rename for `name`. Returns why the candidate cannot be used ('' when it can)."""
+    implicit = [s for s in rename if pre and rename[s] != s and not re.search(rf"\b{re.escape(s)}\b", pre)]
+    todo = {}
+    with _new_syms_lock:
+        taken = {v: k for f in _RUNTIME.values() for k, v in f.items()}
+        names = set(syms.values())
+        for s in implicit:
+            tn = rename[s]
+            if AUTO_NAME.match(s) or not AUTO_FUNC.match(tn):
+                return f"implicit runtime call {s} (the game calls it {tn})"
+            if s in names or taken.get(s, tn) != tn:
+                return f"implicit runtime call {s} (the game already has a {s})"
+            todo[tn] = s
+        for tn, s in todo.items():
+            rename[s] = s
+        if todo:
+            _RUNTIME[name] = todo
+    return ""
+
+
+def runtime_renames(found_names) -> dict[str, str]:
+    """{game symbol: runtime name} the matches `found_names` need (see runtime_calls)."""
+    out = {}
+    for n in found_names:
+        out.update(_RUNTIME.get(n, {}))
+    return out
 
 
 def add_new_symbols(sources: list[str]) -> int:
@@ -335,13 +384,19 @@ def only_function(obj_file: Path, name: str) -> bool:
 # ---------------------------------------------------------------- our other projects as donors
 
 def _project_symbols(sym_file: Path) -> dict[int, str]:
+    """Symbols of the main module, then of its autoloads (itcm/, dtcm/ next to it): code also loads ITCM/DTCM
+    addresses (SDK_AUTOLOAD_DTCM_START in one project is data_027e0000 in another), which must be renamed too."""
     out = {}
-    for line in sym_file.read_text(encoding="utf-8", errors="replace").splitlines():
-        m = SYM_RE.match(line)
-        if m:
-            a = int(m.group(3), 16)
-            if m.group(2) == "function" or a not in out:
-                out[a] = m.group(1)
+    files = [sym_file] + [sym_file.parent / d / "symbols.txt" for d in ("itcm", "dtcm")]
+    for f in files:
+        if not f.exists():
+            continue
+        for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
+            m = SYM_RE.match(line)
+            if m:
+                a = int(m.group(3), 16)
+                if m.group(2) == "function" and f == sym_file or a not in out:
+                    out[a] = m.group(1)
     return out
 
 
@@ -486,6 +541,10 @@ def try_internal(f, target, fp, syms, log, style) -> tuple[str, str] | None:
                 log(f"  {name}: {g.name}:{d_name} skipped ({why})")
                 continue
             pre = internal_preprocessed(g, path, version, flags)
+            why = runtime_calls(name, rename, pre, syms)
+            if why:
+                log(f"  {name}: {g.name}:{d_name} skipped ({why})")
+                continue
             profiles = [(version, flags)] + alt_profiles(version, flags, style)
             status, source, version, flags = compile_profiles(pre, d_name, rename, name, size, addr, profiles)
             log(f"  {name}: projets/{g.name}:{path}:{d_name} [{version} {flags}] -> {status}")
@@ -534,11 +593,9 @@ def try_one(dn, con, f, syms, log, licenses) -> tuple[str, str] | None:
             continue
         incs = con.execute("SELECT incs FROM repo WHERE repo=?", (repo,)).fetchone()[0]
         pre = preprocessed(dn, repo, rel, profile, incs)
-        # Calls the compiler adds by itself (`_u32_div_f`, `_ddiv`...) are not in the source, so they cannot be
-        # renamed to the game's symbol: the link would fail
-        implicit = [s for s in rename if pre and rename[s] != s and not re.search(rf"\b{re.escape(s)}\b", pre)]
-        if implicit:
-            log(f"  {name}: {repo}:{dname} skipped (implicit runtime call {implicit[0]})")
+        why = runtime_calls(name, rename, pre, syms)
+        if why:
+            log(f"  {name}: {repo}:{dname} skipped ({why})")
             continue
         version, flags = dn.PROFILES[profile]
         # The donor's profile first, then the other compilers while the code has the right shape
@@ -812,9 +869,27 @@ def main():
     compilers_backup = project.COMPILERS_TXT.read_bytes() if project.COMPILERS_TXT.exists() else b""
     # Killed before the end (job cancelled): the next run puts these files back and deletes the new sources
     journal_begin([project.DELINKS, project.COMPILERS_TXT, project.SYMBOLS])
+    symbols_backup = project.SYMBOLS.read_bytes()
     n_syms = add_new_symbols([f[3] for f in found])
     if n_syms:
         print(f"{n_syms} data symbols added to symbols.txt for these functions", flush=True)
+    runtime = runtime_renames(f[0] for f in found)
+    if runtime:
+        import names
+        bad = names.clashes(runtime)
+        found = [f for f in found if not set(_RUNTIME.get(f[0], {})) & bad]
+        runtime = {k: v for k, v in runtime.items() if k not in bad}
+        saved, created, _ = names.apply(runtime) if found else ({}, [], {})
+        if runtime and found:
+            print("runtime names given to game symbols: " + ", ".join(f"{k} -> {v}" for k, v in runtime.items()),
+                  flush=True)
+        if not found:
+            return
+        # file renames moved paths in delinks.txt / compilers.txt: verify() restores these, so back them up again
+        delinks_backup = project.DELINKS.read_bytes()
+        compilers_backup = project.COMPILERS_TXT.read_bytes() if project.COMPILERS_TXT.exists() else b""
+    else:
+        saved, created = {}, []
     entries = integrate(found)
     journal_created([ROOT / rel for rel in entries])
     # The game repos check clang-format in CI: format now, the verification below covers the formatted files
@@ -824,6 +899,15 @@ def main():
         print("pre-commit not found: files left unformatted")
     print(f"Added {len(entries)} functions to src/donor/, verifying...", flush=True)
     kept = verify(entries, delinks_backup, compilers_backup, args.bisect)
+    if not kept and saved:
+        # the runtime names go with the matches that needed them (verify restored delinks/compilers itself)
+        for f in created:
+            f.unlink(missing_ok=True)
+        for f, data in saved.items():
+            f.write_bytes(data)
+        print("runtime names undone", flush=True)
+    if not kept:
+        project.SYMBOLS.write_bytes(symbols_backup)  # the data symbols added for the matches
     journal_end()
     print(f"OK: {len(kept)} functions reused from other decompilations." if kept else "Nothing added.")
 
