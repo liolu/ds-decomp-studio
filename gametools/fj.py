@@ -101,7 +101,7 @@ if __name__ == '__main__':
         for n, r in pool.imap_unordered(safe, todo, chunksize=4):
             if r is None: continue
             res[n] = r; done += 1
-            if r['match'] or done % 100 == 0:
+            if r['match'] or done % 10 == 0:  # frequent writes: agentround.py detects a hung Pool by this file
                 print(n, r['status'], r['k'], f'[{done}/{len(todo)} {time.time()-t0:.0f}s]', flush=True)
                 json.dump(res, open(resf, 'w'), indent=1)
     json.dump(res, open(resf, 'w'), indent=1)

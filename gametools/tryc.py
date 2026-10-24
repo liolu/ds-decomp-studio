@@ -7,7 +7,7 @@ for k, src in enumerate(a):
     if src.startswith('@'): src = open(src[1:]).read()
     if '#include' not in src: src = '#include "m2c.h"\n' + src
     p = os.path.join(tempfile.gettempdir(), f'tryc_{name}_{k}.c'); open(p, 'w').write(src)
-    out = subprocess.run([sys.executable, '../../tools/j.py', name, p] + prof, capture_output=True, text=True).stdout
+    out = subprocess.run([sys.executable, str(__import__('pathlib').Path(__file__).resolve().parent / 'j.py'), name, p] + prof, capture_output=True, text=True).stdout
     m = re.match(r'(\w+) profile (\S+(?: \S+)?) diffs (\S+) size (\S+) / (\S+)', out)
     print(k, out.split('\n')[0][:90])
     d = 9999 if not m or m.group(3) == 'None' else int(m.group(3))

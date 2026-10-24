@@ -50,7 +50,10 @@ def load():
 def save(led):
     HUNT.mkdir(parents=True, exist_ok=True)
     tmp = LEDGER.with_suffix('.tmp'); tmp.write_text(json.dumps(led, indent=1, sort_keys=True), encoding='utf-8')
-    os.replace(tmp, LEDGER)
+    for i in range(40):  # Windows: antivirus/indexer can hold the file for a moment
+        try: os.replace(tmp, LEDGER); return
+        except PermissionError: time.sleep(0.25)
+    LEDGER.write_text(tmp.read_text(encoding='utf-8'), encoding='utf-8')
 
 
 def update(name, **kw):
