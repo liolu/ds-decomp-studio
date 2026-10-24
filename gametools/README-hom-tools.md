@@ -61,6 +61,10 @@ Run from the game dir (`projets/<game>/`), env.sh sourced. Agents get `AGENT-BRI
 - `agentnear.py ROUND [--max-diffs 9] [--per 15] [--lists N]` : hands out the near misses of every past round
   (build/hunt/*/all/results.json), with the best file copied into aK/ as the starting point.
 - `agentrelease.py ROUND` : names handed out but never tried (no aK/NAME.c: rate limit, early stop) go back to the pool.
+- `agentpool.py` : read-only census of what is left (compile/size per band, near misses per diff bucket). Run it before
+  dealing instead of probing agentdeal (which marks names as assigned).
+- `nearperm.py ROUND [--max-diffs 6] [--only a1,a2]` : no-LLM pass: judges every aK/NAME.c and runs permrand on the near
+  misses, a matching permutation replaces aK/NAME.c (old kept as .prev). r27: 0/14 (diffs were not declaration order).
 - `agentround.py ROUND` : collect aK/*.c, symfix, judge with every profile (fj.py, capped), submit-many + main submits.
 - `roundpush.sh ROUND` : agentround + `workbench commit` + trailer + configure + progress report gz + git push,
   log in ROUND/push.log.

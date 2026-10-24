@@ -46,5 +46,12 @@ RULES (violations make the match rejected):
   `build/hunt/agents/*.c`: parallel writes corrupt shared state.
 - Never use leaked SDK source.
 
+Near-miss fixes found in r27: re-judge 1.2/sp3, 1.2/sp2p3 AND 2.0/sp1p5 first (the header profile was wrong for 3 of 6
+matches; `e*0x110` as `add r,e,e,lsl#4; lsl#4` = 2.0 with a typed 0x110-byte struct array, `mov+mul` = 1.2); pass plain
+addresses (`L.buf`, `&L`) inline instead of pointer locals (changes the whole prologue); invert a branch
+(`if (f()) break; continue;` vs `if (!f()) continue; break;`); `b = (u8 *)((s32)b + K)` when `b += K` gets folded into
+the next load offset. Pure register permutations: `nearperm.py ROUND` (orchestrator, no LLM) already tried declaration
+orders, do not spend judges on them.
+
 Final answer (short): for each function `NAME: MATCH <profile>` (file written) or `NAME: no (best N diffs, what blocks)`.
 ---
