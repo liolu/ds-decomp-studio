@@ -10,14 +10,14 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 ## Avancement des jeux
 
 <!-- games:start -->
-62 jeux, 22 publiés · 85092/453238 fonctions matchées au total · mis à jour le 2026-10-24 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
+62 jeux, 23 publiés · 85098/453238 fonctions matchées au total · mis à jour le 2026-10-24 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
 
 | Jeu | Version | Studio | Code matché | Fonctions | ROM | Dépôt |
 |---|---|---|---|---|---|---|
 | Rayman Raving Rabbids | usa AR5E | Ubisoft Casablanca | `█████░░░░░` 47.23% | 2560/3607 | ✅ | [Rayman-RR-usa-decomp](https://github.com/liolu/Rayman-RR-usa-decomp) |
 | LEGO Star Wars II | usa AL7E | Amaze Entertainment | `█████░░░░░` 45.39% | 3936/4763 | ✅ | [lego-star-wars-ii-the-original-trilogy-decomp](https://github.com/liolu/lego-star-wars-ii-the-original-trilogy-decomp) |
 | Heroes of Mana | eu AHEP | Brownie Brown | `████░░░░░░` 44.52% | 7123/9264 | ✅ | [heroes-of-mana-decomp](https://github.com/liolu/heroes-of-mana-decomp) |
-| Tom and Jerry Tales | eu AJTP | Sensory Sweep | `████░░░░░░` 41.00% | 1251/1921 | ✅ | local (pas encore de match) |
+| Tom and Jerry Tales | eu AJTP | Sensory Sweep | `████░░░░░░` 41.00% | 1251/1921 | ✅ | [tom-and-jerry-tales-decomp](https://github.com/liolu/tom-and-jerry-tales-decomp) |
 | Spider-Man 2 | usa AS2E | Vicarious Visions | `███░░░░░░░` 32.97% | 1472/2837 | ✅ | local (pas encore de match) |
 | Ultimate Spider-Man | fra AUSF | Vicarious Visions | `███░░░░░░░` 32.90% | 2530/4592 | ✅ | [ultimate-spider-man-decomp](https://github.com/liolu/ultimate-spider-man-decomp) |
 | Farm Frenzy | usa BFZE | Alawar | `███░░░░░░░` 26.13% | 876/1208 | ✅ | [farm-frenzy-decomp](https://github.com/liolu/farm-frenzy-decomp) |
@@ -60,6 +60,7 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Childrenmana | usa ASEE | Nex Entertainment | `░░░░░░░░░░` 0.39% | 526/9011 | ✅ | local (pas encore de match) |
 | Nintendogs | jp AD3J | Nintendo EAD | `░░░░░░░░░░` 0.34% | 414/8614 | ✅ | local (pas encore de match) |
 | Spider-Man 2 | eu AS2P | Vicarious Visions | `░░░░░░░░░░` 0.05% | 19/2847 | ✅ | local (pas encore de match) |
+| Shrek Forever After | eu VSKV | Griptonite Games | `░░░░░░░░░░` 0.01% | 7/12253 | ✅ | local (pas encore de match) |
 | The Penguins of Madagascar | eu VPEV | Griptonite Games | `░░░░░░░░░░` 0.01% | 7/8879 | ✅ | local (pas encore de match) |
 | Db Kai Rpg | eu BRPP | Monolith Soft | `░░░░░░░░░░` 0.00% | 0/2127 | ✅ | local (pas encore de match) |
 | Doh | usa CIEE |  | `░░░░░░░░░░` 0.00% | 0/9688 | ✅ | local (pas encore de match) |
@@ -72,7 +73,6 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Pvz         | eu BWBY | PopCap | `░░░░░░░░░░` 0.00% | 0/5647 | ✅ | local (pas encore de match) |
 | Pvz         | eu BWBX | PopCap | `░░░░░░░░░░` 0.00% | 0/5647 | ✅ | local (pas encore de match) |
 | Rrr2 Ds | usa YRRE | Ubisoft Casablanca | `░░░░░░░░░░` 0.00% | 0/6201 | ✅ | local (pas encore de match) |
-| Shrek Forever After | eu VSKV | Griptonite Games | `░░░░░░░░░░` 0.00% | 1/12253 | ✅ | local (pas encore de match) |
 | Spider_Mansd | eu B3PP | Griptonite Games | `░░░░░░░░░░` 0.00% | 0/10144 | ✅ | local (pas encore de match) |
 | Toy Story 3 | eu VT3V | n-Space | `░░░░░░░░░░` 0.00% | 0/5745 | ✅ | local (pas encore de match) |
 | Wheelfortune | usa BW7E |  | `░░░░░░░░░░` 0.00% | 0/7389 | ✅ | local (pas encore de match) |
