@@ -48,3 +48,22 @@ CHANGES (root causes; the overlays start AFTER(ARM9), so a shifted main .bss mov
 3-byte symbol (neither scalar nor array = a field) -> `symmerge.py --min-size 3 --apply`; false pointers that symmerge
 turned into `to:obj add:0x1` (0x0212_0001-like table entries) make objdiff report 9x% on a pointer-free table -> delete
 those relocs.txt lines by hand.
+
+## Agent rounds (N agents in a loop, then one push)
+
+Run from the game dir (`projets/<game>/`), env.sh sourced. Agents get `AGENT-BRIEF-hom.md` + one list each.
+
+- `agentdeal.py N PER [--status compile,size --min-size B --max-size B]` : deals the hunt queue into
+  build/hunt/agentlists/agentI.txt, remembers handed-out names in build/hunt/assigned.json.
+- `agentrefill.sh ROUND [PER]` : one fresh list for a new agent slot (build/hunt/ROUND/listK.txt + aK/), filled from
+  the size bands 40-170, 171-300, 301-500, 501-800, 801-1200, 1201-2000 in order. Call it each time an agent ends.
+- `agentnear.py ROUND [--max-diffs 9] [--per 15] [--lists N]` : hands out the near misses of every past round
+  (build/hunt/*/all/results.json), with the best file copied into aK/ as the starting point.
+- `agentrelease.py ROUND` : names handed out but never tried (no aK/NAME.c: rate limit, early stop) go back to the pool.
+- `agentround.py ROUND` : collect aK/*.c, symfix, judge with every profile (fj.py, capped), submit-many + main submits.
+- `roundpush.sh ROUND` : agentround + `workbench commit` + trailer + configure + progress report gz + git push,
+  log in ROUND/push.log.
+
+Agent prompt that works: "one pass, max 4 judges per function, answer when the list is done, stop at HH:55". Never
+"keep going until HH:00": agents then grind the same functions for an hour. Yields on Heroes of Mana: compile/size
+40-170 B ~75%, 170-300 ~65%, 300-500 ~55%, 500-800 ~40%, 800-1200 ~10%; near misses 1-9 diffs ~25%, 10-20 ~15%.

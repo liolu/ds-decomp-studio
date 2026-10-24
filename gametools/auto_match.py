@@ -55,7 +55,8 @@ MWCC_ROOT = Path(os.environ.get("MWCCARM", ROOT / "tools" / "mwccarm"))
 COMPILERS = [("2.0/sp1p5", ""), ("1.2/sp2p3", ""), ("1.2/sp2p3", "-proc arm7tdmi")]
 # Other mwccarm builds to try, e.g. AUTO_EXTRA_PROFILES="1.2/sp3,1.2/sp4" (Heroes of Mana: 1.2/sp3 builds code that ends in
 # `pop {.., pc}` and keeps `sub sp` instead of the `push r3` pad, which 2.0 and 1.2/sp2p3 do not produce).
-EXTRA_PROFILES = [(v.strip(), "") for v in os.environ.get("AUTO_EXTRA_PROFILES", "").split(",") if v.strip()]
+# split only on commas starting a new version ("1.2/sp3 -O2,p" keeps its comma)
+EXTRA_PROFILES = [(v.strip(), "") for v in re.split(r",(?=\s*\d)", os.environ.get("AUTO_EXTRA_PROFILES", "")) if v.strip()]
 COMPILERS += [c for c in EXTRA_PROFILES if c not in COMPILERS]
 # Multi search (--multi / AUTO_MULTI=1): every version also with these optimisation flags (they come after -O4,p and
 # override it); a match with one of them is recorded in compilers.txt like any other profile
