@@ -10,12 +10,12 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 ## Avancement des jeux
 
 <!-- games:start -->
-62 jeux, 22 publiés · 85088/453238 fonctions matchées au total · mis à jour le 2026-10-24 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
+62 jeux, 22 publiés · 85089/453238 fonctions matchées au total · mis à jour le 2026-10-24 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
 
 | Jeu | Version | Studio | Code matché | Fonctions | ROM | Dépôt |
 |---|---|---|---|---|---|---|
 | Rayman Raving Rabbids | usa AR5E | Ubisoft Casablanca | `█████░░░░░` 47.23% | 2560/3607 | ✅ | [Rayman-RR-usa-decomp](https://github.com/liolu/Rayman-RR-usa-decomp) |
-| LEGO Star Wars II | usa AL7E | Amaze Entertainment | `█████░░░░░` 45.30% | 3932/4763 | ✅ | [lego-star-wars-ii-the-original-trilogy-decomp](https://github.com/liolu/lego-star-wars-ii-the-original-trilogy-decomp) |
+| LEGO Star Wars II | usa AL7E | Amaze Entertainment | `█████░░░░░` 45.33% | 3933/4763 | ✅ | [lego-star-wars-ii-the-original-trilogy-decomp](https://github.com/liolu/lego-star-wars-ii-the-original-trilogy-decomp) |
 | Heroes of Mana | eu AHEP | Brownie Brown | `████░░░░░░` 44.52% | 7123/9264 | ✅ | [heroes-of-mana-decomp](https://github.com/liolu/heroes-of-mana-decomp) |
 | Tom and Jerry Tales | eu AJTP | Sensory Sweep | `████░░░░░░` 41.00% | 1251/1921 | ✅ | local (pas encore de match) |
 | Spider-Man 2 | usa AS2E | Vicarious Visions | `███░░░░░░░` 32.97% | 1472/2837 | ✅ | local (pas encore de match) |
