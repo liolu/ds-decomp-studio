@@ -10,7 +10,7 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 ## Avancement des jeux
 
 <!-- games:start -->
-62 jeux, 23 publiés · 85870/453238 fonctions matchées au total · mis à jour le 2026-10-25 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
+62 jeux, 23 publiés · 85884/453238 fonctions matchées au total · mis à jour le 2026-10-25 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
 
 | Jeu | Version | Studio | Code matché | Fonctions | ROM | Dépôt |
 |---|---|---|---|---|---|---|
@@ -53,7 +53,7 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Star Wars Episode III | eu ASTP | Ubisoft | `░░░░░░░░░░` 2.35% | 805/6518 | ✅ | local (pas encore de match) |
 | Ntr-P-Yybp | eu YYBP | Feelplus | `░░░░░░░░░░` 2.13% | 639/16145 | ✅ | local (pas encore de match) |
 | Fairy Tail: Kardia | jp TFTJ | Konami | `░░░░░░░░░░` 2.01% | 1454/12899 | ✅ | [fairy-tail-kardia-decomp](https://github.com/liolu/fairy-tail-kardia-decomp) |
-| Club House Games | usa ATDE | Agenda | `░░░░░░░░░░` 1.47% | 532/8314 | ✅ | local (pas encore de match) |
+| Club House Games | usa ATDE | Agenda | `░░░░░░░░░░` 1.50% | 546/8314 | ✅ | local (pas encore de match) |
 | Vivapinatads | usa CP3E | Rare | `░░░░░░░░░░` 1.26% | 162/6802 | ✅ | local (pas encore de match) |
 | Saga3 | jp BZ3J | Square Enix | `░░░░░░░░░░` 0.91% | 163/10835 | ✅ | local (pas encore de match) |
 | Sw:Cw-Rh | usa BW9E | Krome Studios | `░░░░░░░░░░` 0.66% | 86/6665 | ✅ | local (pas encore de match) |
