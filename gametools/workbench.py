@@ -411,7 +411,7 @@ def judge(name: str, source: str, profile: str | None = None) -> dict:
         for p in (ROOT / "build" / "auto" / "near" / f"{name}.c", ROOT / (covered(addr) or "-")):
             if p.is_file():
                 base += p.read_text(encoding="utf-8", errors="replace") + "\n"
-        why = fake_match(source, base + "\n" + STD_HEAD + f"#define M2C_SELF_{name}\n")
+        why = fake_match(source, base + "\n" + STD_HEAD + f"#define M2C_SELF_{name}\n", name)
         if why:
             return {"status": "refused", "match": False, "why": f"fake match: {why}. Write plain C only."}
     thumb = f["mode"] == "thumb"

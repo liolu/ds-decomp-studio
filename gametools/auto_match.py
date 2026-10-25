@@ -1084,6 +1084,18 @@ def freeze(source: str, name: str, protos: dict[str, str]) -> str:
 PROFILE_REC = None  # set by workbench: name -> (start, end) of the -profile .data record
 
 
+def code_section(addr: int) -> str:
+    """Name of the module's code section (header of delinks.txt, `kind:code`) holding addr: .text for almost
+    everything, .init for the C++ static initializers (__sinit_*)."""
+    for line in DELINKS.read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith((" ", "\t")):
+            break  # first file entry: end of the module header
+        m = re.match(r"\s+(\.\w+)\s+start:0x([0-9a-fA-F]+)\s+end:0x([0-9a-fA-F]+)\s+kind:code", line)
+        if m and int(m.group(2), 16) <= addr < int(m.group(3), 16):
+            return m.group(1)
+    return ".text"
+
+
 def integrate(found: list[tuple[str, int, int, str]]) -> list[Path]:
     AUTO_SRC.mkdir(parents=True, exist_ok=True)
     created = []
@@ -1099,7 +1111,8 @@ def integrate(found: list[tuple[str, int, int, str]]) -> list[Path]:
             import profrec  # while the function was unmatched its record may have had a data file of its own
             profrec.release(rec[0])
             extra = "    .data       start:0x%08x end:0x%08x\n" % rec
-        entries.append(f"\nsrc/auto/{name}.c:\n    complete\n    .text       start:0x{addr:08x} end:0x{addr + size:08x}\n" + extra)
+        sec = code_section(addr)
+        entries.append(f"\nsrc/auto/{name}.c:\n    complete\n    {sec:<12}start:0x{addr:08x} end:0x{addr + size:08x}\n" + extra)
     with DELINKS.open("a", newline="\n") as f:
         f.writelines(entries)
     # Files matched with another compiler are recorded in compilers.txt (read by tools/configure.py)
