@@ -8,7 +8,7 @@
 set -e
 R=build/hunt/$1; G=../../studio/gametools; LOG=$R/push.log
 TRAILER='Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>'
-export AUTO_EXTRA_PROFILES='1.2/sp3,1.2/sp2p3,1.2/sp3 -O2,p,2.0/sp1p5 -O2,p,2.0/sp1p5 -profile,1.2/sp3 -profile,1.2/sp2p3 -profile,1.2/sp2p3 -thumb,2.0/sp1p5 -thumb,1.2/sp2p3 -proc arm7tdmi,1.2/sp3 -proc arm7tdmi'
+export AUTO_EXTRA_PROFILES='1.2/sp3,1.2/sp2p3,1.2/sp3 -O2,p,2.0/sp1p5 -O2,p,2.0/sp1p5 -profile,1.2/sp3 -profile,1.2/sp2p3 -profile,1.2/sp2p3 -thumb,2.0/sp1p5 -thumb,1.2/sp2p3 -proc arm7tdmi,1.2/sp3 -proc arm7tdmi,2.0/sp1p5 -O1,2.0/sp1p5 -O2,2.0/sp1p5 -O4,s'
 {
 echo "== agentround $(date +%H:%M)"; python $G/agentround.py "$R"
 echo "== commit $(date +%H:%M)"; BEFORE=$(git rev-parse HEAD)

@@ -15,7 +15,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 PROFILES = ('1.2/sp3,1.2/sp2p3,1.2/sp3 -O2,p,2.0/sp1p5 -O2,p,2.0/sp1p5 -profile,1.2/sp3 -profile,1.2/sp2p3 -profile,'
-            '1.2/sp2p3 -thumb,2.0/sp1p5 -thumb,1.2/sp2p3 -proc arm7tdmi,1.2/sp3 -proc arm7tdmi')
+            '1.2/sp2p3 -thumb,2.0/sp1p5 -thumb,1.2/sp2p3 -proc arm7tdmi,1.2/sp3 -proc arm7tdmi,2.0/sp1p5 -O1,2.0/sp1p5 -O2,2.0/sp1p5 -O4,s')
 
 ap = argparse.ArgumentParser()
 ap.add_argument('round'); ap.add_argument('--dry-run', action='store_true'); ap.add_argument('--no-judge', action='store_true', help='reuse ROUND/all/results.json (fj.py pool can hang on Windows: judge the stragglers alone with workbench judge and add them)'); ap.add_argument('-j', type=int, default=8)
