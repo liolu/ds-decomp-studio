@@ -10,14 +10,14 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 ## Avancement des jeux
 
 <!-- games:start -->
-62 jeux, 23 publiés · 85098/453238 fonctions matchées au total · mis à jour le 2026-10-24 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
+62 jeux, 23 publiés · 85870/453238 fonctions matchées au total · mis à jour le 2026-10-25 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
 
 | Jeu | Version | Studio | Code matché | Fonctions | ROM | Dépôt |
 |---|---|---|---|---|---|---|
+| Tom and Jerry Tales | eu AJTP | Sensory Sweep | `████████░░` 77.21% | 1800/1921 | ✅ | [tom-and-jerry-tales-decomp](https://github.com/liolu/tom-and-jerry-tales-decomp) |
+| LEGO Star Wars II | usa AL7E | Amaze Entertainment | `█████░░░░░` 50.12% | 4067/4763 | ✅ | [lego-star-wars-ii-the-original-trilogy-decomp](https://github.com/liolu/lego-star-wars-ii-the-original-trilogy-decomp) |
 | Rayman Raving Rabbids | usa AR5E | Ubisoft Casablanca | `█████░░░░░` 47.23% | 2560/3607 | ✅ | [Rayman-RR-usa-decomp](https://github.com/liolu/Rayman-RR-usa-decomp) |
-| LEGO Star Wars II | usa AL7E | Amaze Entertainment | `█████░░░░░` 45.39% | 3936/4763 | ✅ | [lego-star-wars-ii-the-original-trilogy-decomp](https://github.com/liolu/lego-star-wars-ii-the-original-trilogy-decomp) |
-| Heroes of Mana | eu AHEP | Brownie Brown | `████░░░░░░` 44.52% | 7123/9264 | ✅ | [heroes-of-mana-decomp](https://github.com/liolu/heroes-of-mana-decomp) |
-| Tom and Jerry Tales | eu AJTP | Sensory Sweep | `████░░░░░░` 41.00% | 1251/1921 | ✅ | [tom-and-jerry-tales-decomp](https://github.com/liolu/tom-and-jerry-tales-decomp) |
+| Heroes of Mana | eu AHEP | Brownie Brown | `████░░░░░░` 44.65% | 7130/9264 | ✅ | [heroes-of-mana-decomp](https://github.com/liolu/heroes-of-mana-decomp) |
 | Spider-Man 2 | usa AS2E | Vicarious Visions | `███░░░░░░░` 32.97% | 1472/2837 | ✅ | local (pas encore de match) |
 | Ultimate Spider-Man | fra AUSF | Vicarious Visions | `███░░░░░░░` 32.90% | 2530/4592 | ✅ | [ultimate-spider-man-decomp](https://github.com/liolu/ultimate-spider-man-decomp) |
 | Farm Frenzy | usa BFZE | Alawar | `███░░░░░░░` 26.13% | 876/1208 | ✅ | [farm-frenzy-decomp](https://github.com/liolu/farm-frenzy-decomp) |
@@ -54,9 +54,9 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Ntr-P-Yybp | eu YYBP | Feelplus | `░░░░░░░░░░` 2.13% | 639/16145 | ✅ | local (pas encore de match) |
 | Fairy Tail: Kardia | jp TFTJ | Konami | `░░░░░░░░░░` 2.01% | 1454/12899 | ✅ | [fairy-tail-kardia-decomp](https://github.com/liolu/fairy-tail-kardia-decomp) |
 | Club House Games | usa ATDE | Agenda | `░░░░░░░░░░` 1.47% | 532/8314 | ✅ | local (pas encore de match) |
+| Vivapinatads | usa CP3E | Rare | `░░░░░░░░░░` 1.26% | 162/6802 | ✅ | local (pas encore de match) |
 | Saga3 | jp BZ3J | Square Enix | `░░░░░░░░░░` 0.91% | 163/10835 | ✅ | local (pas encore de match) |
 | Sw:Cw-Rh | usa BW9E | Krome Studios | `░░░░░░░░░░` 0.66% | 86/6665 | ✅ | local (pas encore de match) |
-| Vivapinatads | usa CP3E | Rare | `░░░░░░░░░░` 0.40% | 77/6802 | ✅ | local (pas encore de match) |
 | Childrenmana | usa ASEE | Nex Entertainment | `░░░░░░░░░░` 0.39% | 526/9011 | ✅ | local (pas encore de match) |
 | Nintendogs | jp AD3J | Nintendo EAD | `░░░░░░░░░░` 0.34% | 414/8614 | ✅ | local (pas encore de match) |
 | Spider-Man 2 | eu AS2P | Vicarious Visions | `░░░░░░░░░░` 0.05% | 19/2847 | ✅ | local (pas encore de match) |
