@@ -96,7 +96,11 @@ def main() -> int:
     rest = argv[argv.index("--") + 1:] if "--" in argv else []  # extra asm-differ flags
     a = ap.parse_args(argv[:argv.index("--")] if "--" in argv else argv)
     if a.build:
-        return build(a.name, Path(a.build[0]), a.build[1], Path(a.build[2]))
+        rc = build(a.name, Path(a.build[0]), a.build[1], Path(a.build[2]))
+        if rc == 0:  # every saved try goes through judge too: a miss lands in the miss database (AGENTS.md rule 7)
+            wb.MISS_SOURCE = "asmdiff"
+            wb.judge(a.name, Path(a.build[0]).read_text(encoding="utf-8", errors="replace"), a.build[1])
+        return rc
     if not DIFF_PY.exists():
         sys.exit(f"asm-differ not found at {DIFF_PY}: git clone https://github.com/simonlindholm/asm-differ there "
                  "(or set ASM_DIFFER)")
@@ -148,6 +152,10 @@ def main() -> int:
     cmd = [sys.executable, str(DIFF_PY), f"0x{f['addr']:x}", f"0x{end:x}"]
     cmd += ["--no-pager"] + rest if a.once else ["-w", "-m"] + rest
     env = dict(os.environ, DSD_PROJECT=str(ROOT))
+    if not (shutil.which("less") and shutil.which("tail")) and shutil.which("git"):
+        # watch mode pipes through `tail` and `less`: from PowerShell they are only in Git's usr/bin
+        git = Path(shutil.which("git")).resolve().parent.parent
+        env["PATH"] = str(git / "usr" / "bin") + os.pathsep + env["PATH"]
     return subprocess.call(cmd, cwd=work, env=env)
 
 
