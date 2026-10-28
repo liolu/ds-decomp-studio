@@ -10,7 +10,7 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 ## Avancement des jeux
 
 <!-- games:start -->
-62 jeux, 24 publiés · 87852/453237 fonctions matchées au total · mis à jour le 2026-10-28 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
+62 jeux, 24 publiés · 87863/453237 fonctions matchées au total · mis à jour le 2026-10-28 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
 
 | Jeu | Version | Studio | Code matché | Fonctions | ROM | Dépôt |
 |---|---|---|---|---|---|---|
@@ -35,7 +35,7 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | MySims | usa AQIE | EA | `█░░░░░░░░░` 11.97% | 2595/6820 | ✅ | [mysims-decomp](https://github.com/liolu/mysims-decomp) |
 | Thrillville | usa YTVE | Frontier Developments | `█░░░░░░░░░` 11.70% | 2948/9903 | ✅ | local (pas encore de match) |
 | Code Lyoko | usa AL5E | Game Machine Studios | `█░░░░░░░░░` 11.02% | 2114/7474 | ✅ | [code-lyoko-decomp](https://github.com/liolu/code-lyoko-decomp) |
-| Spore Creatures | usa YSPE | Amaze Entertainment | `█░░░░░░░░░` 10.80% | 3576/12008 | ✅ | local (pas encore de match) |
+| Spore Creatures | usa YSPE | Amaze Entertainment | `█░░░░░░░░░` 10.84% | 3587/12008 | ✅ | local (pas encore de match) |
 | Harvest Moon DS | usa ABCE | Marvelous | `█░░░░░░░░░` 10.38% | 2719/5133 | ✅ | [harvest-moon-ds-decomp](https://github.com/liolu/harvest-moon-ds-decomp) |
 | Spider-Man: Web of Shadows | x CS5X | Amaze Entertainment | `█░░░░░░░░░` 9.57% | 2486/5846 | ✅ | [spider-man-web-of-shadows-decomp](https://github.com/liolu/spider-man-web-of-shadows-decomp) |
 | Nintendogs | jp ADGJ | Nintendo EAD | `█░░░░░░░░░` 9.52% | 1740/8614 | ✅ | local (pas encore de match) |
