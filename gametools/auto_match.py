@@ -210,7 +210,7 @@ def fix_byte_offsets(source: str) -> str:
 
 # Instructions the compiler never generates: functions using them were written in assembly
 # (condition suffix in both orders: UAL `swpbne`, pre-UAL `swpneb`)
-ASM_ONLY = re.compile(r"^\s+(swp|mrs|msr|mcr|mrc|ldc|stc|cdp|svc|swi)b?(eq|ne|cs|hs|cc|lo|mi|pl|vs|vc|hi|ls|ge|lt|gt|le|al)?b?\b", re.M)
+ASM_ONLY = re.compile(r"^\s+(swp|mrs|msr|mcr|mrc|ldc|stc|cdp|svc|swi|clz)b?(eq|ne|cs|hs|cc|lo|mi|pl|vs|vc|hi|ls|ge|lt|gt|le|al)?b?\b", re.M)
 
 
 def asm_function(name: str, asm: str) -> str | None:
