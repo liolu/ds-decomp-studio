@@ -4,7 +4,7 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&
 const fmt = n => Number(n || 0).toLocaleString("fr-FR");
 const hex = n => "0x" + Number(n).toString(16).padStart(8, "0");
 const ago = t => { if (!t) return ""; const s = Date.now() / 1000 - t; return s < 90 ? "a l'instant" : s < 5400 ? Math.round(s / 60) + " min" : s < 172800 ? Math.round(s / 3600) + " h" : Math.round(s / 86400) + " j"; };
-const TABS = [["games", "Jeux"], ["game", "Travailler"], ["queue", "Queue"], ["engine", "Engine map"], ["progress", "Progression"], ["settings", "Reglages"]];
+const TABS = [["games", "Jeux"], ["game", "Travailler"], ["queue", "Queue"], ["engine", "Engine map"], ["tags", "Tags"], ["progress", "Progression"], ["settings", "Reglages"]];
 const ST = {free: "libre", claimed: "pris", expired: "expire", done: "termine", queued: "en attente", running: "en cours",
   failed: "echec", stopped: "arrete", interrupted: "interrompu", cancelled: "annule"};
 let O = null, G = null, J = [], tab = location.hash.slice(1) || "games", sub = "blocks";
@@ -69,6 +69,7 @@ async function render() {
     else if (tab === "game") { v.innerHTML = await viewGame(); afterGame(); }
     else if (tab === "queue") v.innerHTML = await viewQueue();
     else if (tab === "engine") v.innerHTML = await viewEngine();
+    else if (tab === "tags") { v.innerHTML = await viewTags(); afterTags(); }
     else if (tab === "progress") v.innerHTML = viewProgress();
     else if (tab === "settings") v.innerHTML = viewSettings();
   } catch (e) { v.innerHTML = `<div class="card">Erreur d'affichage : ${esc(e)}</div>`; console.error(e); }
@@ -555,6 +556,92 @@ async function viewEngine() {
     <table><tr><th>Jeu A</th><th>Jeu B</th><th class="num">Moteur commun</th><th class="num">SDK commun</th></tr>
     ${d.pairs.slice(0, 40).map(p => `<tr><td>${esc(p.a)}</td><td>${esc(p.b)}</td><td class="num"><b>${fmt(p.engine)}</b></td><td class="num hint">${fmt(p.sdk)}</td></tr>`).join("")}</table></div></div>`;
   return h;
+}
+
+// ---------------- Tags (gametools/techtag.py: families that work the same in every game + techniques) ----------------
+let tgQuery = "", tgGame = "", tgTodo = true, tdGame = "", tdTech = "";
+const TAG_HELP = {fam: "meme forme / meme squelette", feat: "ce que l'asm demande", tech: "technique vue dans le C matche",
+  try: "technique a essayer (vient des soeurs matchees)", prof: "compilateur", src: "origine du C", calls: "appelle", size: "taille", mode: "", module: ""};
+const tagChip = t => `<span class="tag${t.startsWith("try:") ? " ok" : t.startsWith("tech:") ? " gh" : ""}" style="cursor:pointer" title="${esc(TAG_HELP[t.split(":")[0]] || "")}" onclick="closeModal();tgQuery='${esc(t)}';go('tags')">${esc(t)}</span>`;
+async function viewTags() {
+  const d = await api("tags");
+  if (d.error) return "";
+  const run = `<button class="btn small" title="${esc(JD('techtag').desc)}" onclick="api('run',{id:'techtag'}).then(r=>r.n&&toast('Taguage lance'))">${d.built ? "Re-taguer" : "Taguer"} tous les jeux</button>`;
+  if (!d.built) return `<div class="card"><h3>Tags</h3><p>Pas encore d'index. ${run}</p></div>`;
+  window.TG = d;
+  if (!tdGame) tdGame = O.settings.active_game || (d.games[0] || {}).game || "";
+  const gopts = (sel, all) => (all ? `<option value="">tous les jeux</option>` : "") + d.games.map(g => `<option value="${esc(g.game)}" ${g.game === sel ? "selected" : ""}>${esc(g.game)}</option>`).join("");
+  const tries = d.tags.filter(t => t.tag.startsWith("try:"));
+  let h = `<div class="kpis"><div class="kpi"><b>${fmt(d.functions)}</b><span>fonctions taguees</span></div><div class="kpi"><b>${fmt(d.matched)}</b><span>matchees (sources des techniques)</span></div>
+    <div class="kpi"><b>${fmt(d.games.reduce((a, g) => a + g.hinted, 0))}</b><span>non matchees avec une piste</span></div><div class="kpi"><b>${d.games.length}</b><span>jeux</span></div></div>
+    <div class="card"><p class="hint">Chaque fonction de chaque jeu recoit des tags : <b>fam:s-</b> meme forme d'instructions (registres et constantes masques), <b>fam:k-</b> meme squelette (chargements / calculs / tests / appels dans le meme ordre),
+    <b>feat:</b> ce que l'asm demande, <b>tech:</b> la technique visible dans le C des fonctions matchees, et <b>try:</b> pour les non matchees, les techniques qui ont resolu leurs soeurs dans n'importe quel jeu.
+    Index du ${new Date(d.built * 1000).toLocaleString("fr-FR")} (${d.seconds} s). ${run}</p></div>`;
+  h += `<div class="split"><div class="card"><h3>Chercher un tag</h3>
+    <div class="btns"><input id="tgq" list="tglist" placeholder="try:goto-loop, feat:switch, fam:s-..." value="${esc(tgQuery)}" onchange="tgQuery=this.value.trim();subTagFind()" style="min-width:240px">
+    <datalist id="tglist">${d.tags.map(t => `<option value="${esc(t.tag)}">`).join("")}</datalist>
+    <select onchange="tgGame=this.value;subTagFind()">${gopts(tgGame, true)}</select>
+    <label class="hint"><input type="checkbox" ${tgTodo ? "checked" : ""} onchange="tgTodo=this.checked;subTagFind()"> non matchees seulement</label></div>
+    <div id="tgout" class="hint">Choisis un tag (ou clique sur un tag plus bas).</div></div>
+    <div class="card"><h3>A faire : pistes par jeu</h3><p class="hint">Fonctions non matchees, la meilleure piste d'abord. Clique pour voir pourquoi et ouvrir l'editeur C.</p>
+    <div class="btns"><select onchange="tdGame=this.value;subTagTodo()">${gopts(tdGame, false)}</select>
+    <select onchange="tdTech=this.value;subTagTodo()"><option value="">toutes les techniques</option>${tries.map(t => `<option value="${esc(t.tag)}" ${t.tag === tdTech ? "selected" : ""}>${esc(t.tag.slice(4))} (${fmt(t.n)})</option>`).join("")}</select></div>
+    <div id="tdout" class="hint">Chargement...</div></div></div>`;
+  h += `<div class="card"><h3>Familles partagees entre jeux</h3><p class="hint">Fonctions qui marchent pareil dans plusieurs jeux. Les familles ou des soeurs sont deja matchees et d'autres non viennent d'abord : la meme technique devrait resoudre le reste.</p>
+    <div class="scrollbox"><table><tr><th>Famille</th><th>Niveau</th><th class="num">Fonctions</th><th class="num">Matchees</th><th class="num">Jeux</th><th class="num">Taille</th><th>Techniques des matchees</th><th>Exemple</th></tr>
+    ${d.families.map(f => `<tr style="cursor:pointer" onclick="showTagFamily('${f.fam}')"><td><code>${esc(f.fam)}</code></td><td class="hint">${f.level === "shape" ? "forme" : "squelette"}</td>
+      <td class="num">${fmt(f.members)}</td><td class="num">${fmt(f.matched)}</td><td class="num">${f.games}</td><td class="num">${fmt(f.size)}</td>
+      <td>${f.techs.slice(0, 4).map(([t, n]) => `<span class="tag gh">${esc(t.slice(5))} ${n}</span>`).join(" ")}</td><td class="hint">${esc(f.sample[0] ? f.sample[0].join("/") : "")}</td></tr>`).join("")}</table></div></div>`;
+  h += `<div class="split"><div class="card"><h3>Tous les tags</h3><div style="display:flex;flex-wrap:wrap;gap:4px">
+    ${d.tags.map(t => `<span class="tag${t.tag.startsWith("try:") ? " ok" : t.tag.startsWith("tech:") ? " gh" : ""}" style="cursor:pointer" title="${fmt(t.matched)} matchees, ${t.games} jeux" onclick="tgQuery='${esc(t.tag)}';$('#tgq').value=tgQuery;subTagFind()">${esc(t.tag)} <b>${fmt(t.n)}</b></span>`).join("")}</div></div>
+    <div class="card"><h3>Besoin &rarr; technique</h3><p class="hint">Sur toutes les fonctions matchees (le meme code dans 40 jeux compte une fois) : quand l'asm a ce besoin, cette technique revient bien plus souvent que d'habitude.</p>
+    <div class="scrollbox"><table><tr><th>Besoin (asm)</th><th>Technique (C)</th><th class="num">Fonctions</th><th class="num">Part</th><th class="num">x</th></tr>
+    ${d.techfeat.map(x => `<tr><td>${esc(x.feat)}</td><td>${esc(x.tech)}</td><td class="num">${fmt(x.n_both)}/${fmt(x.n_feat)}</td><td class="num">${Math.round(100 * x.p)} %</td><td class="num">${x.lift}</td></tr>`).join("")}</table></div></div></div>`;
+  return h;
+}
+function afterTags() { if ($("#tdout")) { subTagTodo(); if (tgQuery) subTagFind(); } }
+async function subTagFind() {
+  const box = $("#tgout"); if (!box || !tgQuery) return;
+  box.innerHTML = "Chargement...";
+  const d = await api(`tags/find?tag=${encodeURIComponent(tgQuery)}&game=${encodeURIComponent(tgGame)}&todo=${tgTodo ? 1 : 0}`);
+  if (d.error) return;
+  box.innerHTML = `<div style="margin:6px 0"><b>${fmt(d.rows.length)}</b> fonctions${d.rows.length >= d.limit ? " (limite atteinte)" : ""}</div>
+    <div class="scrollbox"><table><tr><th>Jeu</th><th>Fonction</th><th class="num">Taille</th><th>Module</th><th></th></tr>
+    ${d.rows.map(r => `<tr style="cursor:pointer" onclick="showTagFunc('${esc(r.game)}','${esc(r.name)}')"><td>${esc(r.game)}</td><td>${esc(r.name)}</td><td class="num">${fmt(r.size)}</td>
+      <td class="hint">${esc(r.module)} ${esc(r.mode)}</td><td>${r.matched ? '<span class="tag ok">matchee</span>' : ""}</td></tr>`).join("")}</table></div>`;
+}
+async function subTagTodo() {
+  const box = $("#tdout"); if (!box || !tdGame) return;
+  const d = await api(`tags/todo?game=${encodeURIComponent(tdGame)}&tech=${encodeURIComponent(tdTech)}`);
+  if (d.error) return;
+  box.innerHTML = d.rows.length ? `<div class="scrollbox"><table><tr><th class="num">Score</th><th>Piste</th><th>Fonction</th><th class="num">Taille</th><th>Pourquoi</th></tr>
+    ${d.rows.map(r => `<tr style="cursor:pointer" onclick="showTagFunc('${esc(tdGame)}','${esc(r.name)}')"><td class="num">${r.score.toFixed(2)}</td><td><span class="tag ok">${esc(r.tag.slice(4))}</span></td>
+      <td>${esc(r.name)}</td><td class="num">${fmt(r.size)}</td><td class="hint">${esc(r.why)}</td></tr>`).join("")}</table></div>` : "Aucune piste pour ce jeu.";
+}
+async function tagEdit(g, n) {
+  if (O.settings.active_game !== g) { await api("settings", {active_game: g}); O.settings.active_game = g; G = null; }
+  openEditor(n);
+}
+async function showTagFunc(g, n) {
+  const d = await api(`tags/func?game=${encodeURIComponent(g)}&name=${encodeURIComponent(n)}`);
+  if (d.error) return;
+  const fam = f => `<h3>${f.level === "shape" ? "Meme forme" : "Meme squelette"} <code>${esc(f.fam)}</code> <span class="hint">${f.members.length} fonctions</span></h3>
+    <div class="scrollbox"><table><tr><th>Jeu</th><th>Fonction</th><th class="num">Taille</th><th>Techniques</th></tr>
+    ${f.members.map(m => `<tr style="cursor:pointer" onclick="showTagFunc('${esc(m.game)}','${esc(m.name)}')"><td>${esc(m.game)}</td><td>${m.matched ? "&#10003; " : ""}${esc(m.name)}</td><td class="num">${fmt(m.size)}</td>
+      <td>${m.techs.map(t => `<span class="tag${t.startsWith("tech:") ? " gh" : ""}">${esc(t)}</span>`).join(" ")}</td></tr>`).join("")}</table></div>`;
+  modal(`<h2>${esc(d.name)}</h2><p class="hint">${esc(d.game)} &middot; ${esc(d.module)} ${esc(d.mode)} &middot; ${fmt(d.size)} octets &middot; ${d.matched ? "matchee : " + esc(d.path) + " (" + esc(d.profile) + ")" : "non matchee"}</p>
+    <div class="btns"><button class="btn small" onclick="closeModal();tagEdit('${esc(d.game)}','${esc(d.name)}')">Ouvrir dans l'editeur C</button></div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin:8px 0">${d.tags.map(tagChip).join("")}</div>
+    ${d.hints.length ? `<h3>Pistes</h3><table>${d.hints.map(x => `<tr><td class="num">${x.score.toFixed(2)}</td><td><span class="tag ok">${esc(x.tag.slice(4))}</span></td><td class="hint">${esc(x.why)}</td></tr>`).join("")}</table>` : ""}
+    ${d.families.map(fam).join("")}`);
+}
+async function showTagFamily(fam) {
+  const d = await api(`tags/family?fam=${encodeURIComponent(fam)}`);
+  if (d.error) return;
+  modal(`<h2>Famille <code>${esc(fam)}</code></h2><p class="hint">${d.level === "shape" ? "meme forme d'instructions" : "meme squelette"} &middot; ${d.members.length} fonctions, ${d.members.filter(m => m.matched).length} matchees</p>
+    <div class="scrollbox"><table><tr><th>Jeu</th><th>Fonction</th><th class="num">Taille</th><th>Tags</th></tr>
+    ${d.members.map(m => `<tr style="cursor:pointer" onclick="showTagFunc('${esc(m.game)}','${esc(m.name)}')"><td>${esc(m.game)}</td><td>${m.matched ? "&#10003; " : ""}${esc(m.name)}</td><td class="num">${fmt(m.size)}</td>
+      <td>${m.tags.map(t => `<span class="tag${t.startsWith("try:") ? " ok" : t.startsWith("tech:") ? " gh" : ""}">${esc(t)}</span>`).join(" ")}</td></tr>`).join("")}</table></div>`);
 }
 
 // ---------------- Progression ----------------
