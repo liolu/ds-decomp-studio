@@ -76,6 +76,13 @@ Order / registers
 - **local-static** an SDK `if (flag) return; flag = TRUE;` whose store is delayed / whose constant lands in a callee-saved reg: the flag is a FUNCTION-LOCAL `static` (mwcc knows nothing else sees it). The file must own the flag's .bss word: symbols.txt `NAME$N kind:bss(size=4) addr:X local` (mwcc names it NAME$N), shrink the neighbouring .bss blob. TnJ OS_InitLock (s36)
 - **shape-first** `build/hunt/s36/msbs.py` (register-blind diff) before anything: a few shape lines = a real source error (TnJ func_02006178: two bitfield names swapped, then varmerge+cmutate+declperm climb 49 -> 0)
 - **callee-types** declare every callee with its REAL matched signature (src/ definition), above all the return type: a `short` return kept in an s16 local turns `mla` into `smlabb` (TnJ func_02037bb8: func_02037a38 returns short, pos s16 -> match). Caller side: `prototypes/callsig.py` reads u8/u16 params and used returns from the callers' code (func_02012e28 k is u16; B-spline helpers (u8, u16, s32) -> exact size)
+- **exceptix** a data blob at the end of .text = (addr, size, action) triples of MSL functions + 8-byte action records
+  before them: the C++ exception index table the linker builds (EXCEPTION command). mwcc emits one `.exceptix`
+  entry per (non-leaf) function and `@ET@func` records in `.exception` when the file is compiled with
+  `-Cpp_exceptions on` -- even for C, code unchanged. Recipe: delinks header `.exception`/`.exceptix` sections,
+  per-file `.exceptix` (12 B per entry) + `.exception` (8 B per record) ranges, `-Cpp_exceptions on` in
+  compilers.txt for those files, `@ET@func kind:data(byte[5]) ... local` symbols for the records.
+  `prototypes/exceptix.py START END` checks every file first (entries + text unchanged). TnJ data_02063a48 (55 files).
 - **literal-owner** a donor's string literals/zero words sitting at an old data symbol: give the C file that .rodata/.data range in delinks.txt, delete the src/data file, replace the symbol by a sized local `@name kind:data(byte[N]) ... local` (dsd check matches any @ names), keep padding inside the range (TnJ __strtold, __pformatter)
 - **call-temp** one call per statement / temp for the call result (`s32 t = f(); return t + a;`); args of calls in one expression are all evaluated first
 - **accumulate** `ret = A; ret += B;` keeps term order (mwcc reorders `a + b + c` with s64 divisions)
