@@ -22,6 +22,7 @@ Three levels:
 ## Functional tools (studio/gametools)
 - **profile-sweep** `hunt.py try` (all profiles), `vsweep.py` (250 compiler versions/flags), `optsweep.py`; header profile is often wrong: try 1.2/sp3, 1.2/sp2p3, 2.0/sp1p5 -O1/-O2/-O4,s, `-profile`
 - **hunt-battery** `hunt.py try/sweep`: decl-swap, stmt-swap, if-invert, param-volatile, byteptr, call-temp, unfold, ptr-u8, extern-u8, shift-div, cmp-hoist, pad-param, loop forms, vcall-this2 (orchestrator only: writes the ledger)
+- **typed-struct** `structxfer.py list|sweep [--min 0.6]`: techtag `try:typed-struct` targets get the C file of a matched member of their shape/skeleton family (any game, written with typed structs), calls/pool symbols renamed by position, 2nd variant with differing immediates remapped (offsets, pad sizes); proto_run too
 - **siblings** `hunt.py sibs NAME`, `sibmatch.py`, `clone_match.py`: transplant a match to same-shape functions
 - **donor** `donor_match.py`: reuse C from external decomps (donors.py index)
 - **missdb-replay** `missdb.py replay`: every recorded miss replayed by fingerprint on all games
