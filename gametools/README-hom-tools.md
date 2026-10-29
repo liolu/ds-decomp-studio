@@ -51,6 +51,16 @@ CHANGES (root causes; the overlays start AFTER(ARM9), so a shifted main .bss mov
 turned into `to:obj add:0x1` (0x0212_0001-like table entries) make objdiff report 9x% on a pointer-free table -> delete
 those relocs.txt lines by hand.
 
+## Technique journal + prototypes (every function, every session)
+
+`TECHNIQUES.md` = catalogue of every technique (ids). `techlog.py history NAME` before working on a function,
+`protorun.py NAME` next (runs every `proto_run` of `prototypes/*.py` and of the tools, logs `proto:<tool>` results),
+`techlog.py add NAME ID ok|better|fail ...` after every try, `techlog.py stats` per technique,
+`protorun.py promote TOOL` moves a prototype that matched something into gametools. Journals:
+`build/hunt/techlog/NAME.md` (one file per function: safe with parallel agents).
+Former TnJ scratch tools now here: judgemany.py (jm.py), relcheck.py, sbs.py; prototypes/: mscore, regions,
+schedscan (v075 scan), asmconv, declperm (fperm), cmutate, profextra.
+
 ## Agent rounds (N agents in a loop, then one push)
 
 Run from the game dir (`projets/<game>/`), env.sh sourced. Agents get `AGENT-BRIEF-hom.md` + one list each.

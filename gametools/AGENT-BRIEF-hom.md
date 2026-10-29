@@ -10,6 +10,20 @@ You hand-match Nintendo DS (mwccarm) functions of Heroes of Mana. Project dir:
 
 Your functions: {NAMES}
 
+MANDATORY for every function (techniques: `../../studio/gametools/TECHNIQUES.md`, use its ids):
+A. BEFORE touching it: `python ../../studio/gametools/techlog.py history NAME` -> everything already done on it (technique
+   journal, ledger notes, best C, missdb misses, techniques that worked elsewhere but were never tried here). Do not
+   repeat a technique the journal already shows as `fail` unless you change something, and say what.
+B. Then run the prototypes: `python ../../studio/gametools/protorun.py NAME --by AGENT_ID` (every prototype + auto tool,
+   results logged by itself; a better variant lands in `build/hunt/proto/NAME/`). Start from it if it beat the best C.
+C. After EVERY technique you try, failed or successful:
+   `python ../../studio/gametools/techlog.py add NAME TECH_ID ok|better|fail --diffs N --note "what exactly" --file F.c --by AGENT_ID`
+   (an id of TECHNIQUES.md; a new trick gets a new short id and a line in your final answer).
+D. Any helper script you write (variant generator, scanner, converter) is a technique: save it as
+   `../../studio/gametools/prototypes/<short_name>.py` with a docstring (usage, what, origin function), and a
+   `proto_run(ctx)` if it can run alone on one function (see protorun.py). Never only in /tmp or a scratch dir.
+   Do not edit the other prototypes or tools.
+
 For each function:
 1. `python ../../studio/gametools/hunt.py show NAME` -> best draft so far + diff (TARGET | CANDIDATE, `*` = differing line).
 2. Edit a copy of the draft in your own dir `build/hunt/agents/NAME.c` (create it; this is also where the final answer goes).
@@ -43,7 +57,9 @@ that call (m2c drops it). Bitfield structs (`u32 f:1`) for lsl/lsr/bic/orr; firs
 RULES (violations make the match rejected):
 - ASCII sources, English comments. `#include "m2c.h"` is fine; NO asm, `#define`, `#pragma`, other `#include`, `__attribute__`, `##` in the C.
 - ONLY judge. NEVER run `hunt.py try/note/park/sweep`, `workbench.py submit/commit`, git, or touch other files than
-  `build/hunt/agents/*.c`: parallel writes corrupt shared state.
+  `build/hunt/agents/*.c` (or your round dir), the journals `build/hunt/techlog/NAME.md` of YOUR functions (through
+  techlog.py / protorun.py only) and NEW files in `studio/gametools/prototypes/`: parallel writes corrupt shared state.
+- Before a match counts, run `python ../../studio/gametools/relcheck.py NAME FILE.c PROFILE` (judge masks the literal pool).
 - Never use leaked SDK source.
 
 Near-miss fixes found in r27: re-judge 1.2/sp3, 1.2/sp2p3 AND 2.0/sp1p5 first (the header profile was wrong for 3 of 6
@@ -53,5 +69,6 @@ addresses (`L.buf`, `&L`) inline instead of pointer locals (changes the whole pr
 the next load offset. Pure register permutations: `nearperm.py ROUND` (orchestrator, no LLM) already tried declaration
 orders, do not spend judges on them.
 
-Final answer (short): for each function `NAME: MATCH <profile>` (file written) or `NAME: no (best N diffs, what blocks)`.
+Final answer (short): for each function `NAME: MATCH <profile>` (file written) or `NAME: no (best N diffs, what blocks)`,
+plus the new technique ids / prototypes you created (the orchestrator adds them to TECHNIQUES.md).
 ---
