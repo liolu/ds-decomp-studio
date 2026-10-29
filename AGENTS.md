@@ -40,8 +40,9 @@ python ../../studio/gametools/ghidra_draft.py --names a,b            # Ghidra dr
 3. ASCII-only sources, comments in English. `asm` functions only for instructions the compiler never emits.
    Fake matches are refused by the tools (`gametools/fakematch.py`): asm, new `#define`/`#pragma`/`#include` lines,
    `##`, `_Pragma`, `__declspec`/`__attribute__`, machine code written as numbers. Only exception: a `__sinit_*`
-   function (C++ static initializer, which the compiler puts in `.init`) may declare
-   `#pragma define_section INIT ".init" ".init"` and use `__declspec(INIT)`.
+   function (C++ static initializer, which the compiler puts in `.init`, with a pointer to it in `.ctor`) may declare
+   `#pragma define_section INIT ".init" ".init"` / `#pragma define_section CTOR ".ctor" ".ctor"` and use
+   `__declspec(INIT)` / `__declspec(CTOR)` for that function and its `.ctor` entry.
 4. Never use leaked source code. Never commit ROMs, extracted assets or build outputs.
 5. `.studio/` is written by the studio only (through the commands above).
 6. Level "Portable" functions have an identical twin already matched in another game: the brief names the source

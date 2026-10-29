@@ -22,9 +22,13 @@ def split_decls(lines, name):
     j = i0
     decl = []
     while j < len(lines) and re.match(r'^\s+[A-Za-z_][\w \*\[\]]*(,[\w \*\[\]]+)*;\s*$', lines[j]):
-        m = re.match(r'^\s+((?:\w+ )*\w+)\s*(.*);', lines[j])
-        for part in m.group(2).split(','):
-            decl.append(f'    {m.group(1)} {part.strip()};')
+        # `double z, ax;` -> type `double`, names `z`, `ax` (the type is the head of the first part minus its name)
+        parts = lines[j].strip().rstrip(';').split(',')
+        m = re.match(r'^(.*?)([\s\*]+)(\w+(?:\[\w*\])?)$', parts[0].strip())
+        ty = m.group(1).strip()
+        decl.append(f'    {ty} {m.group(2).strip()}{m.group(3)};')
+        for part in parts[1:]:
+            decl.append(f'    {ty} {part.strip()};')
         j += 1
     return i0, j, decl
 

@@ -8,9 +8,11 @@ file did not have. Everything is counted against the starting file, so what it a
 by auto_match for instructions no compiler emits, the file's own #include lines) stays allowed. Comments and strings
 are ignored.
 
-One exception, for `__sinit_*` functions only (C++ static initializers that the compiler itself places in `.init`):
-`#pragma define_section NAME ".init" ".init"` and `__declspec(NAME)` with that NAME are allowed, so the C version
-lands in the same section as the original. No other section, and no other function, gets it.
+One exception, for `__sinit_*` functions only (C++ static initializers that the compiler itself places in `.init`,
+with a pointer to them in `.ctor`): `#pragma define_section NAME ".init" ".init"` and
+`#pragma define_section NAME ".ctor" ".ctor"` and `__declspec(NAME)` with those NAMEs are allowed, so the C version
+lands in the same sections as the original (user decision 2026-10-29 for .ctor). No other section, and no other
+function, gets it.
 """
 import re
 
@@ -28,11 +30,13 @@ def _directives(code: str) -> list[str]:
     return [re.sub(r"\s+", " ", l.strip()) for l in code.split("\n") if l.lstrip().startswith("#")]
 
 
-INIT_SECTION = re.compile(r'^[ \t]*#[ \t]*pragma[ \t]+define_section[ \t]+(\w+)[ \t]+"\.init"[ \t]+"\.init"[ \t]*\r?$', re.M)
+# .init holds the __sinit_ function, .ctor the pointer to it that the C++ compiler emits in the same file
+INIT_SECTION = re.compile(r'^[ \t]*#[ \t]*pragma[ \t]+define_section[ \t]+(\w+)[ \t]+"\.(?:init|ctor)"[ \t]+"\.(?:init|ctor)"[ \t]*\r?$',
+                          re.M)
 
 
 def _allow_sinit(code: str) -> str:
-    """Remove the .init section declaration and its __declspec uses (only for __sinit_ functions)."""
+    """Remove the .init/.ctor section declarations and their __declspec uses (only for __sinit_ functions)."""
     code = re.sub(r"\\\r?\n[ \t]*", " ", code)  # clang-format splits the long #pragma line with a continuation
     for sec in INIT_SECTION.findall(code):
         code = re.sub(r"\b__declspec\s*\(\s*" + re.escape(sec) + r"\s*\)", " ", code)

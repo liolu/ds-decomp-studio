@@ -38,6 +38,9 @@ Three levels:
 ## Prototypes (studio/gametools/prototypes) - see prototypes/README.md
 - **proto:profextra** `profextra.py` - the extra-profile list as one auto pass (agents cannot run `hunt.py try`)
 - **proto:declperm** / **decl-order** `declperm.py` - random local-declaration orders (callee-saved register order)
+- **proto:declclimb** / **decl-climb** `declclimb.py` - hill climb on declaration order (move one line per step), continues where random declperm stalls (TnJ func_01ff99e8 39 -> 21)
+- **proto:declsubset** / **decl-subset** `declsubset.py` - every order of a few named locals (<= 7), others fixed: wrong spill slots / swapped regs (TnJ func_01ff99e8 21 -> 6)
+- **proto:donorpp** / **donor-preprocess** `donorpp.py` - preprocess a real SDK/MSL donor with its headers, keep one function, rename to the game's symbols; also try every 2.0 compiler build (TnJ MSL/OS printf = 2.0/sp1p2). 7 big TnJ functions matched (s31)
 - **proto:cmutate** `cmutate.py` - **int-vs-long**, **neg-mul**, **chain-order**, **nested-assign**
 - **proto:asmconv** / **asm-function** `asmconv.py` - whole-function asm for asm-only instructions
 - **shape-score** `mscore.py` - variant ranking with registers masked (big functions)
@@ -58,6 +61,14 @@ Order / registers
 - **stmt-order** reorder independent statements / stores (stores keep source order when they may alias)
 - **reuse-var** reuse a dead variable / the param itself as loop counter or running pointer (`font = g + 2; *font++`)
 - **chain-order** `b = a = 0` vs `a = b = 0` (pool order); **nested-assign** `b = (a = 0) - 1` (no const fold, distinct regs)
+- **use-count** a local's register depends on how many statements use it: assign the same variable in every test (`dd = dot - d - r; if (dd > 0)` x3 instead of only the last) gave TnJ func_01ff8e94 the target registers (74 -> 26)
+- **swap-temps** pointer/value swaps: `t = a1; pe = e1; ...` all temps first, then all `x1 = x0`, then all `x0 = t` (distinct temp regs), and the order of the groups inside each line = instruction order (TnJ func_01ff99e8 sort of 3 axes)
+- **temp-split** `w = d2 - d6; w = FX_Div(d2, w);` instead of `FX_Div(d2, d2 - d6)` keeps the value in r0 (TnJ func_01ff8ac4, last 7 diffs)
+- **goto-loop** search loop `b cond` (not rotated, no pre-check): `j = 0; goto check; next: if (..) goto done; j++; check: if (j < n) goto next; done:` (TnJ func_01ff9518)
+- **donor-shape** take the C shape of a public donor of a similar SDK function (MTX_Concat43 locals xa/ya/za, xb/yb/zb reused across rows) -> TnJ func_01ff87b4 matched
+- **cross-branch** an asm-only function (clz...) that branches INTO another function with no relocation (TnJ _fsub -> _fadd+0xc, _dsub -> _dadd+0x10): add `NAME kind:label(arm) addr:X` to symbols.txt + `from:A kind:arm_branch to:X` to relocs.txt, declare `void NAME(void);` before the asm function and branch to it; compute X from the ROM word (the disassembly offset is NOT pc+8-relative); objdiff needs the patched dsd (dsd-dsi.exe, keeps the bmi condition of arm_branch relocs)
+- **static-anchor** a duplicated pool entry for the same address, or `[base, #32]` loads of a neighbour object = mwcc addressing FILE STATICS from one anchor: define the tables as `static const` in the C file (try the declaration orders), let the file own their .rodata/.bss range, rename the symbols to the static names with `local` (TnJ __ieee754_exp)
+- **literal-owner** a donor's string literals/zero words sitting at an old data symbol: give the C file that .rodata/.data range in delinks.txt, delete the src/data file, replace the symbol by a sized local `@name kind:data(byte[N]) ... local` (dsd check matches any @ names), keep padding inside the range (TnJ __strtold, __pformatter)
 - **call-temp** one call per statement / temp for the call result (`s32 t = f(); return t + a;`); args of calls in one expression are all evaluated first
 - **accumulate** `ret = A; ret += B;` keeps term order (mwcc reorders `a + b + c` with s64 divisions)
 - **inline-addr** pass `L.buf` / `&L` inline instead of a pointer local (changes the prologue)

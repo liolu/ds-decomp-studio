@@ -20,6 +20,10 @@ Current prototypes (details in each docstring and in `../TECHNIQUES.md`):
 |---|---|---|
 | profextra.py | yes | judge the C on every compiler profile hunt knows + 1.2/sp2p3 and -O1/-O2/-O4,s variants |
 | declperm.py | yes | random orders of the local declarations (callee-saved register order) |
+| declclimb.py | no | hill climb on the declaration order (one line moved per step, parallel) |
+| declsubset.py | no | every order of a few named locals, the other declarations fixed |
+| declrand.py | no | random full declaration orders in a process pool |
+| donorpp.py | no | one function out of a preprocessed donor file (prototypes for the rest, renames) |
 | cmutate.py | yes | session-lesson mutations: `s32`->`int`, `x = -x` <-> `x *= -1`, chained assignment order, return cast |
 | asmconv.py | yes (asm-only functions) | whole-function `asm` version for swp/swi/mrs/coprocessor functions |
 | mscore.py | no | rank variants by mnemonic/shape mismatches, registers ignored |

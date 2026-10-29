@@ -15,6 +15,11 @@ def pre_ual(line):
     m = re.match(r'^(\s*)(ldr|str|swp)(sb|sh|b|h|d)(' + CONDS + r')(\s.*)$', line)
     if m:
         return f'{m.group(1)}{m.group(2)}{m.group(4)}{m.group(3)}{m.group(5)}'
+    # UAL `andseq` / `subsge` (flag-setting + condition) -> pre-UAL `andeqs` / `subges`
+    m = re.match(r'^(\s*)(and|eor|sub|rsb|add|adc|sbc|rsc|orr|mov|bic|mvn|mul|mla|lsl|lsr|asr|ror)s(' + CONDS + r')(\s.*)$',
+                 line)
+    if m:
+        return f'{m.group(1)}{m.group(2)}{m.group(3)}s{m.group(4)}'
     m = re.match(r'^(\s*)blx(\s+)(?!r\d|lr|ip)(\w+)$', line)
     if m:
         return f'{m.group(1)}bl{m.group(2)}{m.group(3)}'
