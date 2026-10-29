@@ -4,7 +4,7 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&
 const fmt = n => Number(n || 0).toLocaleString("fr-FR");
 const hex = n => "0x" + Number(n).toString(16).padStart(8, "0");
 const ago = t => { if (!t) return ""; const s = Date.now() / 1000 - t; return s < 90 ? "a l'instant" : s < 5400 ? Math.round(s / 60) + " min" : s < 172800 ? Math.round(s / 3600) + " h" : Math.round(s / 86400) + " j"; };
-const TABS = [["games", "Jeux"], ["game", "Travailler"], ["queue", "Queue"], ["engine", "Engine map"], ["tags", "Tags"], ["progress", "Progression"], ["settings", "Reglages"]];
+const TABS = [["games", "Jeux"], ["game", "Travailler"], ["queue", "Queue"], ["engine", "Engine map"], ["tags", "Tags"], ["xref", "Data"], ["progress", "Progression"], ["settings", "Reglages"]];
 const ST = {free: "libre", claimed: "pris", expired: "expire", done: "termine", queued: "en attente", running: "en cours",
   failed: "echec", stopped: "arrete", interrupted: "interrompu", cancelled: "annule"};
 let O = null, G = null, J = [], tab = location.hash.slice(1) || "games", sub = "blocks";
@@ -70,6 +70,7 @@ async function render() {
     else if (tab === "queue") v.innerHTML = await viewQueue();
     else if (tab === "engine") v.innerHTML = await viewEngine();
     else if (tab === "tags") { v.innerHTML = await viewTags(); afterTags(); }
+    else if (tab === "xref") { v.innerHTML = viewXref(); subXref(); }
     else if (tab === "progress") v.innerHTML = viewProgress();
     else if (tab === "settings") v.innerHTML = viewSettings();
   } catch (e) { v.innerHTML = `<div class="card">Erreur d'affichage : ${esc(e)}</div>`; console.error(e); }
@@ -558,6 +559,49 @@ async function viewEngine() {
   return h;
 }
 
+// ---------------- Data (gametools/xref.py: who uses a symbol, pointer slots of a table, functions sharing its data) ----------------
+let xrGame = "", xrQuery = "", xrMode = "users";
+const XR_MODES = [["users", "Qui l'utilise"], ["table", "Contenu (table / vtable)"], ["siblings", "Fonctions soeurs"]];
+const XR_HELP = {users: "Fonctions et donnees qui pointent vers ce symbole, avec les decalages utilises (+0x10...) : la forme de la struct.",
+  table: "Les pointeurs ranges dans cette donnee, case par case : une vtable donne toutes les methodes d'une classe, une table de callbacks toutes ses fonctions.",
+  siblings: "Fonctions qui lisent le plus de donnees en commun avec les utilisateurs de ce symbole : le meme module du jeu. Une soeur matchee montre souvent l'astuce."};
+function viewXref() {
+  if (!xrGame) xrGame = O.settings.active_game || (O.games[0] || {}).id || "";
+  const opts = O.games.map(x => `<option value="${x.id}" ${x.id === xrGame ? "selected" : ""}>${esc(x.title)}</option>`).join("");
+  return `<div class="card"><h3>Data : references croisees</h3>
+    <p class="hint">Depuis les relocations que dsd connait deja (relocs.txt de chaque module). Un nom (<code>data_02107860</code>, <code>func_0204b070</code>) ou une adresse (<code>0x020fcfb8</code>, aussi au milieu d'un symbole).
+    <span class="tag ok">matchee</span> = une source possede la fonction. Clique un nom pour le suivre.</p>
+    <div class="btns"><select onchange="xrGame=this.value;subXref()">${opts}</select>
+    <input id="xrq" placeholder="data_..., func_..., 0x..." value="${esc(xrQuery)}" onchange="xrQuery=this.value.trim();subXref()" style="min-width:240px">
+    ${XR_MODES.map(([m, l]) => `<button class="btn small${m === xrMode ? "" : " sec"}" onclick="xrMode='${m}';go('xref')">${l}</button>`).join("")}</div>
+    <p class="hint">${esc(XR_HELP[xrMode])}</p><div id="xrout" class="hint">${xrQuery ? "Chargement..." : "Entre un symbole."}</div></div>`;
+}
+function xrFollow(name, mod) { xrQuery = name; const i = $("#xrq"); if (i) i.value = name; subXref(mod); }
+async function subXref(mod) {
+  const box = $("#xrout"); if (!box || !xrQuery || !xrGame) return;
+  box.innerHTML = "Chargement...";
+  const d = await api(`xref?game=${encodeURIComponent(xrGame)}&q=${encodeURIComponent(xrQuery)}&mode=${xrMode}&module=${encodeURIComponent(mod || "")}`);
+  if (d.error) return;
+  if (!d.symbols.length) { box.innerHTML = "Aucun symbole de ce nom ou a cette adresse."; return; }
+  const hx = n => "0x" + n.toString(16).padStart(8, "0");
+  const who = r => `<a style="cursor:pointer" onclick="xrFollow('${esc(r.name)}','${esc(r.module)}')">${esc(r.name)}${r.off ? "+0x" + r.off.toString(16) : ""}</a>
+    ${r.module !== "main" ? `<span class="hint">${esc(r.module)}</span>` : ""} ${r.matched ? '<span class="tag ok">matchee</span>' : ""}
+    ${r.kind === "function" ? `<a class="hint" style="cursor:pointer" title="Ouvrir dans l'editeur C" onclick="tagEdit('${esc(xrGame)}','${esc(r.name)}')">&#9998;</a>` : `<span class="hint">${esc(r.kind)}</span>`}`;
+  box.innerHTML = d.symbols.map(s => {
+    const head = `<h3>${esc(s.name)} <span class="hint">${esc(s.kind)} ${hx(s.addr)}-${hx(s.end)} (${fmt(s.end - s.addr)} octets) ${esc(s.module)}</span></h3>`;
+    if (!s.rows.length) return head + `<p>Rien.</p>`;
+    const n = s.rows.filter(r => r.kind === "function"), m = n.filter(r => r.matched).length;
+    const sum = n.length ? `<p class="hint">${n.length} fonctions, ${m} matchees.</p>` : "";
+    const rows = xrMode === "table"
+      ? `<tr><th class="num">Case</th><th>Pointe vers</th></tr>` + s.rows.map(r => `<tr><td class="num">+0x${r.slot.toString(16)}</td><td>${who(r)}</td></tr>`).join("")
+      : xrMode === "siblings"
+      ? `<tr><th>Fonction</th><th class="num">Donnees partagees</th></tr>` + s.rows.map(r => `<tr><td>${who(r)}</td><td class="num">${r.shared}</td></tr>`).join("")
+      : `<tr><th>Utilisateur</th><th>Type</th><th>Decalages</th></tr>` + s.rows.map(r => `<tr><td>${who(r)}</td><td class="hint">${esc(r.kinds.join(" "))}</td>
+          <td><code>${r.offs.some(o => o) ? r.offs.map(o => "+0x" + o.toString(16)).join(" ") : ""}</code></td></tr>`).join("");
+    return head + sum + `<div class="scrollbox"><table>${rows}</table></div>`;
+  }).join("");
+}
+
 // ---------------- Tags (gametools/techtag.py: families that work the same in every game + techniques) ----------------
 let tgQuery = "", tgGame = "", tgTodo = true, tdGame = "", tdTech = "";
 const TAG_HELP = {fam: "meme forme / meme squelette", feat: "ce que l'asm demande", tech: "technique vue dans le C matche",
@@ -683,6 +727,9 @@ async function saveSettings() {
   // #edit/<game>/<function>: straight into the C editor (links from briefs, logs...)
   const deep = location.hash.match(/^#edit\/([^/]+)\/(\w+)$/);
   if (deep) tab = "game";
+  // #xref/<game>/<symbol or address>[/table|siblings]: straight into the Data tab
+  const xd = location.hash.match(/^#xref\/([^/]+)\/([\w.@$]+)(?:\/(table|siblings))?$/);
+  if (xd) { tab = "xref"; xrGame = xd[1]; xrQuery = xd[2]; xrMode = xd[3] || "users"; location.hash = "xref"; }
   tabs(); await loadOverview();
   if (deep && O.settings.active_game !== deep[1]) { await api("settings", {active_game: deep[1]}); O.settings.active_game = deep[1]; }
   render(); loadXP();
