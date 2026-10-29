@@ -33,6 +33,9 @@ DEFS = {
     "sync_tools": ("Mettre a jour les outils", "game", 60, "copie la derniere version des outils de rayman-rr (auto_match...)"),
     "sync_all": ("Mettre a jour les outils de tous les jeux", "global", 300, "idem pour chaque jeu"),
     "scan": ("Indexer les empreintes (fingerprint)", "global", 180, "met a jour fpdb.sqlite"),
+    "techtag": ("Taguer les fonctions de tous les jeux", "global", 900,
+                "familles de fonctions qui marchent pareil (meme forme / meme squelette, dans tous les jeux), ce dont "
+                "elles ont besoin, et les techniques qui ont resolu leurs soeurs deja matchees (techtags.sqlite)"),
     "donors": ("Reprendre les matchs des autres decomps", "game", 1200,
                "fonctions deja decompilees ailleurs (NitroSDK, pret...) : compile + compare, fichiers fautifs "
                "retires (build ninja + bisection), puis un verify complet"),
@@ -246,6 +249,8 @@ def command(jid: str, game, p: dict) -> str:
                 + (f" --game {_q(p['game'])}" if p.get("game") else "") + (" --no-push" if p.get("no_push") else ""))
     if jid == "scan":
         return "python tools/fingerprint.py scan projets/_analyse/*"
+    if jid == "techtag":
+        return f"python {_q((config.GAMETOOLS / 'techtag.py').as_posix())} build"
     if jid == "new_project":
         return f"python tools/new_project.py {_q(p['slug'])} {_q(p['rom'])}"
     if jid == "wb_submit":

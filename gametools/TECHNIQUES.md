@@ -25,13 +25,14 @@ Three levels:
 - **siblings** `hunt.py sibs NAME`, `sibmatch.py`, `clone_match.py`: transplant a match to same-shape functions
 - **donor** `donor_match.py`: reuse C from external decomps (donors.py index)
 - **missdb-replay** `missdb.py replay`: every recorded miss replayed by fingerprint on all games
+- **tech-tags** `techtag.py build|show|find|todo|stats` (Studio tab "Tags", job techtag): every function of every game tagged with its families (same shape / same skeleton across games), asm needs (feat:), techniques seen in matched C (tech:) and techniques to try (try:) from its matched relatives; `techtag.py todo GAME` = best hint first
 - **variant-batch** `judgemany.py NAME files...` (was TnJ jm.py): judge many hand variants in one process, ~1 s each
 - **pool-check** `relcheck.py NAME FILE.c [P]`: literal-pool order/addends vs target (judge masks them) - run on every match
 - **side-by-side** `sbs.py NAME FILE.c [A B]`: full target | candidate listing
 - **struct-diff** `mdiff.py NAME FILE.c P`: structural diff
 - **asm-differ** `asmdiff.py`: live asm-differ view
 - **stmt-perm** `stmtperm.py` (tag statements `/*P*/`), **rand-perm** `permrand.py`, **near-perm** `nearperm.py ROUND` (decl orders, no LLM), **permuter** `permute.py` (decomp-permuter; scores unreliable on TnJ)
-- **asm-only** `auto_match.ASM_ONLY` + whole `asm` function (allowed only for swp/swi/mrs/mcr/clz...); write `bl` even to Thumb callees
+- **asm-only** `auto_match.ASM_ONLY` + whole `asm` function (allowed only for swp/swi/mrs/mcr/clz..., or, in TnJ, for SDK/MSL functions a public decomp proves were `asm`: cite it in `// ASM:`); write `bl` even to Thumb callees
 - **profile-pad** `profpad.py` (HoM `-profile` padding), **ld-align** `ld_align.py` (Thumb BIOS stubs at addr%4==2), **lcf-const** `config/<v>/arm9/lcf_symbols.txt` (SDK_IRQ_STACKSIZE...)
 - **scene-fix** `scenefix.py` (HoM per-overlay scene state machines), **vcall** `vcall.py`, **ptr-scale** `ptrscale.py`, **hw-volatile** `hwvol.py`, **bitflag** `bitflag.py`/`bittail.py`, **fnptr** `fnptr.py`, **struct-copy** `structcopy.py`, **sw-default** `swdefault.py`, **call-arg** `callarg.py`, **near-fix** `nearfix.py`
 
