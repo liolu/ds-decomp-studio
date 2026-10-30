@@ -6,8 +6,8 @@
     python ../../studio/gametools/romarc.py users [N ...] [--json]  # which functions load file n (const / table)
 
 Entry packing (game function that unpacks, Lego func_02059efc): u32 header, bits 4-7 = kind, bits 8-31 = size.
-kind & 7: 0 raw copy, 2 SDK Huffman (MI_UncompressHuffman), 6 the game's own bit coder in ITCM (func_01ff8000,
-hand-written ARM; run in an ARM emulator when the `unicorn` module is installed, else left packed).
+kind & 7: 0 raw copy, 1 SDK LZ77, 2 SDK Huffman, 3 SDK run-length, 6 the game's own bit coder in ITCM (func_01ff8000,
+hand-written ARM, run in the unicorn ARM emulator: pip install unicorn; left packed without it).
 kind & 8: 16-bit delta filter after unpacking (a[i] += a[i-1]).
 
 `users` finds the loaders by itself: the function naming "rom.bin" opens a file handle; the readers of that
@@ -56,7 +56,9 @@ def header(blob: bytes):
     h = struct.unpack_from("<I", blob, 0)[0]
     kind, size = (h >> 4) & 0xF, h >> 8
     k = kind & 7
-    if k not in (0, 2, 6) or not size or size > 64 * len(blob) + 64:
+    if k not in (0, 1, 2, 3, 6) or not size or size > 64 * len(blob) + 64:
+        return None
+    if k in (1, 3) and (blob[0] & 0xF or size < len(blob) - 8):  # SDK LZ77 / RLE: 0x10 / 0x30, they expand
         return None
     if k == 0 and not len(blob) - 8 < size <= len(blob) - 4:  # stored: the size is the blob's (+ padding)
         return None
@@ -104,6 +106,43 @@ def huffman(src: bytes) -> bytes:
     return bytes(out[:size])
 
 
+def lz77(src: bytes, size: int) -> bytes:
+    """Nintendo LZ77 (BIOS/SDK MI_UncompressLZ8, header 0x10)."""
+    out, pos = bytearray(), 4
+    while len(out) < size:
+        flags = src[pos]
+        pos += 1
+        for b in range(7, -1, -1):
+            if len(out) >= size:
+                break
+            if flags >> b & 1:
+                n, d = (src[pos] >> 4) + 3, ((src[pos] & 0xF) << 8 | src[pos + 1]) + 1
+                pos += 2
+                if d > len(out):
+                    raise IndexError("lz77 back reference before the start")
+                for _ in range(n):
+                    out.append(out[-d])
+            else:
+                out.append(src[pos])
+                pos += 1
+    return bytes(out[:size])
+
+
+def rle(src: bytes, size: int) -> bytes:
+    """Nintendo run-length (BIOS/SDK MI_UncompressRL8, header 0x30)."""
+    out, pos = bytearray(), 4
+    while len(out) < size:
+        f = src[pos]
+        pos += 1
+        if f & 0x80:
+            out += bytes([src[pos]]) * ((f & 0x7F) + 3)
+            pos += 1
+        else:
+            out += src[pos:pos + (f & 0x7F) + 1]
+            pos += (f & 0x7F) + 1
+    return bytes(out[:size])
+
+
 def bitcoder(itcm: tuple[int, bytes] | None, src: bytes, size: int, entry: int) -> bytes | None:
     """Kind 6: run the game's own unpacker (ITCM, `entry`) in unicorn. None without unicorn or ITCM."""
     try:
@@ -145,6 +184,11 @@ def unpack(blob: bytes, itcm=None, entry: int = 0x01FF8000):
     k = kind & 7
     if k == 0:
         out = blob[4:4 + size]
+    elif k in (1, 3):  # SDK LZ77 / run-length (The Sims 2 DS uses them, Lego does not)
+        try:
+            out = (lz77 if k == 1 else rle)(blob, size)
+        except IndexError:
+            return blob, "raw"
     elif k == 2:  # the SDK decoder reads the same u32 header (low nibble = bits per symbol)
         try:
             out = huffman(blob)
@@ -159,7 +203,7 @@ def unpack(blob: bytes, itcm=None, entry: int = 0x01FF8000):
         for i in range(1, len(a)):
             a[i] = (a[i] + a[i - 1]) & 0xFFFF
         out = struct.pack(f"<{len(a)}H", *a) + out[len(a) * 2:]
-    return out, ["copy", "", "huffman", "", "", "", "coder6"][k] + ("+delta" if kind & 8 else "")
+    return out, ["copy", "lz77", "huffman", "rle", "", "", "coder6"][k] + ("+delta" if kind & 8 else "")
 
 
 def magic(b: bytes) -> str:
