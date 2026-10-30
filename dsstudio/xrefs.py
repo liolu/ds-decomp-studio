@@ -24,6 +24,14 @@ def _index(game_id: str):
 
 
 def query(game_id: str, key: str, mode: str = "users", module: str = "", top: int = 40) -> dict:
+    if mode == "files":  # ROM file paths found as strings + who loads them (key = filter)
+        ix = _index(game_id)
+        if getattr(ix, "files_cache", None) is None:
+            ix.files_cache = xr.files(ix, games.get(game_id).cfg)
+        res = ix.files_cache
+        k = key.lower()
+        rows = [r for r in res["rows"] if not k or k in r["string"].lower() or any(k in f.lower() for f in r["files"])]
+        return {**res, "rows": rows, "mode": mode}
     if mode not in ("users", "table", "siblings"):
         raise KeyError(f"mode inconnu : {mode}")
     return xr.query(_index(game_id), key, mode, module, top)

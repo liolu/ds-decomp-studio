@@ -560,11 +560,12 @@ async function viewEngine() {
 }
 
 // ---------------- Data (gametools/xref.py: who uses a symbol, pointer slots of a table, functions sharing its data) ----------------
-let xrGame = "", xrQuery = "", xrMode = "users";
-const XR_MODES = [["users", "Qui l'utilise"], ["table", "Contenu (table / vtable)"], ["siblings", "Fonctions soeurs"]];
+let xrGame = "", xrQuery = "", xrMode = "users", xrTodo = false;
+const XR_MODES = [["users", "Qui l'utilise"], ["table", "Contenu (table / vtable)"], ["siblings", "Fonctions soeurs"], ["files", "Fichiers du ROM"]];
 const XR_HELP = {users: "Fonctions et donnees qui pointent vers ce symbole, avec les decalages utilises (+0x10...) : la forme de la struct.",
   table: "Les pointeurs ranges dans cette donnee, case par case : une vtable donne toutes les methodes d'une classe, une table de callbacks toutes ses fonctions.",
-  siblings: "Fonctions qui lisent le plus de donnees en commun avec les utilisateurs de ce symbole : le meme module du jeu. Une soeur matchee montre souvent l'astuce."};
+  siblings: "Fonctions qui lisent le plus de donnees en commun avec les utilisateurs de ce symbole : le meme module du jeu. Une soeur matchee montre souvent l'astuce.",
+  files: "Les chemins de fichiers du ROM ecrits dans le code (\"characters/%s/%s.anm\", \"/images/HUD_overlay.z\"...) et les fonctions qui les utilisent : la fonction qui charge tom.skn s'occupe de Tom. Le champ filtre (dossier, nom, extension)."};
 function viewXref() {
   if (!xrGame) xrGame = O.settings.active_game || (O.games[0] || {}).id || "";
   const opts = O.games.map(x => `<option value="${x.id}" ${x.id === xrGame ? "selected" : ""}>${esc(x.title)}</option>`).join("");
@@ -572,21 +573,31 @@ function viewXref() {
     <p class="hint">Depuis les relocations que dsd connait deja (relocs.txt de chaque module). Un nom (<code>data_02107860</code>, <code>func_0204b070</code>) ou une adresse (<code>0x020fcfb8</code>, aussi au milieu d'un symbole).
     <span class="tag ok">matchee</span> = une source possede la fonction. Clique un nom pour le suivre.</p>
     <div class="btns"><select onchange="xrGame=this.value;subXref()">${opts}</select>
-    <input id="xrq" placeholder="data_..., func_..., 0x..." value="${esc(xrQuery)}" onchange="xrQuery=this.value.trim();subXref()" style="min-width:240px">
-    ${XR_MODES.map(([m, l]) => `<button class="btn small${m === xrMode ? "" : " sec"}" onclick="xrMode='${m}';go('xref')">${l}</button>`).join("")}</div>
-    <p class="hint">${esc(XR_HELP[xrMode])}</p><div id="xrout" class="hint">${xrQuery ? "Chargement..." : "Entre un symbole."}</div></div>`;
+    <input id="xrq" placeholder="${xrMode === "files" ? "filtre : characters/, .anm, tom..." : "data_..., func_..., 0x..."}" value="${esc(xrQuery)}" onchange="xrQuery=this.value.trim();subXref()" style="min-width:240px">
+    ${XR_MODES.map(([m, l]) => `<button class="btn small${m === xrMode ? "" : " sec"}" onclick="xrMode='${m}';go('xref')">${l}</button>`).join("")}
+    ${xrMode === "files" ? `<label class="hint"><input type="checkbox" ${xrTodo ? "checked" : ""} onchange="xrTodo=this.checked;subXref()"> avec une fonction non matchee</label>` : ""}</div>
+    <p class="hint">${esc(XR_HELP[xrMode])}</p><div id="xrout" class="hint">${xrQuery || xrMode === "files" ? "Chargement..." : "Entre un symbole."}</div></div>`;
 }
-function xrFollow(name, mod) { xrQuery = name; const i = $("#xrq"); if (i) i.value = name; subXref(mod); }
+function xrFollow(name, mod) { if (xrMode === "files") { xrMode = "users"; xrQuery = name; return go("xref"); } xrQuery = name; const i = $("#xrq"); if (i) i.value = name; subXref(mod); }
 async function subXref(mod) {
-  const box = $("#xrout"); if (!box || !xrQuery || !xrGame) return;
+  const box = $("#xrout"); if (!box || !xrGame || (!xrQuery && xrMode !== "files")) return;
   box.innerHTML = "Chargement...";
   const d = await api(`xref?game=${encodeURIComponent(xrGame)}&q=${encodeURIComponent(xrQuery)}&mode=${xrMode}&module=${encodeURIComponent(mod || "")}`);
   if (d.error) return;
-  if (!d.symbols.length) { box.innerHTML = "Aucun symbole de ce nom ou a cette adresse."; return; }
   const hx = n => "0x" + n.toString(16).padStart(8, "0");
   const who = r => `<a style="cursor:pointer" onclick="xrFollow('${esc(r.name)}','${esc(r.module)}')">${esc(r.name)}${r.off ? "+0x" + r.off.toString(16) : ""}</a>
     ${r.module !== "main" ? `<span class="hint">${esc(r.module)}</span>` : ""} ${r.matched ? '<span class="tag ok">matchee</span>' : ""}
     ${r.kind === "function" ? `<a class="hint" style="cursor:pointer" title="Ouvrir dans l'editeur C" onclick="tagEdit('${esc(xrGame)}','${esc(r.name)}')">&#9998;</a>` : `<span class="hint">${esc(r.kind)}</span>`}`;
+  if (xrMode === "files") {
+    const rows = xrTodo ? d.rows.filter(r => r.users.some(u => u.matched === false)) : d.rows;
+    box.innerHTML = `<p class="hint">${fmt(d.files_found)} / ${fmt(d.files)} fichiers du ROM nommes par le code ; ${fmt(d.unmatched_users)} fonctions non matchees les utilisent. ${fmt(rows.length)} chaines affichees.</p>
+      <div class="scrollbox"><table><tr><th>Chaine dans le code</th><th>Fichiers</th><th>Fonctions</th></tr>
+      ${rows.map(r => `<tr><td><code>${esc(r.string)}</code> <span class="hint">${esc(r.match)} ${hx(r.addr)}${r.module !== "main" ? " " + esc(r.module) : ""}</span></td>
+        <td class="hint">${r.files.slice(0, 3).map(esc).join("<br>")}${r.n_files > 3 ? `<br>... ${fmt(r.n_files)} fichiers` : ""}</td>
+        <td>${r.users.map(who).join("<br>")}</td></tr>`).join("")}</table></div>`;
+    return;
+  }
+  if (!d.symbols.length) { box.innerHTML = "Aucun symbole de ce nom ou a cette adresse."; return; }
   box.innerHTML = d.symbols.map(s => {
     const head = `<h3>${esc(s.name)} <span class="hint">${esc(s.kind)} ${hx(s.addr)}-${hx(s.end)} (${fmt(s.end - s.addr)} octets) ${esc(s.module)}</span></h3>`;
     if (!s.rows.length) return head + `<p>Rien.</p>`;
@@ -728,7 +739,7 @@ async function saveSettings() {
   const deep = location.hash.match(/^#edit\/([^/]+)\/(\w+)$/);
   if (deep) tab = "game";
   // #xref/<game>/<symbol or address>[/table|siblings]: straight into the Data tab
-  const xd = location.hash.match(/^#xref\/([^/]+)\/([\w.@$]+)(?:\/(table|siblings))?$/);
+  const xd = location.hash.match(/^#xref\/([^/]+)\/([\w.@$]+)(?:\/(table|siblings|files))?$/);
   if (xd) { tab = "xref"; xrGame = xd[1]; xrQuery = xd[2]; xrMode = xd[3] || "users"; location.hash = "xref"; }
   tabs(); await loadOverview();
   if (deep && O.settings.active_game !== deep[1]) { await api("settings", {active_game: deep[1]}); O.settings.active_game = deep[1]; }

@@ -178,7 +178,7 @@ class H(BaseHTTPRequestHandler):
             if p == "tags/todo":
                 return self.send(techtags.todo(q["game"], q.get("tech", ""), int(q.get("limit", 400))))
             if p == "xref":  # gametools/xref.py: users / table slots / siblings of a symbol of one game
-                return self.send(xrefs.query(q["game"], q["q"], q.get("mode", "users"), q.get("module", "")))
+                return self.send(xrefs.query(q["game"], q.get("q", ""), q.get("mode", "users"), q.get("module", "")))
             if p == "jobs":
                 return self.send({"jobs": jobs.view()})
             if p == "log":  # from=<size the page already has>: only the new end of the log
