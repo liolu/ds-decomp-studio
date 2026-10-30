@@ -32,6 +32,7 @@ Three levels:
 - **side-by-side** `sbs.py NAME FILE.c [A B]`: full target | candidate listing
 - **struct-diff** `mdiff.py NAME FILE.c P`: structural diff
 - **asm-differ** `asmdiff.py`: live asm-differ view
+- **romarc** `romarc.py list|extract|users` (index archives `rom.bin`, Amaze engine: Lego SW II, Sims 2): entries, unpacking (raw / SDK Huffman / delta; kind 6 = the game's ITCM coder, needs `unicorn`), and file number -> functions that load it (loaders found by themselves from the full dsd disassembly in build/xref_asm)
 - **xref** `xref.py SYM [--table|--siblings]` / `xref.py --files [filter]` (ROM file paths written in the code -> functions that load them): who uses a data symbol (offsets), callers of a function, pointer slots of a table/vtable, functions sharing the most data (same module); [x] = matched. Find sibling matches to copy tricks from, and group/name functions
 - **stmt-perm** `stmtperm.py` (tag statements `/*P*/`), **rand-perm** `permrand.py`, **near-perm** `nearperm.py ROUND` (decl orders, no LLM), **permuter** `permute.py` (decomp-permuter; scores unreliable on TnJ)
 - **asm-only** `auto_match.ASM_ONLY` + whole `asm` function (allowed only for swp/swi/mrs/mcr/clz..., or, in TnJ, for SDK/MSL functions a public decomp proves were `asm`: cite it in `// ASM:`); write `bl` even to Thumb callees

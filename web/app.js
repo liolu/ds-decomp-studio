@@ -561,11 +561,12 @@ async function viewEngine() {
 
 // ---------------- Data (gametools/xref.py: who uses a symbol, pointer slots of a table, functions sharing its data) ----------------
 let xrGame = "", xrQuery = "", xrMode = "users", xrTodo = false;
-const XR_MODES = [["users", "Qui l'utilise"], ["table", "Contenu (table / vtable)"], ["siblings", "Fonctions soeurs"], ["files", "Fichiers du ROM"]];
+const XR_MODES = [["users", "Qui l'utilise"], ["table", "Contenu (table / vtable)"], ["siblings", "Fonctions soeurs"], ["files", "Fichiers du ROM"], ["archive", "Archive (rom.bin)"]];
 const XR_HELP = {users: "Fonctions et donnees qui pointent vers ce symbole, avec les decalages utilises (+0x10...) : la forme de la struct.",
   table: "Les pointeurs ranges dans cette donnee, case par case : une vtable donne toutes les methodes d'une classe, une table de callbacks toutes ses fonctions.",
   siblings: "Fonctions qui lisent le plus de donnees en commun avec les utilisateurs de ce symbole : le meme module du jeu. Une soeur matchee montre souvent l'astuce.",
-  files: "Les chemins de fichiers du ROM ecrits dans le code (\"characters/%s/%s.anm\", \"/images/HUD_overlay.z\"...) et les fonctions qui les utilisent : la fonction qui charge tom.skn s'occupe de Tom. Le champ filtre (dossier, nom, extension)."};
+  files: "Les chemins de fichiers du ROM ecrits dans le code (\"characters/%s/%s.anm\", \"/images/HUD_overlay.z\"...) et les fonctions qui les utilisent : la fonction qui charge tom.skn s'occupe de Tom. Le champ filtre (dossier, nom, extension).",
+  archive: "Jeux a archive numerotee (rom.bin : Lego, Sims 2...) : le jeu charge \"le fichier n\". Les fonctions de chargement sont trouvees seules, puis le numero passe a chaque appel (constante ou table de numeros). Filtre : un numero ou une fonction. Extraire : romarc.py extract N."};
 function viewXref() {
   if (!xrGame) xrGame = O.settings.active_game || (O.games[0] || {}).id || "";
   const opts = O.games.map(x => `<option value="${x.id}" ${x.id === xrGame ? "selected" : ""}>${esc(x.title)}</option>`).join("");
@@ -573,14 +574,14 @@ function viewXref() {
     <p class="hint">Depuis les relocations que dsd connait deja (relocs.txt de chaque module). Un nom (<code>data_02107860</code>, <code>func_0204b070</code>) ou une adresse (<code>0x020fcfb8</code>, aussi au milieu d'un symbole).
     <span class="tag ok">matchee</span> = une source possede la fonction. Clique un nom pour le suivre.</p>
     <div class="btns"><select onchange="xrGame=this.value;subXref()">${opts}</select>
-    <input id="xrq" placeholder="${xrMode === "files" ? "filtre : characters/, .anm, tom..." : "data_..., func_..., 0x..."}" value="${esc(xrQuery)}" onchange="xrQuery=this.value.trim();subXref()" style="min-width:240px">
+    <input id="xrq" placeholder="${xrMode === "files" ? "filtre : characters/, .anm, tom..." : xrMode === "archive" ? "filtre : 1366, func_..." : "data_..., func_..., 0x..."}" value="${esc(xrQuery)}" onchange="xrQuery=this.value.trim();subXref()" style="min-width:240px">
     ${XR_MODES.map(([m, l]) => `<button class="btn small${m === xrMode ? "" : " sec"}" onclick="xrMode='${m}';go('xref')">${l}</button>`).join("")}
     ${xrMode === "files" ? `<label class="hint"><input type="checkbox" ${xrTodo ? "checked" : ""} onchange="xrTodo=this.checked;subXref()"> avec une fonction non matchee</label>` : ""}</div>
-    <p class="hint">${esc(XR_HELP[xrMode])}</p><div id="xrout" class="hint">${xrQuery || xrMode === "files" ? "Chargement..." : "Entre un symbole."}</div></div>`;
+    <p class="hint">${esc(XR_HELP[xrMode])}</p><div id="xrout" class="hint">${xrQuery || xrMode === "files" || xrMode === "archive" ? "Chargement..." : "Entre un symbole."}</div></div>`;
 }
-function xrFollow(name, mod) { if (xrMode === "files") { xrMode = "users"; xrQuery = name; return go("xref"); } xrQuery = name; const i = $("#xrq"); if (i) i.value = name; subXref(mod); }
+function xrFollow(name, mod) { if (xrMode === "files" || xrMode === "archive") { xrMode = "users"; xrQuery = name; return go("xref"); } xrQuery = name; const i = $("#xrq"); if (i) i.value = name; subXref(mod); }
 async function subXref(mod) {
-  const box = $("#xrout"); if (!box || !xrGame || (!xrQuery && xrMode !== "files")) return;
+  const box = $("#xrout"); if (!box || !xrGame || (!xrQuery && xrMode !== "files" && xrMode !== "archive")) return;
   box.innerHTML = "Chargement...";
   const d = await api(`xref?game=${encodeURIComponent(xrGame)}&q=${encodeURIComponent(xrQuery)}&mode=${xrMode}&module=${encodeURIComponent(mod || "")}`);
   if (d.error) return;
@@ -595,6 +596,20 @@ async function subXref(mod) {
       ${rows.map(r => `<tr><td><code>${esc(r.string)}</code> <span class="hint">${esc(r.match)} ${hx(r.addr)}${r.module !== "main" ? " " + esc(r.module) : ""}</span></td>
         <td class="hint">${r.files.slice(0, 3).map(esc).join("<br>")}${r.n_files > 3 ? `<br>... ${fmt(r.n_files)} fichiers` : ""}</td>
         <td>${r.users.map(who).join("<br>")}</td></tr>`).join("")}</table></div>`;
+    return;
+  }
+  if (xrMode === "archive") {
+    if (d.error) { box.innerHTML = "Pas d'archive numerotee pour ce jeu (aucune fonction ne nomme rom.bin)."; return; }
+    const fn = name => ({name, module: "main", kind: "function", off: 0, matched: d.matched[name]});
+    const nums = Object.keys(d.files);
+    box.innerHTML = `<p class="hint">Archive ouverte par ${who(fn(d.opener))} ; ${fmt(d.entries)} fichiers, ${fmt(d.calls)} appels de chargement dont ${fmt(d.unknown_calls)} avec un numero calcule a l'execution.
+      <b>${fmt(nums.length)}</b> numeros relies a une fonction.</p>
+      <p class="hint">Fonctions de chargement : ${d.loaders.map(f => who(fn(f))).join(", ")}</p>
+      ${d.tables.length ? `<p class="hint">Tables de numeros : ${d.tables.map(t => `<a style="cursor:pointer" onclick="xrFollow('${esc(t.table)}','main')">${esc(t.table)}</a>+0x${t.field.toString(16)} (${t.ids.length})`).join(", ")}</p>` : ""}
+      <div class="scrollbox"><table><tr><th class="num">Fichier n</th><th>Contenu</th><th>Charge par</th></tr>
+      ${nums.map(n => { const i = d.info[n] || {};
+        return `<tr><td class="num">${n}</td><td class="hint">${fmt(i.size || 0)} o${i.packed ? ` (${esc(i.packed)} -> ${fmt(i.unpacked)} o)` : ""} ${esc(i.magic || "")}</td>
+        <td>${d.files[n].map(u => who(fn(u.function)) + ` <span class="hint">${esc(u.how)}${u.n > 1 ? " x" + u.n : ""}</span>`).join("<br>")}</td></tr>`; }).join("")}</table></div>`;
     return;
   }
   if (!d.symbols.length) { box.innerHTML = "Aucun symbole de ce nom ou a cette adresse."; return; }
@@ -739,7 +754,7 @@ async function saveSettings() {
   const deep = location.hash.match(/^#edit\/([^/]+)\/(\w+)$/);
   if (deep) tab = "game";
   // #xref/<game>/<symbol or address>[/table|siblings]: straight into the Data tab
-  const xd = location.hash.match(/^#xref\/([^/]+)\/([\w.@$]+)(?:\/(table|siblings|files))?$/);
+  const xd = location.hash.match(/^#xref\/([^/]+)\/([\w.@$]+)(?:\/(table|siblings|files|archive))?$/);
   if (xd) { tab = "xref"; xrGame = xd[1]; xrQuery = xd[2]; xrMode = xd[3] || "users"; location.hash = "xref"; }
   tabs(); await loadOverview();
   if (deep && O.settings.active_game !== deep[1]) { await api("settings", {active_game: deep[1]}); O.settings.active_game = deep[1]; }

@@ -23,7 +23,25 @@ def _index(game_id: str):
         return ix
 
 
+_rspec = importlib.util.spec_from_file_location("romarc", config.GAMETOOLS / "romarc.py")
+ra = importlib.util.module_from_spec(_rspec)
+_rspec.loader.exec_module(ra)
+
+
 def query(game_id: str, key: str, mode: str = "users", module: str = "", top: int = 40) -> dict:
+    if mode == "archive":  # rom.bin-style index archive: loaders, file number -> functions (romarc.py users)
+        ix, g = _index(game_id), games.get(game_id)
+        if getattr(ix, "archive_cache", None) is None:
+            import sys
+            sys.modules.setdefault("xref", xr)  # romarc imports xref by name
+            ix.archive_cache = ra.users(g.path, g.version, g.cfg)
+        res = ix.archive_cache
+        if "error" in res:
+            return {**res, "mode": mode}
+        k = key.strip().lower()
+        files = {n: us for n, us in res["files"].items()
+                 if not k or k == n or any(k in u["function"].lower() or k in u["how"].lower() for u in us)}
+        return {**res, "files": files, "mode": mode}
     if mode == "files":  # ROM file paths found as strings + who loads them (key = filter)
         ix = _index(game_id)
         if getattr(ix, "files_cache", None) is None:
