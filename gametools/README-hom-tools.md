@@ -54,7 +54,7 @@ those relocs.txt lines by hand.
 ## Technique journal + prototypes (every function, every session)
 
 `TECHNIQUES.md` = catalogue of every technique (ids). `techlog.py history NAME` before working on a function,
-`protorun.py NAME` next (runs every `proto_run` of `prototypes/*.py` and of the tools, logs `proto:<tool>` results),
+`protorun.py NAME` on a stuck function, max one run per hour on the PC (runs every `proto_run` of `prototypes/*.py` and of the tools, logs `proto:<tool>` results),
 `techlog.py add NAME ID ok|better|fail ...` after every try, `techlog.py stats` per technique,
 `protorun.py promote TOOL` moves a prototype that matched something into gametools. Journals:
 `build/hunt/techlog/NAME.md` (one file per function: safe with parallel agents).

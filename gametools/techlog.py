@@ -133,7 +133,7 @@ def cmd_history(a):
     for t, s in sugg[:20]:
         print(f"   {t:24s} ok {s['ok']} better {s['better']} fail {s['fail']}")
     if not sugg: print('   (none yet)')
-    print('--- next: python ../../studio/gametools/protorun.py', name, '(runs every prototype, logs here)')
+    print('--- next: python ../../studio/gametools/protorun.py', name, '(runs every prototype, logs here; max one run per hour)')
 
 
 def tech_stats():

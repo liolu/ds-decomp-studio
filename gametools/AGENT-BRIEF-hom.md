@@ -14,8 +14,9 @@ MANDATORY for every function (techniques: `../../studio/gametools/TECHNIQUES.md`
 A. BEFORE touching it: `python ../../studio/gametools/techlog.py history NAME` -> everything already done on it (technique
    journal, ledger notes, best C, missdb misses, techniques that worked elsewhere but were never tried here). Do not
    repeat a technique the journal already shows as `fail` unless you change something, and say what.
-B. Then run the prototypes: `python ../../studio/gametools/protorun.py NAME --by AGENT_ID` (every prototype + auto tool,
-   results logged by itself; a better variant lands in `build/hunt/proto/NAME/`). Start from it if it beat the best C.
+B. Optional, for a stuck function only: `python ../../studio/gametools/protorun.py NAME --by AGENT_ID` (every prototype +
+   auto tool, results logged by itself; a better variant lands in `build/hunt/proto/NAME/`). Start from it if it beat the
+   best C. MAX ONE RUN PER HOUR on the whole PC: another run is refused (exit code 2), so go on by hand, do not retry.
 C. After EVERY technique you try, failed or successful:
    `python ../../studio/gametools/techlog.py add NAME TECH_ID ok|better|fail --diffs N --note "what exactly" --file F.c --by AGENT_ID`
    (an id of TECHNIQUES.md; a new trick gets a new short id and a line in your final answer).

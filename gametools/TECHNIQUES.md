@@ -14,7 +14,8 @@ Three levels:
 
 ## Workflow per function (agents and hand sessions)
 1. `techlog.py history NAME` - read everything done before (journal, ledger, best C, missdb, untried winners).
-2. `protorun.py NAME` - every prototype + auto tool on the best C; results go to the journal by themselves.
+2. `protorun.py NAME`, on a stuck function only: max one run per hour on the PC (refused otherwise, exit code 2) -
+   every prototype + auto tool on the best C; results go to the journal by themselves.
 3. Work by hand from `build/hunt/proto/NAME/*.c` (if one is better) or the best C.
 4. After EVERY technique tried, success or failure: `techlog.py add NAME ID RESULT --diffs N --note "what exactly"`.
 5. A new idea that is a script -> `prototypes/` (with `proto_run` when it can run alone), never only in scratch.

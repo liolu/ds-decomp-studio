@@ -12,15 +12,32 @@ A tool joins the run by defining `proto_run(ctx) -> dict`. ctx: name, src, profi
 judge(src, profile=None) -> result dict, out (Path of this tool's output .c), log(text).
 It returns {'result': 'ok'|'better'|'fail'|'skip', 'diffs': N, 'profile': P, 'src': best C or None, 'note': '...'}.
 ok = match, better = fewer diffs than base, skip = does not apply to this function (not logged as a failure).
+
+User rule (2026-11-01): at most ONE run per hour on this PC, all games, agents and --only runs included (a run costs
+about 2 min and parallel runs overloaded the PC). Another run in that hour is refused, exit code 2. --list and promote
+are not limited. The clock is the date of the file `decomp ds/protorun.last`.
 """
 import argparse, importlib.util, re, shutil, sys, time, traceback
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PROTO = HERE / 'prototypes'
+LAST_RUN = HERE.parents[1] / 'protorun.last'
+MIN_INTERVAL = 3600
 sys.path.insert(0, str(HERE))
 import hunt  # noqa: E402
 import techlog  # noqa: E402
+
+
+def claim_hourly_run():
+    """refuse the run if another one started less than MIN_INTERVAL ago, else start the clock."""
+    if LAST_RUN.exists():
+        left = LAST_RUN.stat().st_mtime + MIN_INTERVAL - time.time()
+        if left > 0:
+            print(f'protorun refused: max one run per hour, next one in {left / 60:.0f} min. Work on the function by hand.')
+            sys.stdout.flush()
+            sys.exit(2)
+    LAST_RUN.write_text(time.strftime('%Y-%m-%d %H:%M:%S\n'), encoding='utf-8')
 
 
 def runners():
@@ -111,6 +128,7 @@ def main():
     if a.list or not a.name:
         for tool, path, kind in runners(): print(f'{tool:14s} {kind:10s} {path}')
         return
+    claim_hourly_run()
     cmd_run(a)
 
 
