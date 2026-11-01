@@ -426,8 +426,21 @@ def replay(games: list[str] | None, jobs: int, targets: set[str] | None = None, 
         return None
 
     found = []
+    saved = [0, time.time()]
+
+    def checkpoint():
+        """The failed tries so far go to the database every minute: a stopped replay starts again where it was."""
+        rows_ = done_rows[saved[0]:]
+        saved[0] += len(rows_)
+        saved[1] = time.time()
+        with _lock:
+            c.executemany("INSERT OR REPLACE INTO tried VALUES (?,?,?,?,?)",
+                          [(m, ROOT.name, t, res, saved[1]) for m, t, res in rows_ if res != "match"])
+            c.commit()
     with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
         for res in pool.map(attempt, sorted(per_target.items())):
+            if time.time() - saved[1] > 60:
+                checkpoint()
             if res:
                 mod, n, src, prof, mid, kind, frm = res
                 a, s = imgs[mod].where(n)
