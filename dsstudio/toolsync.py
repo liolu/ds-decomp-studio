@@ -19,7 +19,7 @@ PER_GAME: set[str] = set()  # nothing: per-game settings live in <project>/game.
 # what a game needs to build the ROM, verify it and publish its progress (configure.py imports or runs the rest)
 BUILD_TOOLS = {"configure.py", "project.py", "get_platform.py", "ninja_syntax.py", "reloc_fixes.py",
                "download_tool.py", "m2ctx.py", "banner_fix.py", "rom_build.py", "sha1.py", "transform_dep.py",
-               "match.py", "pipeline_lock.py", "probe_compiler.py"}
+               "match.py", "pipeline_lock.py", "probe_compiler.py", "ld_align.py"}
 
 
 def tool_names() -> list[str]:

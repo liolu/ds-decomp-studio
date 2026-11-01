@@ -10,6 +10,11 @@ a `static` function becomes a local symbol, a file can shift everything after it
 build per step), this tool compares every rebuilt module (ARM9 main, ITCM, DTCM, overlays) with the original byte by
 byte and maps each difference to the `complete` file of delinks.txt that covers it. It also reads the errors of the
 build (compile errors, `check symbols`). Dropped files are moved to build/culprits/<date>/ (nothing is deleted).
+
+Shifts: when one file grows, everything after it moves, and every `bl`/`blx`/Thumb bl/pointer that targets the moved
+code, in every module, differs by a byte or two (thousands of "1 byte(s) differ" in innocent files). The linker map
+(symbols named after their address, placed elsewhere) gives the object that grew and the move deltas; a differing
+word that is the same reference to a target moved by such a delta is counted under "(moved references)", not blamed.
 """
 import argparse
 import re
@@ -76,8 +81,9 @@ def complete_files(delinks: Path) -> list[tuple[str, int, int]]:
     return out
 
 
-def diff_ranges(a: bytes, b: bytes) -> tuple[list[tuple[int, int]], bool]:
-    """Differing byte runs (offset, length). When the sizes differ only the first difference is meaningful."""
+def diff_ranges(a: bytes, b: bytes, first_only: bool = True) -> tuple[list[tuple[int, int]], bool]:
+    """Differing byte runs (offset, length). When the sizes differ only the first difference is meaningful (all of
+    them with first_only=False: the caller skips the moved references before it)."""
     n = min(len(a), len(b))
     runs = []
     i = 0
@@ -96,8 +102,118 @@ def diff_ranges(a: bytes, b: bytes) -> tuple[list[tuple[int, int]], bool]:
         i = j
     shifted = len(a) != len(b)
     if shifted:
-        runs = runs[:1] or [(n, 1)]
+        runs = (runs[:1] or [(n, 1)]) if first_only else runs + [(n, 1)]
     return runs, shifted
+
+
+MAP_SECTION = re.compile(r"^# \.(arm9|itcm|dtcm|ov\d+)\s*$", re.M)
+MAP_SYMBOL = re.compile(r"^\s+([0-9A-Fa-f]{8}) [0-9A-Fa-f]{8} \.\w+\s+(\S+)\t\((\S+?)\.o\)", re.M)
+NAMED_ADDR = re.compile(r"(?:^|_)([0-9a-f]{8})$")
+
+
+def map_module_name(sec: str) -> str:
+    return {"arm9": "ARM9 main", "itcm": "ITCM", "dtcm": "DTCM"}.get(sec) or f"overlay {int(sec[2:])}"
+
+
+def moved_objects(newest_config: float) -> tuple[list[tuple[str, str]], set[int]]:
+    """Where the code really moved, read from the linker map: a symbol named after its address (func_0202af6c,
+    .L_0202b1d4, data_ov123_020d5034...) placed at another address has moved. The first one of each module tells
+    which object grew (the one placed just before it, or the one holding it when it is not its first symbol).
+    Returns ([(file, reason)], {address deltas}): the deltas let find() recognise the words that differ only
+    because they point to something that moved."""
+    xmap = project.BUILD / "arm9.o.xMAP"
+    if not xmap.exists() or xmap.stat().st_mtime < newest_config:
+        return [], set()
+    text = xmap.read_text(encoding="latin-1")
+    mods = modules()
+    stems = {Path(f).stem: f for mod in mods for f, _, _ in complete_files(mod["delinks"])}
+    bases = {mod["name"]: mod["base"] for mod in mods}
+    out, deltas = [], set()
+    heads = list(MAP_SECTION.finditer(text))
+    for i, h in enumerate(heads):
+        body = text[h.end():heads[i + 1].start() if i + 1 < len(heads) else len(text)]
+        name = map_module_name(h.group(1))
+        syms = MAP_SYMBOL.findall(body)
+        if not syms:
+            continue
+        # A module placed after another one (overlays after main) moves as a whole when that one grows: nothing in
+        # it is guilty, only what moves inside it relatively to its start.
+        whole = int(syms[0][0], 16) - bases[name] if name in bases else 0
+        if whole:
+            deltas.add(whole)
+            out.append(("(moved modules)", f"{name} placed {whole:+#x} as a whole: something placed before it grew"))
+        # A gap object (_dsd_gap@...) is cut from the original bytes and cannot grow: the object that grew is the
+        # last `complete` one placed before the moved symbol (or the moved symbol's own, when it is inside it).
+        prev_obj, last_complete, first = None, None, None
+        for placed, sym, obj in syms:
+            if obj != prev_obj and prev_obj in stems:
+                last_complete = prev_obj
+            n = NAMED_ADDR.search(sym)
+            if n and not sym.startswith(("@", ".p_")):  # .p__sinit_X: ctor pointer named after the function
+                d = int(placed, 16) - int(n.group(1), 16)
+                if d and abs(d) < 0x100000:
+                    deltas.add(d)
+                    if first is None and d != whole:
+                        first = (sym, d - whole, obj if obj == prev_obj and obj in stems else last_complete)
+            prev_obj = obj
+        if first:
+            sym, d, grown = first
+            f = stems.get(grown or "", "(no complete file)")
+            out.append((f, f"{name}: {sym} placed {d:+#x} from its address in the linker map, "
+                           f"{grown or 'nothing'}.o before it grew"))
+    return out, deltas
+
+
+def _sext(v: int, bits: int) -> int:
+    return v - (1 << bits) if v & (1 << (bits - 1)) else v
+
+
+def reference_deltas(o: bytes, c: bytes, off: int) -> list[tuple[bool, int]]:
+    """The readings of the 4 bytes at `off` as the same reference to two targets: [(relative?, target difference)].
+    Relative: ARM b/bl/blx, Thumb bl/blx pair; else an absolute pointer. A word can read several ways (a Thumb
+    pair also looks like an ARM bl): all are returned."""
+    if off < 0 or off + 4 > min(len(o), len(c)):
+        return []
+    wo, wc = int.from_bytes(o[off:off + 4], "little"), int.from_bytes(c[off:off + 4], "little")
+    if wo == wc:
+        return []
+    out = []
+    if off % 4 == 0:
+        if wo >> 24 == wc >> 24 and (wo >> 25) & 7 == 5:  # b/bl (any condition), blx imm (H bit equal)
+            out.append((True, (_sext(wc & 0xFFFFFF, 24) - _sext(wo & 0xFFFFFF, 24)) * 4))
+        if 0x01000000 <= wo < 0x03000000 and 0x01000000 <= wc < 0x03000000:
+            out.append((False, wc - wo))
+    ho, lo = wo & 0xFFFF, wo >> 16
+    hc, lc = wc & 0xFFFF, wc >> 16
+    if (ho & 0xF800) == (hc & 0xF800) == 0xF000 and (lo & 0xE800) == 0xE800 and (lo & 0xF800) == (lc & 0xF800):
+        out.append((True, (((_sext(hc & 0x7FF, 11) << 12) | ((lc & 0x7FF) << 1))
+                           - ((_sext(ho & 0x7FF, 11) << 12) | ((lo & 0x7FF) << 1)))))
+    return out
+
+
+def moved_reference(o: bytes, c: bytes, off: int, ln: int, deltas: set[int]) -> bool:
+    """Is every differing byte of the run (off, ln) part of a reference whose target moved by a known delta? A
+    branch is relative: its offset changes by (target move - move of the branch itself), both known deltas or 0."""
+    if not deltas:
+        return False
+    moves = deltas | {0}
+    relative = {t - s for t in moves for s in moves} - {0}
+    i = off
+    while i < off + ln:
+        if i >= len(o) or i >= len(c):
+            return False
+        if o[i] == c[i]:
+            i += 1
+            continue
+        # the word holding byte i: an ARM word, or a Thumb bl pair starting on this halfword or the one before
+        for start in dict.fromkeys((i & ~3, i & ~1, (i & ~1) - 2)):
+            if start <= i < start + 4 and any(d in (relative if rel else deltas)
+                                              for rel, d in reference_deltas(o, c, start)):
+                i = start + 4
+                break
+        else:
+            return False
+    return True
 
 
 LOCAL_IMPORT = re.compile(r"Imported symbol (\.L_[0-9a-f]+) at 0x([0-9a-f]+) in (.+?) is local")
@@ -172,16 +288,31 @@ def find(build_output: str) -> list[dict]:
         add(f, reason)
     for mod, addr, sym in shifted_symbols(build_output):
         add("(no complete file)", f"{mod} shifted from 0x{addr:08x} ({sym}): something placed before it grew")
+    # When one file grows, everything after it moves and every `bl`/pointer to it, in every module, differs by a byte
+    # or two: thousands of innocent files. The linker map says what moved and by how much; the words that differ
+    # only by such a move are counted, not blamed.
+    grown, deltas = moved_objects(newest_config)
+    for f, reason in grown:
+        add(f, reason)
+    moved_refs = {}  # module -> [words, files]
     for mod in modules():
         if mod["built"].stat().st_mtime < newest_config:
             add("(build)", f"{mod['name']} not relinked since the last config change: fix the build errors first")
             continue
-        runs, shifted = diff_ranges(mod["orig"].read_bytes(), mod["built"].read_bytes())
+        orig, built = mod["orig"].read_bytes(), mod["built"].read_bytes()
+        runs, shifted = diff_ranges(orig, built, first_only=not deltas)
         if not runs:
             continue
         files = complete_files(mod["delinks"])
         for off, ln in runs:
+            if moved_reference(orig, built, off, ln, deltas):
+                n = moved_refs.setdefault(mod["name"], [0, set()])
+                n[0] += 1
+                n[1].update(f for f, s, e in files if s <= mod["base"] + off < e)
+                continue
             addr = mod["base"] + off
+            if shifted:  # the run goes on to the end of the module
+                ln = 1
             owners = [f for f, s, e in files if s <= addr < e or (s < addr + ln and addr < e)]
             if not owners and shifted:  # a shift starts at the end of the file that grew: blame the one before
                 before = [x for x in files if x[2] <= addr]
@@ -191,6 +322,15 @@ def find(build_output: str) -> list[dict]:
                 add(f, f"{mod['name']} 0x{addr:08x}: {what}")
             if not owners:
                 add("(no complete file)", f"{mod['name']} 0x{addr:08x}: {what}")
+            if shifted:  # past the start of a shift, bytes no longer face their counterpart
+                break
+    if moved_refs:
+        words = sum(n for n, _ in moved_refs.values())
+        nfiles = len(set().union(*(f for _, f in moved_refs.values())))
+        mods = ", ".join(f"{m} {n}" for m, (n, _) in sorted(moved_refs.items(), key=lambda x: -x[1][0])[:6])
+        add("(moved references)", f"{words} differing word(s) in {nfiles} file(s) only point to code/data that moved "
+                                  f"by {', '.join(f'{d:+#x}' for d in sorted(deltas))} ({mods}...): consequences, "
+                                  f"not culprits")
     return [{"file": f, "reasons": r} for f, r in found.items()]
 
 

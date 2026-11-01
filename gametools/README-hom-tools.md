@@ -6,6 +6,7 @@ Reusable matching helpers (run from a project dir, e.g. projets/heroes-of-mana):
 - variants.py NAME BASE.c 'old=>new@@old2=>new2' ... : try textual variants (\n = newline), prints diff count
 - permrand.py NAME FILE.c [--n 300 -j 6 --profile P]  : RANDOM permutations of the local declaration lines (7+ locals; permdecl only tries the first 800 in lexicographic order), scores diffs + 1000*size gap -> FILE.best.c
 - mdiff.py NAME FILE.c [profile]            : STRUCTURAL diff (difflib on mnemonics of the full listings, via WB_FULL=1) - shows real insertions/deletions even when the sizes differ (the index-aligned `diff` of judge is useless then)
+- **asmdiff.py NAME [FILE.c] [--profile P] [--once] [-- asm-differ flags]** : LIVE side-by-side diff with asm-differ (tools/asm-differ): every save of FILE.c recompiles and refreshes the diff (q quits). Without FILE.c the starting draft is copied to build/asmdiff/NAME.c. Without --profile, judge picks the best one. bl targets and pool words are masked like judge. Main module, overlays and Thumb. `-- -3` also shows the previous build, `--once -- --format plain` prints once (for agents). Double-click launcher: decomp ds/asmdiff.cmd GAME NAME [FILE.c].
 - stmtperm.py NAME FILE.c [--profile P -j N]   : permute the statement lines tagged with a trailing `/*P*/` (<= 7 lines), judge every order -> FILE.best.c (fixes store/load scheduling, e.g. MBi_CheckWmErrcode 5 -> 3 diffs)
 - optsweep.py NAME FILE.c [versions...]       : judge FILE.c at every -O0..-O4,p/s of 2.0/sp1p5 and 1.2/sp2p3 (profile string "2.0/sp1p5 -O2,p" works in judge/submit). Loops with `b cond` entry + mul/mla (no strength reduction) are -O2 files (SND_CommandInit 53 -> 1 diff).
 - donor_match.py: DONOR_DUMP=dir python tools/donor_match.py --dry-run --names a,b  writes the donor C that compiled but did not match (status near/size/...) to dir/NAME.STATUS.c (ntrtwl dumps are skipped on purpose: leaked) = ready-made starting point (needs `__attribute__` removed for the fake-match gate, types/offsets fixed by hand)
@@ -41,13 +42,24 @@ Order: `datagap.py` (what is left and why) -> `fakeptr.py --apply` (false pointe
 by auto_match.integrate, file removed at `workbench commit`) -> `tiegen.py gen`, ninja, `tiegen.py check` (twice) for
 equal-size runs -> `datagap.py --name-nosym` + `datagen.py` for unreferenced data -> `match.py verify`.
 mwcc facts: one element type per run; arrays get a section each (aligned 4 by the linker) but 1-2 byte scalars are
-packed in one section (so tiegen writes scalars); const all-zero data stays in .rodata, non-const goes to .bss;
+packed in one section (so tiegen writes scalars); const all-zero data stays in .rodata, non-const goes to .bss unless the file has `#pragma explicit_zero_data on`
+(datagen writes it, so all-zero .data is matched too);
 thumb function pointers are written `(u32)&f` (the linker sets bit 0).
 When `ninja` fails its symbol check after datagen/bssgen: `datashift.py` prints only the objects where the offset
 CHANGES (root causes; the overlays start AFTER(ARM9), so a shifted main .bss moves them all). Seen on The Sims 2: an odd
 3-byte symbol (neither scalar nor array = a field) -> `symmerge.py --min-size 3 --apply`; false pointers that symmerge
 turned into `to:obj add:0x1` (0x0212_0001-like table entries) make objdiff report 9x% on a pointer-free table -> delete
 those relocs.txt lines by hand.
+
+## Technique journal + prototypes (every function, every session)
+
+`TECHNIQUES.md` = catalogue of every technique (ids). `techlog.py history NAME` before working on a function,
+`protorun.py NAME` next (runs every `proto_run` of `prototypes/*.py` and of the tools, logs `proto:<tool>` results),
+`techlog.py add NAME ID ok|better|fail ...` after every try, `techlog.py stats` per technique,
+`protorun.py promote TOOL` moves a prototype that matched something into gametools. Journals:
+`build/hunt/techlog/NAME.md` (one file per function: safe with parallel agents).
+Former TnJ scratch tools now here: judgemany.py (jm.py), relcheck.py, sbs.py; prototypes/: mscore, regions,
+schedscan (v075 scan), asmconv, declperm (fperm), cmutate, profextra.
 
 ## Agent rounds (N agents in a loop, then one push)
 
@@ -60,6 +72,10 @@ Run from the game dir (`projets/<game>/`), env.sh sourced. Agents get `AGENT-BRI
 - `agentnear.py ROUND [--max-diffs 9] [--per 15] [--lists N]` : hands out the near misses of every past round
   (build/hunt/*/all/results.json), with the best file copied into aK/ as the starting point.
 - `agentrelease.py ROUND` : names handed out but never tried (no aK/NAME.c: rate limit, early stop) go back to the pool.
+- `agentpool.py` : read-only census of what is left (compile/size per band, near misses per diff bucket). Run it before
+  dealing instead of probing agentdeal (which marks names as assigned).
+- `nearperm.py ROUND [--max-diffs 6] [--only a1,a2]` : no-LLM pass: judges every aK/NAME.c and runs permrand on the near
+  misses, a matching permutation replaces aK/NAME.c (old kept as .prev). r27: 0/14 (diffs were not declaration order).
 - `agentround.py ROUND` : collect aK/*.c, symfix, judge with every profile (fj.py, capped), submit-many + main submits.
 - `roundpush.sh ROUND` : agentround + `workbench commit` + trailer + configure + progress report gz + git push,
   log in ROUND/push.log.

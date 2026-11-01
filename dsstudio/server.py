@@ -9,7 +9,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import blocks, brief, config, data, difficulty, engine, gameenv, games, jobs, misses, projects, toolsync, xp
+from . import blocks, brief, config, data, difficulty, engine, gameenv, games, jobs, misses, projects, techtags, toolsync, xp, xrefs
 
 
 _games_cache = {"t": 0.0, "games": None, "busy": False}
@@ -167,6 +167,18 @@ class H(BaseHTTPRequestHandler):
                 return self.send(engine.memory_map(games.get(q["game"])))
             if p == "engine":
                 return self.send({**engine.cross_games(), "studios": engine.studios()})
+            if p == "tags":
+                return self.send(techtags.overview())
+            if p == "tags/func":
+                return self.send(techtags.function(q["game"], q["name"]))
+            if p == "tags/family":
+                return self.send(techtags.family(q["fam"]))
+            if p == "tags/find":
+                return self.send(techtags.find(q["tag"], q.get("game", ""), q.get("todo") == "1", int(q.get("limit", 500))))
+            if p == "tags/todo":
+                return self.send(techtags.todo(q["game"], q.get("tech", ""), int(q.get("limit", 400))))
+            if p == "xref":  # gametools/xref.py: users / table slots / siblings of a symbol of one game
+                return self.send(xrefs.query(q["game"], q.get("q", ""), q.get("mode", "users"), q.get("module", "")))
             if p == "jobs":
                 return self.send({"jobs": jobs.view()})
             if p == "log":  # from=<size the page already has>: only the new end of the log

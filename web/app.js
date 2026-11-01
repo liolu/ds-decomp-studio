@@ -4,7 +4,7 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&
 const fmt = n => Number(n || 0).toLocaleString("fr-FR");
 const hex = n => "0x" + Number(n).toString(16).padStart(8, "0");
 const ago = t => { if (!t) return ""; const s = Date.now() / 1000 - t; return s < 90 ? "a l'instant" : s < 5400 ? Math.round(s / 60) + " min" : s < 172800 ? Math.round(s / 3600) + " h" : Math.round(s / 86400) + " j"; };
-const TABS = [["games", "Jeux"], ["game", "Travailler"], ["queue", "Queue"], ["engine", "Engine map"], ["progress", "Progression"], ["settings", "Reglages"]];
+const TABS = [["games", "Jeux"], ["game", "Travailler"], ["queue", "Queue"], ["engine", "Engine map"], ["tags", "Tags"], ["xref", "Data"], ["progress", "Progression"], ["settings", "Reglages"]];
 const ST = {free: "libre", claimed: "pris", expired: "expire", done: "termine", queued: "en attente", running: "en cours",
   failed: "echec", stopped: "arrete", interrupted: "interrompu", cancelled: "annule"};
 let O = null, G = null, J = [], tab = location.hash.slice(1) || "games", sub = "blocks";
@@ -69,6 +69,8 @@ async function render() {
     else if (tab === "game") { v.innerHTML = await viewGame(); afterGame(); }
     else if (tab === "queue") v.innerHTML = await viewQueue();
     else if (tab === "engine") v.innerHTML = await viewEngine();
+    else if (tab === "tags") { v.innerHTML = await viewTags(); afterTags(); }
+    else if (tab === "xref") { v.innerHTML = viewXref(); subXref(); }
     else if (tab === "progress") v.innerHTML = viewProgress();
     else if (tab === "settings") v.innerHTML = viewSettings();
   } catch (e) { v.innerHTML = `<div class="card">Erreur d'affichage : ${esc(e)}</div>`; console.error(e); }
@@ -557,6 +559,161 @@ async function viewEngine() {
   return h;
 }
 
+// ---------------- Data (gametools/xref.py: who uses a symbol, pointer slots of a table, functions sharing its data) ----------------
+let xrGame = "", xrQuery = "", xrMode = "users", xrTodo = false;
+const XR_MODES = [["users", "Qui l'utilise"], ["table", "Contenu (table / vtable)"], ["siblings", "Fonctions soeurs"], ["files", "Fichiers du ROM"], ["archive", "Archive (rom.bin)"]];
+const XR_HELP = {users: "Fonctions et donnees qui pointent vers ce symbole, avec les decalages utilises (+0x10...) : la forme de la struct.",
+  table: "Les pointeurs ranges dans cette donnee, case par case : une vtable donne toutes les methodes d'une classe, une table de callbacks toutes ses fonctions.",
+  siblings: "Fonctions qui lisent le plus de donnees en commun avec les utilisateurs de ce symbole : le meme module du jeu. Une soeur matchee montre souvent l'astuce.",
+  files: "Les chemins de fichiers du ROM ecrits dans le code (\"characters/%s/%s.anm\", \"/images/HUD_overlay.z\"...) et les fonctions qui les utilisent : la fonction qui charge tom.skn s'occupe de Tom. Le champ filtre (dossier, nom, extension).",
+  archive: "Jeux a archive numerotee (rom.bin : Lego, Sims 2...) : le jeu charge \"le fichier n\". Les fonctions de chargement sont trouvees seules, puis le numero passe a chaque appel (constante ou table de numeros). Filtre : un numero ou une fonction. Extraire : romarc.py extract N."};
+function viewXref() {
+  if (!xrGame) xrGame = O.settings.active_game || (O.games[0] || {}).id || "";
+  const opts = O.games.map(x => `<option value="${x.id}" ${x.id === xrGame ? "selected" : ""}>${esc(x.title)}</option>`).join("");
+  return `<div class="card"><h3>Data : references croisees</h3>
+    <p class="hint">Depuis les relocations que dsd connait deja (relocs.txt de chaque module). Un nom (<code>data_02107860</code>, <code>func_0204b070</code>) ou une adresse (<code>0x020fcfb8</code>, aussi au milieu d'un symbole).
+    <span class="tag ok">matchee</span> = une source possede la fonction. Clique un nom pour le suivre.</p>
+    <div class="btns"><select onchange="xrGame=this.value;subXref()">${opts}</select>
+    <input id="xrq" placeholder="${xrMode === "files" ? "filtre : characters/, .anm, tom..." : xrMode === "archive" ? "filtre : 1366, func_..." : "data_..., func_..., 0x..."}" value="${esc(xrQuery)}" onchange="xrQuery=this.value.trim();subXref()" style="min-width:240px">
+    ${XR_MODES.map(([m, l]) => `<button class="btn small${m === xrMode ? "" : " sec"}" onclick="xrMode='${m}';go('xref')">${l}</button>`).join("")}
+    ${xrMode === "files" ? `<label class="hint"><input type="checkbox" ${xrTodo ? "checked" : ""} onchange="xrTodo=this.checked;subXref()"> avec une fonction non matchee</label>` : ""}</div>
+    <p class="hint">${esc(XR_HELP[xrMode])}</p><div id="xrout" class="hint">${xrQuery || xrMode === "files" || xrMode === "archive" ? "Chargement..." : "Entre un symbole."}</div></div>`;
+}
+function xrFollow(name, mod) { if (xrMode === "files" || xrMode === "archive") { xrMode = "users"; xrQuery = name; return go("xref"); } xrQuery = name; const i = $("#xrq"); if (i) i.value = name; subXref(mod); }
+async function subXref(mod) {
+  const box = $("#xrout"); if (!box || !xrGame || (!xrQuery && xrMode !== "files" && xrMode !== "archive")) return;
+  box.innerHTML = "Chargement...";
+  const d = await api(`xref?game=${encodeURIComponent(xrGame)}&q=${encodeURIComponent(xrQuery)}&mode=${xrMode}&module=${encodeURIComponent(mod || "")}`);
+  if (d.error) return;
+  const hx = n => "0x" + n.toString(16).padStart(8, "0");
+  const who = r => `<a style="cursor:pointer" onclick="xrFollow('${esc(r.name)}','${esc(r.module)}')">${esc(r.name)}${r.off ? "+0x" + r.off.toString(16) : ""}</a>
+    ${r.module !== "main" ? `<span class="hint">${esc(r.module)}</span>` : ""} ${r.matched ? '<span class="tag ok">matchee</span>' : ""}
+    ${r.kind === "function" ? `<a class="hint" style="cursor:pointer" title="Ouvrir dans l'editeur C" onclick="tagEdit('${esc(xrGame)}','${esc(r.name)}')">&#9998;</a>` : `<span class="hint">${esc(r.kind)}</span>`}`;
+  if (xrMode === "files") {
+    const rows = xrTodo ? d.rows.filter(r => r.users.some(u => u.matched === false)) : d.rows;
+    box.innerHTML = `<p class="hint">${fmt(d.files_found)} / ${fmt(d.files)} fichiers du ROM nommes par le code ; ${fmt(d.unmatched_users)} fonctions non matchees les utilisent. ${fmt(rows.length)} chaines affichees.</p>
+      <div class="scrollbox"><table><tr><th>Chaine dans le code</th><th>Fichiers</th><th>Fonctions</th></tr>
+      ${rows.map(r => `<tr><td><code>${esc(r.string)}</code> <span class="hint">${esc(r.match)} ${hx(r.addr)}${r.module !== "main" ? " " + esc(r.module) : ""}</span></td>
+        <td class="hint">${r.files.slice(0, 3).map(esc).join("<br>")}${r.n_files > 3 ? `<br>... ${fmt(r.n_files)} fichiers` : ""}</td>
+        <td>${r.users.map(who).join("<br>")}</td></tr>`).join("")}</table></div>`;
+    return;
+  }
+  if (xrMode === "archive") {
+    if (d.error) { box.innerHTML = "Pas d'archive numerotee pour ce jeu (aucune fonction ne nomme rom.bin)."; return; }
+    const fn = name => ({name, module: "main", kind: "function", off: 0, matched: d.matched[name]});
+    const nums = Object.keys(d.files);
+    box.innerHTML = `<p class="hint">Archive ouverte par ${who(fn(d.opener))} ; ${fmt(d.entries)} fichiers, ${fmt(d.calls)} appels de chargement dont ${fmt(d.unknown_calls)} avec un numero calcule a l'execution.
+      <b>${fmt(nums.length)}</b> numeros relies a une fonction.</p>
+      <p class="hint">Fonctions de chargement : ${d.loaders.map(f => who(fn(f))).join(", ")}</p>
+      ${d.tables.length ? `<p class="hint">Tables de numeros : ${d.tables.map(t => `<a style="cursor:pointer" onclick="xrFollow('${esc(t.table)}','main')">${esc(t.table)}</a>+0x${t.field.toString(16)} (${t.ids.length})`).join(", ")}</p>` : ""}
+      <div class="scrollbox"><table><tr><th class="num">Fichier n</th><th>Contenu</th><th>Charge par</th></tr>
+      ${nums.map(n => { const i = d.info[n] || {};
+        return `<tr><td class="num">${n}</td><td class="hint">${fmt(i.size || 0)} o${i.packed ? ` (${esc(i.packed)} -> ${fmt(i.unpacked)} o)` : ""} ${esc(i.magic || "")}</td>
+        <td>${d.files[n].map(u => who(fn(u.function)) + ` <span class="hint">${esc(u.how)}${u.n > 1 ? " x" + u.n : ""}</span>`).join("<br>")}</td></tr>`; }).join("")}</table></div>`;
+    return;
+  }
+  if (!d.symbols.length) { box.innerHTML = "Aucun symbole de ce nom ou a cette adresse."; return; }
+  box.innerHTML = d.symbols.map(s => {
+    const head = `<h3>${esc(s.name)} <span class="hint">${esc(s.kind)} ${hx(s.addr)}-${hx(s.end)} (${fmt(s.end - s.addr)} octets) ${esc(s.module)}</span></h3>`;
+    if (!s.rows.length) return head + `<p>Rien.</p>`;
+    const n = s.rows.filter(r => r.kind === "function"), m = n.filter(r => r.matched).length;
+    const sum = n.length ? `<p class="hint">${n.length} fonctions, ${m} matchees.</p>` : "";
+    const rows = xrMode === "table"
+      ? `<tr><th class="num">Case</th><th>Pointe vers</th></tr>` + s.rows.map(r => `<tr><td class="num">+0x${r.slot.toString(16)}</td><td>${who(r)}</td></tr>`).join("")
+      : xrMode === "siblings"
+      ? `<tr><th>Fonction</th><th class="num">Donnees partagees</th></tr>` + s.rows.map(r => `<tr><td>${who(r)}</td><td class="num">${r.shared}</td></tr>`).join("")
+      : `<tr><th>Utilisateur</th><th>Type</th><th>Decalages</th></tr>` + s.rows.map(r => `<tr><td>${who(r)}</td><td class="hint">${esc(r.kinds.join(" "))}</td>
+          <td><code>${r.offs.some(o => o) ? r.offs.map(o => "+0x" + o.toString(16)).join(" ") : ""}</code></td></tr>`).join("");
+    return head + sum + `<div class="scrollbox"><table>${rows}</table></div>`;
+  }).join("");
+}
+
+// ---------------- Tags (gametools/techtag.py: families that work the same in every game + techniques) ----------------
+let tgQuery = "", tgGame = "", tgTodo = true, tdGame = "", tdTech = "";
+const TAG_HELP = {fam: "meme forme / meme squelette", feat: "ce que l'asm demande", tech: "technique vue dans le C matche",
+  try: "technique a essayer (vient des soeurs matchees)", prof: "compilateur", src: "origine du C", calls: "appelle", size: "taille", mode: "", module: ""};
+const tagChip = t => `<span class="tag${t.startsWith("try:") ? " ok" : t.startsWith("tech:") ? " gh" : ""}" style="cursor:pointer" title="${esc(TAG_HELP[t.split(":")[0]] || "")}" onclick="closeModal();tgQuery='${esc(t)}';go('tags')">${esc(t)}</span>`;
+async function viewTags() {
+  const d = await api("tags");
+  if (d.error) return "";
+  const run = `<button class="btn small" title="${esc(JD('techtag').desc)}" onclick="api('run',{id:'techtag'}).then(r=>r.n&&toast('Taguage lance'))">${d.built ? "Re-taguer" : "Taguer"} tous les jeux</button>`;
+  if (!d.built) return `<div class="card"><h3>Tags</h3><p>Pas encore d'index. ${run}</p></div>`;
+  window.TG = d;
+  if (!tdGame) tdGame = O.settings.active_game || (d.games[0] || {}).game || "";
+  const gopts = (sel, all) => (all ? `<option value="">tous les jeux</option>` : "") + d.games.map(g => `<option value="${esc(g.game)}" ${g.game === sel ? "selected" : ""}>${esc(g.game)}</option>`).join("");
+  const tries = d.tags.filter(t => t.tag.startsWith("try:"));
+  let h = `<div class="kpis"><div class="kpi"><b>${fmt(d.functions)}</b><span>fonctions taguees</span></div><div class="kpi"><b>${fmt(d.matched)}</b><span>matchees (sources des techniques)</span></div>
+    <div class="kpi"><b>${fmt(d.games.reduce((a, g) => a + g.hinted, 0))}</b><span>non matchees avec une piste</span></div><div class="kpi"><b>${d.games.length}</b><span>jeux</span></div></div>
+    <div class="card"><p class="hint">Chaque fonction de chaque jeu recoit des tags : <b>fam:s-</b> meme forme d'instructions (registres et constantes masques), <b>fam:k-</b> meme squelette (chargements / calculs / tests / appels dans le meme ordre),
+    <b>feat:</b> ce que l'asm demande, <b>tech:</b> la technique visible dans le C des fonctions matchees, et <b>try:</b> pour les non matchees, les techniques qui ont resolu leurs soeurs dans n'importe quel jeu.
+    Index du ${new Date(d.built * 1000).toLocaleString("fr-FR")} (${d.seconds} s). ${run}</p></div>`;
+  h += `<div class="split"><div class="card"><h3>Chercher un tag</h3>
+    <div class="btns"><input id="tgq" list="tglist" placeholder="try:goto-loop, feat:switch, fam:s-..." value="${esc(tgQuery)}" onchange="tgQuery=this.value.trim();subTagFind()" style="min-width:240px">
+    <datalist id="tglist">${d.tags.map(t => `<option value="${esc(t.tag)}">`).join("")}</datalist>
+    <select onchange="tgGame=this.value;subTagFind()">${gopts(tgGame, true)}</select>
+    <label class="hint"><input type="checkbox" ${tgTodo ? "checked" : ""} onchange="tgTodo=this.checked;subTagFind()"> non matchees seulement</label></div>
+    <div id="tgout" class="hint">Choisis un tag (ou clique sur un tag plus bas).</div></div>
+    <div class="card"><h3>A faire : pistes par jeu</h3><p class="hint">Fonctions non matchees, la meilleure piste d'abord. Clique pour voir pourquoi et ouvrir l'editeur C.</p>
+    <div class="btns"><select onchange="tdGame=this.value;subTagTodo()">${gopts(tdGame, false)}</select>
+    <select onchange="tdTech=this.value;subTagTodo()"><option value="">toutes les techniques</option>${tries.map(t => `<option value="${esc(t.tag)}" ${t.tag === tdTech ? "selected" : ""}>${esc(t.tag.slice(4))} (${fmt(t.n)})</option>`).join("")}</select></div>
+    <div id="tdout" class="hint">Chargement...</div></div></div>`;
+  h += `<div class="card"><h3>Familles partagees entre jeux</h3><p class="hint">Fonctions qui marchent pareil dans plusieurs jeux. Les familles ou des soeurs sont deja matchees et d'autres non viennent d'abord : la meme technique devrait resoudre le reste.</p>
+    <div class="scrollbox"><table><tr><th>Famille</th><th>Niveau</th><th class="num">Fonctions</th><th class="num">Matchees</th><th class="num">Jeux</th><th class="num">Taille</th><th>Techniques des matchees</th><th>Exemple</th></tr>
+    ${d.families.map(f => `<tr style="cursor:pointer" onclick="showTagFamily('${f.fam}')"><td><code>${esc(f.fam)}</code></td><td class="hint">${f.level === "shape" ? "forme" : "squelette"}</td>
+      <td class="num">${fmt(f.members)}</td><td class="num">${fmt(f.matched)}</td><td class="num">${f.games}</td><td class="num">${fmt(f.size)}</td>
+      <td>${f.techs.slice(0, 4).map(([t, n]) => `<span class="tag gh">${esc(t.slice(5))} ${n}</span>`).join(" ")}</td><td class="hint">${esc(f.sample[0] ? f.sample[0].join("/") : "")}</td></tr>`).join("")}</table></div></div>`;
+  h += `<div class="split"><div class="card"><h3>Tous les tags</h3><div style="display:flex;flex-wrap:wrap;gap:4px">
+    ${d.tags.map(t => `<span class="tag${t.tag.startsWith("try:") ? " ok" : t.tag.startsWith("tech:") ? " gh" : ""}" style="cursor:pointer" title="${fmt(t.matched)} matchees, ${t.games} jeux" onclick="tgQuery='${esc(t.tag)}';$('#tgq').value=tgQuery;subTagFind()">${esc(t.tag)} <b>${fmt(t.n)}</b></span>`).join("")}</div></div>
+    <div class="card"><h3>Besoin &rarr; technique</h3><p class="hint">Sur toutes les fonctions matchees (le meme code dans 40 jeux compte une fois) : quand l'asm a ce besoin, cette technique revient bien plus souvent que d'habitude.</p>
+    <div class="scrollbox"><table><tr><th>Besoin (asm)</th><th>Technique (C)</th><th class="num">Fonctions</th><th class="num">Part</th><th class="num">x</th></tr>
+    ${d.techfeat.map(x => `<tr><td>${esc(x.feat)}</td><td>${esc(x.tech)}</td><td class="num">${fmt(x.n_both)}/${fmt(x.n_feat)}</td><td class="num">${Math.round(100 * x.p)} %</td><td class="num">${x.lift}</td></tr>`).join("")}</table></div></div></div>`;
+  return h;
+}
+function afterTags() { if ($("#tdout")) { subTagTodo(); if (tgQuery) subTagFind(); } }
+async function subTagFind() {
+  const box = $("#tgout"); if (!box || !tgQuery) return;
+  box.innerHTML = "Chargement...";
+  const d = await api(`tags/find?tag=${encodeURIComponent(tgQuery)}&game=${encodeURIComponent(tgGame)}&todo=${tgTodo ? 1 : 0}`);
+  if (d.error) return;
+  box.innerHTML = `<div style="margin:6px 0"><b>${fmt(d.rows.length)}</b> fonctions${d.rows.length >= d.limit ? " (limite atteinte)" : ""}</div>
+    <div class="scrollbox"><table><tr><th>Jeu</th><th>Fonction</th><th class="num">Taille</th><th>Module</th><th></th></tr>
+    ${d.rows.map(r => `<tr style="cursor:pointer" onclick="showTagFunc('${esc(r.game)}','${esc(r.name)}')"><td>${esc(r.game)}</td><td>${esc(r.name)}</td><td class="num">${fmt(r.size)}</td>
+      <td class="hint">${esc(r.module)} ${esc(r.mode)}</td><td>${r.matched ? '<span class="tag ok">matchee</span>' : ""}</td></tr>`).join("")}</table></div>`;
+}
+async function subTagTodo() {
+  const box = $("#tdout"); if (!box || !tdGame) return;
+  const d = await api(`tags/todo?game=${encodeURIComponent(tdGame)}&tech=${encodeURIComponent(tdTech)}`);
+  if (d.error) return;
+  box.innerHTML = d.rows.length ? `<div class="scrollbox"><table><tr><th class="num">Score</th><th>Piste</th><th>Fonction</th><th class="num">Taille</th><th>Pourquoi</th></tr>
+    ${d.rows.map(r => `<tr style="cursor:pointer" onclick="showTagFunc('${esc(tdGame)}','${esc(r.name)}')"><td class="num">${r.score.toFixed(2)}</td><td><span class="tag ok">${esc(r.tag.slice(4))}</span></td>
+      <td>${esc(r.name)}</td><td class="num">${fmt(r.size)}</td><td class="hint">${esc(r.why)}</td></tr>`).join("")}</table></div>` : "Aucune piste pour ce jeu.";
+}
+async function tagEdit(g, n) {
+  if (O.settings.active_game !== g) { await api("settings", {active_game: g}); O.settings.active_game = g; G = null; }
+  openEditor(n);
+}
+async function showTagFunc(g, n) {
+  const d = await api(`tags/func?game=${encodeURIComponent(g)}&name=${encodeURIComponent(n)}`);
+  if (d.error) return;
+  const fam = f => `<h3>${f.level === "shape" ? "Meme forme" : "Meme squelette"} <code>${esc(f.fam)}</code> <span class="hint">${f.members.length} fonctions</span></h3>
+    <div class="scrollbox"><table><tr><th>Jeu</th><th>Fonction</th><th class="num">Taille</th><th>Techniques</th></tr>
+    ${f.members.map(m => `<tr style="cursor:pointer" onclick="showTagFunc('${esc(m.game)}','${esc(m.name)}')"><td>${esc(m.game)}</td><td>${m.matched ? "&#10003; " : ""}${esc(m.name)}</td><td class="num">${fmt(m.size)}</td>
+      <td>${m.techs.map(t => `<span class="tag${t.startsWith("tech:") ? " gh" : ""}">${esc(t)}</span>`).join(" ")}</td></tr>`).join("")}</table></div>`;
+  modal(`<h2>${esc(d.name)}</h2><p class="hint">${esc(d.game)} &middot; ${esc(d.module)} ${esc(d.mode)} &middot; ${fmt(d.size)} octets &middot; ${d.matched ? "matchee : " + esc(d.path) + " (" + esc(d.profile) + ")" : "non matchee"}</p>
+    <div class="btns"><button class="btn small" onclick="closeModal();tagEdit('${esc(d.game)}','${esc(d.name)}')">Ouvrir dans l'editeur C</button></div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin:8px 0">${d.tags.map(tagChip).join("")}</div>
+    ${d.hints.length ? `<h3>Pistes</h3><table>${d.hints.map(x => `<tr><td class="num">${x.score.toFixed(2)}</td><td><span class="tag ok">${esc(x.tag.slice(4))}</span></td><td class="hint">${esc(x.why)}</td></tr>`).join("")}</table>` : ""}
+    ${d.families.map(fam).join("")}`);
+}
+async function showTagFamily(fam) {
+  const d = await api(`tags/family?fam=${encodeURIComponent(fam)}`);
+  if (d.error) return;
+  modal(`<h2>Famille <code>${esc(fam)}</code></h2><p class="hint">${d.level === "shape" ? "meme forme d'instructions" : "meme squelette"} &middot; ${d.members.length} fonctions, ${d.members.filter(m => m.matched).length} matchees</p>
+    <div class="scrollbox"><table><tr><th>Jeu</th><th>Fonction</th><th class="num">Taille</th><th>Tags</th></tr>
+    ${d.members.map(m => `<tr style="cursor:pointer" onclick="showTagFunc('${esc(m.game)}','${esc(m.name)}')"><td>${esc(m.game)}</td><td>${m.matched ? "&#10003; " : ""}${esc(m.name)}</td><td class="num">${fmt(m.size)}</td>
+      <td>${m.tags.map(t => `<span class="tag${t.startsWith("try:") ? " ok" : t.startsWith("tech:") ? " gh" : ""}">${esc(t)}</span>`).join(" ")}</td></tr>`).join("")}</table></div>`);
+}
+
 // ---------------- Progression ----------------
 function viewProgress() {
   const x = window.XP; if (!x) return '<div class="empty">Chargement...</div>';
@@ -596,6 +753,9 @@ async function saveSettings() {
   // #edit/<game>/<function>: straight into the C editor (links from briefs, logs...)
   const deep = location.hash.match(/^#edit\/([^/]+)\/(\w+)$/);
   if (deep) tab = "game";
+  // #xref/<game>/<symbol or address>[/table|siblings]: straight into the Data tab
+  const xd = location.hash.match(/^#xref\/([^/]+)\/([\w.@$]+)(?:\/(table|siblings|files|archive))?$/);
+  if (xd) { tab = "xref"; xrGame = xd[1]; xrQuery = xd[2]; xrMode = xd[3] || "users"; location.hash = "xref"; }
   tabs(); await loadOverview();
   if (deep && O.settings.active_game !== deep[1]) { await api("settings", {active_game: deep[1]}); O.settings.active_game = deep[1]; }
   render(); loadXP();

@@ -198,11 +198,11 @@ def declare(wb, m: Mod, targets, ad: int, n: str, size: int, secname: str):
     const = "const " if secname == ".rodata" else ""
     ptrs = {f: m.relocs[f] for f in range(ad, ad + size) if f in m.relocs}
     if not ptrs and not any(raw):
-        if not const:
-            return None, set()  # mwcc puts all-zero data in .bss (const zero data stays in .rodata)
+        # mwcc puts non-const all-zero data in .bss unless explicit_zero_data is on (const zero stays in .rodata)
+        pre = "" if const else "#pragma explicit_zero_data on\n"
         if size % 4 == 0 and ad % 4 == 0:
-            return f"const u32 {n}[{size // 4}] = {{0}};", set()
-        return f"const u8 {n}[{size}] = {{0}};", set()
+            return f"{pre}{const}u32 {n}[{size // 4}] = {{0}};", set()
+        return f"{pre}{const}u8 {n}[{size}] = {{0}};", set()
     if not ptrs:
         s = c_string(raw)
         if s is not None:

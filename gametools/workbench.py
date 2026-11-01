@@ -392,8 +392,11 @@ def compile_one(source: str, profile: str) -> tuple[bytes | None, str, Path | No
     mwcc = am.MWCC_ROOT / version / "mwccarm.exe"
     tmp = tempfile.TemporaryDirectory()
     t = Path(tmp.name)
-    (t / "f.c").write_text(source, encoding="utf-8", newline="\n")
-    r = am.run_limited(f'"{mwcc}" -O4,p {pc.BASE_FLAGS} {extra} -i "{ROOT / "include"}" -c f.c -o f.o', cwd=t,
+    src, flags = "f.c", pc.BASE_FLAGS
+    if am.is_cpp_source(source):  # real C++ (virtual calls load the vtable through r0), built as src/auto/NAME.cpp
+        src, flags = "f.cpp", pc.BASE_FLAGS.replace("-lang=c", "-lang=c++") + " -Cpp_exceptions off"
+    (t / src).write_text(source, encoding="utf-8", newline="\n")
+    r = am.run_limited(f'"{mwcc}" -O4,p {flags} {extra} -i "{ROOT / "include"}" -c {src} -o f.o', cwd=t,
                        shell=True)
     msg = ((r.stdout or "") + (r.stderr or "")).strip()
     obj = t / "f.o"
@@ -411,7 +414,7 @@ def judge(name: str, source: str, profile: str | None = None) -> dict:
         for p in (ROOT / "build" / "auto" / "near" / f"{name}.c", ROOT / (covered(addr) or "-")):
             if p.is_file():
                 base += p.read_text(encoding="utf-8", errors="replace") + "\n"
-        why = fake_match(source, base + "\n" + STD_HEAD + f"#define M2C_SELF_{name}\n")
+        why = fake_match(source, base + "\n" + STD_HEAD + f"#define M2C_SELF_{name}\n", name)
         if why:
             return {"status": "refused", "match": False, "why": f"fake match: {why}. Write plain C only."}
     thumb = f["mode"] == "thumb"
