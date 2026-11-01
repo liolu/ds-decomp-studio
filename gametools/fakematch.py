@@ -31,7 +31,7 @@ def _directives(code: str) -> list[str]:
 
 
 # .init holds the __sinit_ function, .ctor the pointer to it that the C++ compiler emits in the same file
-INIT_SECTION = re.compile(r'^[ \t]*#[ \t]*pragma[ \t]+define_section[ \t]+(\w+)[ \t]+"\.(?:init|ctor)"[ \t]+"\.(?:init|ctor)"[ \t]*\r?$',
+INIT_SECTION = re.compile(r'^[ \t]*#[ \t]*pragma[ \t]+define_section[ \t]+(\w+)[ \t]+"\.(?:init|ctor)"[ \t]+"\.(?:init|ctor)"(?:[ \t]+RW)?[ \t]*\r?$',
                           re.M)
 
 

@@ -70,6 +70,10 @@ addresses (`L.buf`, `&L`) inline instead of pointer locals (changes the whole pr
 the next load offset. Pure register permutations: `nearperm.py ROUND` (orchestrator, no LLM) already tried declaration
 orders, do not spend judges on them.
 
+Struct by value (r28, ov004 fixed-point family): `push {r0,r1,r2,r3}` + `add sp,sp,#0x10` at the end, with an arg re-read
+from the stack (`ldr r2,[sp,#4]`) = a one-word struct passed by value, not varargs: `typedef struct { int v; } Fx;
+void f(O *o, Fx v) { o->f = v.v; }`. A call `add r0,sp,#N; bl g` then `ldr [sp+N]` = out pointer `void g(Fx *ret, Fx a)`.
+
 Final answer (short): for each function `NAME: MATCH <profile>` (file written) or `NAME: no (best N diffs, what blocks)`,
 plus the new technique ids / prototypes you created (the orchestrator adds them to TECHNIQUES.md).
 ---

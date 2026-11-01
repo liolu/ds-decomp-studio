@@ -51,6 +51,19 @@ CHANGES (root causes; the overlays start AFTER(ARM9), so a shifted main .bss mov
 turned into `to:obj add:0x1` (0x0212_0001-like table entries) make objdiff report 9x% on a pointer-free table -> delete
 those relocs.txt lines by hand.
 
+Last holes, up to 100%: `prototypes/fieldgap.py --sections .data,.rodata,.bss,.ctor` gives every hole left to C. The
+interior symbols that matched C names (struct fields) stay in symbols.txt and get their address in
+`config/<version>/arm9/lcf_symbols.txt`, which `ld_align.py` writes right after the object that holds them (a symbol set
+outside a section is bound to an arbitrary one, and dsd's symbol check fails). objdiff compares .bss symbol by symbol, so
+.bss holes become one file per symbol. `.ctor` entries are one file each with `#pragma define_section NAME ".ctor"
+".ctor" RW`: without RW mwcc marks the section executable and objdiff never scores it. When a `__sinit_` function gets
+matched, delete the `src/data/<mod>_ctor_<addr>.c` of its entry (and its delinks block) first. `prototypes/profpadfix.py`
+replaces the padded -profile record ranges by exact ones plus a padding file (`.data` really 100%, no verify exception).
+`.exceptix` / `.exception`: when the owners of the entries are not all matched (`prototypes/exceptix.py` needs them), the
+tables may go in data files too: `fieldgap.py --sections .exceptix,.exception` (user decision 2026-11-01, Heroes of Mana:
+data files only, byte tables to replace by the real `-Cpp_exceptions` output once the owners are matched). The fake-match
+gate for function sources does not change.
+
 ## Technique journal + prototypes (every function, every session)
 
 `TECHNIQUES.md` = catalogue of every technique (ids). `techlog.py history NAME` before working on a function,
