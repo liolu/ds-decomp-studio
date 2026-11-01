@@ -52,6 +52,10 @@ Three levels:
 - **sched-scan** `schedscan.py` - exact instruction window across thousands of variants (scheduling puzzles)
 
 ## Manual techniques (no script yet - turn into a prototype when reused)
+Compiler flags
+- **cpp-vcall** target `mov r0,rX; ldr r1,[r0]; ldr r1,[r1,#K]; blx r1` where C gives `ldr r1,[rX]`: real C++ virtual call (`struct VA { virtual void f0(); ... }; ((VA *)p)->fN();`, `extern "C"` on the function and callees: judge then builds f.cpp with -lang=c++). Solved the HoM/Sims 2 vcall order family (Sims 2, func_02045e10)
+- **volatile-stack** frame `sub sp,#N` bigger than the locals with stores nobody reads: `volatile s32 tmp[N]`, stores in asm order (Sims 2, func_0201af10)
+- **nointerworking** target returns with `mov pc, lr` / `moveq pc, lr` where we get `bx lr`: add `-nointerworking` to the profile (`1.2/sp2p3 -nointerworking`, `2.0/sp1p5 -nointerworking`). `-proc` does not change it (Sims 2, func_020de834)
 Rewriting
 - **asm-rewrite** write the function fresh from `workbench.py info NAME` asm when the m2c draft has the wrong size or does not compile (TnJ: 8/12 fresh writes matched, old drafts useless)
 - **typed-struct** replace pointer+offset by a typed struct / struct array (fields, sizes from the asm)
