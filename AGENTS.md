@@ -81,6 +81,9 @@ python ../../studio/gametools/ghidra_draft.py --names a,b            # Ghidra dr
   It runs by itself at the end of every Qwen job (`--all-games`), of the auto job and of every `hunt.py sweep`
   (`--to build/hunt/matched`); Studio jobs `misses` (one game) and `misses_all` (misses of every game on every
   game). The game page shows how many misses are kept and how many matches they gave.
+  `gametools/reuse.py` gains with no AI: `scan` (dry-run of clone_match + donor_match, writes build/reuse/estimate.json: functions,
+  bytes, seconds per game, the grey part of the Studio's bars), `apply` (donors then clones, verified, local commits, never a push;
+  skips a game with uncommitted work). Studio jobs `reuse` (one game), `reuse_scan`, `reuse_apply` (best functions per minute first).
   DATA (`gametools/missdata.py`): `workbench.py datacheck` records every object that differs (its C alone, the
   bytes it compiled to, its pointers); `replay` also gives the unmatched .data / .rodata of every module the C of
   a data miss or of the same data matched in another of our games (`--all-games`; fingerprint = section + size

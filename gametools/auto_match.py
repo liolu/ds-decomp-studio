@@ -31,6 +31,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from multiprocessing import Pool
 from pathlib import Path
@@ -60,7 +61,7 @@ EXTRA_PROFILES = [(v.strip(), "") for v in re.split(r",(?=\s*\d)", os.environ.ge
 COMPILERS += [c for c in EXTRA_PROFILES if c not in COMPILERS]
 # Multi search (--multi / AUTO_MULTI=1): every version also with these optimisation flags (they come after -O4,p and
 # override it); a match with one of them is recorded in compilers.txt like any other profile
-MULTI_FLAGS = ["-O4,s", "-O2", "-O3,p"]
+MULTI_FLAGS = ["-O4,s", "-O2"]  # not -O3,p: no match in 56,076 over 49 games
 if "--multi" in sys.argv:
     os.environ["AUTO_MULTI"] = "1"  # before anything reads it: cache version, time budget, worker processes
 MULTI = bool(os.environ.get("AUTO_MULTI"))
@@ -74,7 +75,18 @@ CONTEXT = ROOT / "build" / "auto" / "m2c_context.c"
 
 
 GROUP = int(os.environ.get("AUTO_GROUP", 60))  # functions per grouped first compile (one mwccarm start-up for all)
+GROUP_BYTES = 1500
 FUNCTION_BUDGET = int(os.environ.get("AUTO_BUDGET", 120 if os.environ.get("AUTO_MULTI") else 45))  # seconds spent on one function over all compilers/variants
+
+
+def kill_tree(p: subprocess.Popen) -> None:
+    import psutil
+    try:
+        for c in psutil.Process(p.pid).children(recursive=True):
+            c.kill()
+        p.kill()
+    except Exception:
+        pass
 
 
 def run_limited(cmd, cwd=None, shell=False, timeout=15):
@@ -84,27 +96,62 @@ def run_limited(cmd, cwd=None, shell=False, timeout=15):
     try:
         out, err = p.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
-        import psutil
-        try:
-            for c in psutil.Process(p.pid).children(recursive=True):
-                c.kill()
-            p.kill()
-        except Exception:
-            pass
+        kill_tree(p)
         p.communicate()
         return subprocess.CompletedProcess(cmd, 1, "", "timeout")
     return subprocess.CompletedProcess(cmd, p.returncode, out, err)
 
-AUTO_VERSION = hashlib.sha1(Path(__file__).read_bytes() + (b"multi" if MULTI else b"")).hexdigest()[:12]
+AUTO_SEARCH = "1"  # raise it when a change can find matches the earlier search missed: failures are then tried again
+AUTO_VERSION = AUTO_SEARCH + ("m" if MULTI else "")
+# Failures that still count: a multi search tried more profiles, so it also answers for a plain one. The two hashes are
+# the version of the last runs before AUTO_SEARCH, when any edit of this file threw every failure away.
+ACCEPTED_FAILURES = {AUTO_VERSION, AUTO_SEARCH + "m", "4cffb6a32715"} | (set() if MULTI else {"ad1cad346f40"})
 CACHE = WORK / "cache.jsonl"
+# With --batch: the found matches are added and verified once this many wait, or after this time. A verify costs a full
+# ROM build, so doing it per batch took most of a long run.
+VERIFY_WINS = int(os.environ.get("AUTO_VERIFY_WINS", 300))
+VERIFY_SECONDS = 60 * float(os.environ.get("AUTO_VERIFY_MINUTES", 15))
+BATCH_PER_JOB = 30  # smallest batch per worker: below it the workers wait for each other at the end of each batch
+STOP_FILE = os.environ.get("AUTO_STOP_FILE")  # the Studio's "Arreter": stop trying, keep what was found
+STOPPED_RC = 3  # not 0: the job's checkpoint must not mark this step as done
 _M2C = {}
+
+
+_M2C_SERVER = None
+M2C_TIMEOUT = 15
+
+
+def m2c_run(cmd):
+    """run_limited for an m2c command line (python, m2c.py, arguments), through this worker's m2c_server.py. A draft
+    that takes too long kills the server and counts as a failure; a server that died gives way to the command line."""
+    global _M2C_SERVER
+    if _M2C_SERVER is None or _M2C_SERVER.poll() is not None:
+        _M2C_SERVER = subprocess.Popen([sys.executable, str(Path(__file__).resolve().parent / "m2c_server.py"), str(M2C.parent)],
+                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf-8")
+    server = _M2C_SERVER
+    answer = []
+    reader = threading.Thread(target=lambda: answer.append(server.stdout.readline()), daemon=True)
+    try:
+        server.stdin.write(json.dumps(cmd[2:]) + "\n")
+        server.stdin.flush()
+    except OSError:
+        return run_limited(cmd)
+    reader.start()
+    reader.join(M2C_TIMEOUT)
+    if reader.is_alive():
+        kill_tree(server)  # the python of a venv is a launcher with the real python as its child
+        return subprocess.CompletedProcess(cmd, 1, "", "timeout")
+    if not answer or not answer[0]:
+        return run_limited(cmd)
+    a = json.loads(answer[0])
+    return subprocess.CompletedProcess(cmd, a["rc"], a["out"], a["err"])
 
 
 def m2c_cached(name, cmd):
     """m2c's output does not depend on the compiler: run it once per function and mode."""
     key = (name, "--context" in cmd)
     if key not in _M2C:
-        _M2C[key] = run_limited(cmd)
+        _M2C[key] = m2c_run(cmd)
     return _M2C[key]
 
 
@@ -118,7 +165,7 @@ def load_cache():
         for line in CACHE.read_text(encoding="utf-8", errors="replace").splitlines():
             try:
                 d = json.loads(line)
-                if d["r"][3] == "match" or d.get("v") == AUTO_VERSION:  # failures are redone when the tool changed
+                if d["r"][3] == "match" or d.get("v") in ACCEPTED_FAILURES:
                     out[d["k"]] = tuple(d["r"])
             except Exception:
                 pass  # a line cut by an interruption
@@ -327,11 +374,24 @@ def try_function(f: tuple[str, int, int]) -> tuple[str, int, int, str, str]:
     return first
 
 
+def missing_after_call(missing: list[int], pending: list[int], nofail: str, result: dict[int, str]) -> tuple[list[int], str]:
+    """What to compile next, when `missing` of the `pending` sources gave no object. With -nofail the compiler went on
+    after an error, so they all failed. If nothing at all came out, a compiler may not know -nofail: without it, it
+    stops at the first file with an error and the rest goes in the next call."""
+    if nofail and missing and len(missing) == len(pending):
+        return missing, ""
+    if nofail or not missing:
+        result.update(dict.fromkeys(missing, "compile"))
+        return [], nofail
+    result[missing[0]] = "compile"
+    return missing[1:], nofail
+
+
 def compile_many(items: list[tuple[str, int, int, str]], mwcc: Path, extra: str = "") -> list[str]:
     """`compile_and_compare` for sources of DIFFERENT functions, in as few compiler calls as possible (one start-up of
     about a second for the whole list instead of one per source). items = (name, size, addr, source); returns the status
-    of each. Same rule as compile_batch: the compiler stops at the first file with an error, the rest goes in the next
-    call. A call that times out marks what is left as `compile` (the one-by-one pass tries it again)."""
+    of each. Same rule as compile_batch (-nofail, see missing_after_call). A call that times out marks what is left as
+    `compile` (the one-by-one pass tries it again)."""
     if not items:
         return []
     with tempfile.TemporaryDirectory() as tmp:
@@ -341,9 +401,10 @@ def compile_many(items: list[tuple[str, int, int, str]], mwcc: Path, extra: str 
             (work / f"v{i}.c").write_text(it[3])
         result = {}
         pending = list(range(len(items)))
+        nofail = "-nofail"
         while pending:
             files = " ".join(f"v{i}.c" for i in pending)
-            cmd = f'"{mwcc}" -O4,p {pc.BASE_FLAGS} {extra} -i "{ROOT / "include"}" -c {files} -o objs'
+            cmd = f'"{mwcc}" -O4,p {pc.BASE_FLAGS} {extra} {nofail} -i "{ROOT / "include"}" -c {files} -o objs'
             r = run_limited(cmd, cwd=work, shell=True, timeout=30 + len(pending))
             if r.stderr == "timeout":
                 break
@@ -360,17 +421,15 @@ def compile_many(items: list[tuple[str, int, int, str]], mwcc: Path, extra: str 
                     continue
                 bad, _ = pc.compare(pc.target_bytes(addr, size), cand)
                 result[i] = "match" if bad == 0 else ("near" if len(cand) == size else "size")
-            if not missing:
-                break
-            result[missing[0]] = "compile"
-            pending = missing[1:]
+            pending, nofail = missing_after_call(missing, pending, nofail, result)
         return [result.get(i, "compile") for i in range(len(items))]
 
 
 def grouped_first_pass(group: list[tuple[str, int, int]]) -> dict[str, tuple[str, int, int, str, str]]:
     """First attempt of a whole group of functions: the plain m2c drafts (both modes) are compiled together, one
     compiler call per profile. Only the matches are kept; every other function goes through `try_function` as before
-    (m2c output stays in the in-process cache), so the group pass can only save time, never change a result."""
+    (m2c output and the drafts' results stay in in-process caches), so the group pass can only save time, never change
+    a result."""
     drafts = {}  # name -> [source, ...]
     with tempfile.TemporaryDirectory() as tmp:
         for i, f in enumerate(group):
@@ -402,10 +461,25 @@ def grouped_first_pass(group: list[tuple[str, int, int]]) -> dict[str, tuple[str
             continue
         version, extra = prof
         for it, st in zip(items, compile_many(items, MWCC_ROOT / version / "mwccarm.exe", extra)):
+            if st != "compile":  # `compile` can also mean a call that timed out: the one-by-one pass tries it again
+                _COMPILED[(it[0], it[3], str(MWCC_ROOT / version / "mwccarm.exe"), extra)] = st
             if st == "match" and it[0] not in won:
                 src = it[3] if prof == COMPILERS[0] else f"{MARKER}{version} {extra} */\n" + it[3]
                 won[it[0]] = (it[0], it[1], it[2], "match", src)
     return won
+
+
+def make_groups(chunk: list[tuple[str, int, int]], count: int) -> list[list[tuple[str, int, int]]]:
+    """At most `count` functions and GROUP_BYTES bytes per group. A worker keeps its group to the end, and the time goes
+    with the size: the list is sorted by size, so groups by count alone would leave all the big functions to one worker."""
+    groups, current, total = [], [], 0
+    for f in chunk:
+        if current and (len(current) >= count or total + f[1] > GROUP_BYTES):
+            groups.append(current)
+            current, total = [], 0
+        current.append(f)
+        total += f[1]
+    return groups + [current] if current else groups
 
 
 def try_group(group: list[tuple[str, int, int]]) -> list[tuple[str, int, int, str, str]]:
@@ -413,6 +487,7 @@ def try_group(group: list[tuple[str, int, int]]) -> list[tuple[str, int, int, st
     won = {} if os.environ.get("AUTO_NO_GROUP") else grouped_first_pass(group)
     out = [won[f[0]] if f[0] in won else try_function(f) for f in group]
     _M2C.clear()
+    _COMPILED.clear()
     return out
 
 
@@ -574,8 +649,14 @@ def compile_fixes(source: str) -> str:
     return s
 
 
+_COMPILED = {}  # the group pass's results: (name, source, compiler, flags) -> status
+
+
 def compile_and_compare(t: Path, source: str, name: str, size: int, addr: int, mwcc: Path = MWCC,
                         extra: str = "") -> str:
+    known = _COMPILED.get((name, source, str(mwcc), extra))
+    if known:
+        return known
     (t / "f.o").unlink(missing_ok=True)
     (t / "f.c").write_text(source)
     cmd = f'"{mwcc}" -O4,p {pc.BASE_FLAGS} {extra} -i "{ROOT / "include"}" -c f.c -o f.o'
@@ -596,8 +677,8 @@ def compile_batch(t: Path, sources: list[str], name: str, size: int, addr: int, 
     """Same result as `compile_and_compare` on each source, in far fewer compiler calls.
 
     The compiler spends about a second starting up and almost nothing per file, so all the sources go into one call
-    (`-c v0.c v1.c ... -o objs`). When a file has an error the compiler stops there: that file is `compile`, and the
-    files after it are compiled by the next call. Identical sources are compiled once."""
+    (`-c v0.c v1.c ... -o objs`). With -nofail it goes on after a file with an error, which is `compile`
+    (missing_after_call). Identical sources are compiled once."""
     if not sources:
         return []
     unique = list(dict.fromkeys(sources))
@@ -609,9 +690,10 @@ def compile_batch(t: Path, sources: list[str], name: str, size: int, addr: int, 
     target = pc.target_bytes(addr, size)
     result = {}
     pending = list(range(len(unique)))
+    nofail = "-nofail"
     while pending:
         files = " ".join(f"v{i}.c" for i in pending)
-        cmd = f'"{mwcc}" -O4,p {pc.BASE_FLAGS} {extra} -i "{ROOT / "include"}" -c {files} -o objs'
+        cmd = f'"{mwcc}" -O4,p {pc.BASE_FLAGS} {extra} {nofail} -i "{ROOT / "include"}" -c {files} -o objs'
         r = run_limited(cmd, cwd=work, shell=True, timeout=15 + len(pending) // 2)
         if r.stderr == "timeout":
             # One source makes the compiler loop: find it by compiling the rest one at a time
@@ -630,10 +712,7 @@ def compile_batch(t: Path, sources: list[str], name: str, size: int, addr: int, 
                 continue
             bad, _ = pc.compare(target, cand)
             result[i] = "match" if bad == 0 else ("near" if len(cand) == size else "size")
-        if not missing:
-            break
-        result[missing[0]] = "compile"  # the compiler stopped on the first missing file
-        pending = missing[1:]
+        pending, nofail = missing_after_call(missing, pending, nofail, result)
     return [result.get(unique.index(s), "compile") for s in sources]
 
 
@@ -1096,13 +1175,22 @@ def code_section(addr: int) -> str:
     return ".text"
 
 
+_COMMENTS = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
+
+
+def is_cpp_source(source: str) -> bool:
+    """C++ when the source gives a function C linkage (`extern "C"`, which C cannot write): the C++ files of a game
+    (src/**/*.cpp) keep C names that way, so their twins (clone_match) go to .cpp files too."""
+    return bool(re.search(r'\bextern\s*"C"', _COMMENTS.sub(" ", source)))
+
+
 def integrate(found: list[tuple[str, int, int, str]]) -> list[Path]:
     AUTO_SRC.mkdir(parents=True, exist_ok=True)
     created = []
     entries = []
     protos = load_protos()
     for name, size, addr, source in sorted(found, key=lambda x: x[2]):
-        path = AUTO_SRC / f"{name}.c"
+        path = AUTO_SRC / f"{name}{'.cpp' if is_cpp_source(source) else '.c'}"
         path.write_text(freeze(source, name, protos), encoding="utf-8", newline="\n")
         created.append(path)
         extra = ""
@@ -1112,7 +1200,7 @@ def integrate(found: list[tuple[str, int, int, str]]) -> list[Path]:
             profrec.release(rec[0])
             extra = "    .data       start:0x%08x end:0x%08x\n" % rec
         sec = code_section(addr)
-        entries.append(f"\nsrc/auto/{name}.c:\n    complete\n    {sec:<12}start:0x{addr:08x} end:0x{addr + size:08x}\n" + extra)
+        entries.append(f"\nsrc/auto/{path.name}:\n    complete\n    {sec:<12}start:0x{addr:08x} end:0x{addr + size:08x}\n" + extra)
     with DELINKS.open("a", newline="\n") as f:
         f.writelines(entries)
     # Files matched with another compiler are recorded in compilers.txt (read by tools/configure.py)
@@ -1164,9 +1252,11 @@ def permute_near(near: list[tuple[str, int, int, str]], count: int, minutes: flo
     return won
 
 
-def commit_found(found: list[tuple[str, int, int, str]]) -> int:
+def commit_found(found: list[tuple[str, int, int, str]], format_sources: bool = True) -> int:
     """Adds the matches to src/auto/, verifies the ROM (dropping the files that break it); on failure everything is
-    rolled back. Returns the number of functions added (0 = nothing kept)."""
+    rolled back. Returns the number of functions added (0 = nothing kept). format_sources=False: leave pre-commit to
+    the last verify of the run, it goes over every uncommitted file each time."""
+    verify_cmd = [sys.executable, "tools/match.py", "verify"] + ([] if format_sources else ["--no-format"])
     backup = DELINKS.read_bytes()
     compilers_backup = COMPILERS_TXT.read_bytes() if COMPILERS_TXT.exists() else b""
     # Killed before the end (job cancelled): the next run puts these files back and deletes the new sources
@@ -1175,7 +1265,7 @@ def commit_found(found: list[tuple[str, int, int, str]]) -> int:
     journal_created(created)
     print(f"Added {len(created)} functions to src/auto/, verifying...")
     subprocess.run([sys.executable, "tools/configure.py", project.VERSION], cwd=ROOT, check=True, capture_output=True)
-    verify = subprocess.run([sys.executable, "tools/match.py", "verify"], cwd=ROOT, capture_output=True, text=True)
+    verify = subprocess.run(verify_cmd, cwd=ROOT, capture_output=True, text=True)
     for _ in range(8):
         # Only this run's files: an older file failing is a baseline problem, and the rollback below would not
         # bring it back
@@ -1198,7 +1288,7 @@ def commit_found(found: list[tuple[str, int, int, str]]) -> int:
             COMPILERS_TXT.write_text("".join(keep), newline="\n")
         created = [c for c in created if c.relative_to(ROOT).as_posix() not in bad]
         subprocess.run([sys.executable, "tools/configure.py", project.VERSION], cwd=ROOT, check=True, capture_output=True)
-        verify = subprocess.run([sys.executable, "tools/match.py", "verify"], cwd=ROOT, capture_output=True, text=True)
+        verify = subprocess.run(verify_cmd, cwd=ROOT, capture_output=True, text=True)
     if verify.returncode != 0:
         # Before throwing the whole run away, find the few files that break the ROM (one build, byte comparison)
         import find_culprits
@@ -1212,7 +1302,7 @@ def commit_found(found: list[tuple[str, int, int, str]]) -> int:
             with (WORK / "culprits.txt").open("a", encoding="utf-8") as f:
                 f.writelines(Path(d).stem + "\n" for d in dropped)
         if ok:
-            verify = subprocess.run([sys.executable, "tools/match.py", "verify"], cwd=ROOT, capture_output=True, text=True)
+            verify = subprocess.run(verify_cmd, cwd=ROOT, capture_output=True, text=True)
     print(verify.stdout.strip().splitlines()[-1] if verify.stdout else "")
     if verify.returncode != 0:
         print(verify.stdout[-3000:])
@@ -1240,7 +1330,10 @@ def main():
     ap.add_argument("--cached-only", action="store_true",
                     help="Do not try new functions: only integrate the matches already in the cache (resume)")
     ap.add_argument("--batch", type=int, default=int(os.environ.get("AUTO_BATCH", 0)), metavar="N",
-                    help="Try N functions at a time, adding + verifying the matches of each batch before the next (0 = one pass)")
+                    help=f"Try at least N functions at a time (at least {BATCH_PER_JOB} per worker); the matches are added + verified "
+                         f"every {VERIFY_WINS} matches or {VERIFY_SECONDS / 60:g} minutes (0 = one pass, one verify at the end)")
+    ap.add_argument("--max-minutes", type=float, default=0, metavar="M",
+                    help="Stop trying new functions after M minutes and keep what was found; a new run goes on from the cache (0 = no limit)")
     ap.add_argument("--multi", action="store_true",
                     help="Multi search: also try every compiler version with other optimisation flags (" + "/".join(MULTI_FLAGS) + ")")
     ap.add_argument("--names", help="Only these functions (comma separated), tried again even if cached")
@@ -1248,6 +1341,11 @@ def main():
     args = ap.parse_args()
     if args.multi:
         os.environ["AUTO_MULTI"] = "1"  # the worker processes read it when they import this module
+    # This PC has frozen under long loads: leave it some room. The compilers and ninja inherit the priority.
+    jobs = min(args.j, max(1, (os.cpu_count() or 4) * 3 // 4))
+    if sys.platform == "win32":
+        import ctypes
+        ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x4000)  # below normal
 
     if not M2C.exists():
         raise SystemExit(f"m2c not found at {M2C} (set M2C_PATH)")
@@ -1296,35 +1394,48 @@ def main():
         have = {r[0] for r in results}
         results += [by_name[f] for f in todo if f[0] not in have and f in by_name]
         pending = []
-    print(f"Trying {len(pending)} functions ({len(results)} already in the cache)...", flush=True)
+    pending.sort(key=lambda f: f[1])  # smallest first: they cost least and match most, so a stopped run has most of the gain
+    print(f"Trying {len(pending)} functions ({len(results)} already in the cache) with {jobs} workers...", flush=True)
     WORK.mkdir(parents=True, exist_ok=True)
-    # --batch N: N functions at a time; the matches of a batch are added and verified before the next one starts, so a
-    # long run keeps what it found and one bad batch only loses its own matches
-    size = args.batch if args.batch > 0 else max(1, len(pending))
+    # --batch: the matches are added and verified along the way, so a long run keeps what it found and one bad
+    # verify only loses the matches since the last one
+    size = max(args.batch, jobs * BATCH_PER_JOB) if args.batch > 0 else max(1, len(pending))
     handled = set()
     batch_added = 0
     done = 0
-    with Pool(args.j) as pool, CACHE.open("a", encoding="utf-8") as cache_out:
+    waiting = []
+    last_verify = time.monotonic()
+    deadline = last_verify + 60 * args.max_minutes if args.max_minutes > 0 else None
+    stop_asked = cut_short = False
+    with Pool(jobs) as pool, CACHE.open("a", encoding="utf-8") as cache_out:
         for start in range(0, len(pending), size):
             chunk = pending[start:start + size]
-            chunk_results = []
-            gsize = max(8, min(GROUP, -(-len(chunk) // args.j)))
-            groups = [chunk[g:g + gsize] for g in range(0, len(chunk), gsize)]
+            groups = make_groups(chunk, max(8, min(GROUP, -(-len(chunk) // jobs))))
             for r in (x for grp in pool.imap_unordered(try_group, groups) for x in grp):
                 results.append(r)
-                chunk_results.append(r)
+                if r[3] == "match":
+                    waiting.append(r)
                 cache_out.write(json.dumps({"k": keys[r[0]], "v": AUTO_VERSION, "r": list(r)}) + chr(10))
                 cache_out.flush()
                 done += 1
                 if done % 100 == 99:
                     print(f"[{done + 1}/{len(pending)}] evaluated", flush=True)
-            if args.batch > 0 and not args.dry_run:
+                stop_asked = bool(STOP_FILE) and os.path.exists(STOP_FILE)
+                cut_short = stop_asked or (deadline is not None and time.monotonic() > deadline)
+                if cut_short:
+                    print(f"{'Stop asked' if stop_asked else 'Time budget reached'}: keeping what was found, {len(pending) - done} functions left for a next run", flush=True)
+                    break
+            if cut_short:
+                break  # leaving the `with` kills the workers; the final commit below takes what is waiting
+            if args.batch > 0 and not args.dry_run and waiting and (len(waiting) >= VERIFY_WINS or time.monotonic() - last_verify >= VERIFY_SECONDS):
                 bad_now = set((WORK / "culprits.txt").read_text(encoding="utf-8").split()) if (WORK / "culprits.txt").exists() else set()
-                won = [(n, s_, a_, src) for n, s_, a_, st, src in chunk_results if st == "match" and n not in bad_now]
+                won = [(n, s_, a_, src) for n, s_, a_, st, src in waiting if n not in bad_now]
+                waiting = []
                 if won:
-                    print(f"Batch {start // size + 1}/{-(-len(pending) // size)}: {len(won)} matches, integrating...", flush=True)
-                    batch_added += commit_found(won)
+                    print(f"{done}/{len(pending)} tried: {len(won)} matches, integrating...", flush=True)
+                    batch_added += commit_found(won, format_sources=False)
                     handled |= {w[0] for w in won}
+                last_verify = time.monotonic()
 
     stats = {}
     for r in results:
@@ -1355,7 +1466,7 @@ def main():
             old = []
         mine = {r[0]: list(r[:4]) for r in results}
         (WORK / "status.json").write_text(json.dumps([mine.pop(r[0], r) for r in old] + list(mine.values())))
-    elif not args.cached_only:  # a partial pass must not replace the full list of near misses (Qwen, permuter use it)
+    elif not args.cached_only and not cut_short:  # a partial pass must not replace the full list of near misses (Qwen, permuter use it)
         if (WORK / "near").exists():
             shutil.rmtree(WORK / "near")
         (WORK / "near").mkdir()
@@ -1366,18 +1477,25 @@ def main():
     if near and not args.dry_run:  # the near misses go to the miss database too (replayed on the other functions)
         subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "missdb.py"), "import"], cwd=ROOT)
 
-    if args.permute and near:
+    if args.permute and near and not cut_short:
         print(f"Permuter on {min(args.permute, len(near))} near misses, {args.minutes} min each:")
         found += permute_near(near, args.permute, args.minutes)
 
     if args.dry_run or not found:
         if batch_added:
             print(f"OK: {batch_added} new matching functions (batches).")
+            if not args.dry_run:
+                # The verifies of the batches did not format: what gets committed still has to pass the game's CI
+                verify = subprocess.run([sys.executable, "tools/match.py", "verify"], cwd=ROOT, capture_output=True, text=True)
+                print(verify.stdout.strip().splitlines()[-1] if verify.stdout else "")
+                if verify.returncode != 0:
+                    print(verify.stdout[-3000:])
+                    sys.exit(1)
         print("Nothing added." if not found else f"{len(found)} matches (dry run, nothing added).")
-        return
-
-    if commit_found(found) == 0 and found:
+    elif commit_found(found) == 0:
         sys.exit(1)
+    if stop_asked:
+        sys.exit(STOPPED_RC)
 
 
 if __name__ == "__main__":

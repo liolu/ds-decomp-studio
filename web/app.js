@@ -12,7 +12,8 @@ let fLevel = null, fState = "open", fnLevel = "", fnQuery = "", fnState = "todo"
 let dState = "todo", dSection = "", dModule = "", dQuery = "";
 let gSort = (() => { try { return JSON.parse(localStorage.getItem("gSort")) || ["pct", -1]; } catch (e) { return ["pct", -1]; } })();
 const G_SORTS = {title: g => g.title.toLowerCase(), studio: g => (g.studio || "~").toLowerCase(), rom: g => g.rom.ok ? 0 : 1,
-  functions: g => g.functions, matched: g => g.matched, pct: g => g.pct_code, left: g => g.functions - g.matched, github: g => g.remote ? 0 : 1};
+  functions: g => g.functions, matched: g => g.matched, pct: g => g.pct_code, left: g => g.functions - g.matched, github: g => g.remote ? 0 : 1,
+  gain: g => (g.reuse || {}).gain || 0, rate: g => { const r = g.reuse || {}; return r.gain && !r.blocked ? r.gain / Math.max(r.eta_s || 1, 1) : 0; }};
 const ASC_FIRST = ["title", "studio", "rom", "github"];
 function setSort(k, dir) {
   gSort = [k, dir || (gSort[0] === k ? -gSort[1] : ASC_FIRST.includes(k) ? 1 : -1)];
@@ -41,6 +42,21 @@ const LV = n => O.levels[n] || {label: "?"};
 const JD = k => (O.jobdefs && O.jobdefs[k]) || {label: k, desc: "(redemarre le studio pour cette tache)"};
 const portNote = p => p.game.startsWith("donor:") ? "decomp externe " + esc(p.game.slice(6)) + " (" + esc(p.name) + ")" : p.game.startsWith("clone:") ? "clone de " + esc(p.name) + " (meme code dans ce jeu)" : "copier depuis " + esc(p.game);
 const game = () => O && O.settings.active_game;
+// one bar for code + data: each part as wide as its bytes, filled as far as it is matched
+function segBar(g) {
+  const cb = g.bytes || 0, db = g.data_bytes || 0, tot = cb + db;
+  if (!tot) return pctBar(0);
+  const pc = cb ? 100 * g.matched_bytes / cb : 0, pd = db ? 100 * g.data_matched / db : 0, all = 100 * (g.matched_bytes + g.data_matched) / tot;
+  const r = g.reuse || {}, pot = cb && r.bytes ? Math.min(100 * r.bytes / cb, 100 - pc) : 0;  // grey part: what reuse.py can add with no AI
+  const seg = (w, p, cls, t, more = "") => `<div class="seg ${cls}" style="width:${100 * w / tot}%" title="${t}"><i style="width:${Math.min(p, 100)}%"></i>${more}</div>`;
+  const grey = pot ? `<i class="pot" style="width:${pot}%"></i>` : "";
+  const potT = pot ? ` + ${pot.toFixed(2)} % possibles sans IA` : "";
+  return `<div class="pct"><div class="bar segs">${seg(cb, pc, "code", `Code : ${pc.toFixed(2)} % de ${fmt(cb)} octets${potT}`, grey)}${seg(db, pd, "data", `Data : ${pd.toFixed(2)} % de ${fmt(db)} octets`)}</div><b>${all.toFixed(2)}%</b></div>
+    <div class="hint"><span class="dot code"></span>code ${pc.toFixed(2)} % &middot; <span class="dot data"></span>data ${pd.toFixed(2)} %</div>${reuseNote(r, pot)}`;
+}
+const fmtDur = s => s < 3600 ? `${Math.max(1, Math.round(s / 60))} min` : `${Math.floor(s / 3600)} h ${String(Math.round(s % 3600 / 60)).padStart(2, "0")}`;
+// under the bar: the potential gain, the time it takes, or why it cannot run
+const reuseNote = (r, pot) => !r.gain ? "" : `<div class="hint"><span class="dot pot"></span>+${fmt(r.gain)} fonctions sans IA (+${pot.toFixed(2)} % code) &middot; ${r.measured ? "" : "environ "}${fmtDur(r.eta_s || 0)}${r.blocked ? ` &middot; <span class="tag ko" title="${esc(r.blocked)}">bloque</span>` : ""}</div>`;
 const pctBar = p => `<div class="pct"><div class="bar"><i style="width:${Math.min(p, 100)}%"></i></div><b>${p.toFixed(2)}%</b></div>`;
 
 function tabs() {
@@ -65,10 +81,10 @@ async function render() {
   if (!O) return;
   const v = $("#view");
   try {
-    if (tab === "games") v.innerHTML = viewGames();
+    if (tab === "games") { v.innerHTML = viewGames(); filterGames(); }
     else if (tab === "game") { v.innerHTML = await viewGame(); afterGame(); }
     else if (tab === "queue") v.innerHTML = await viewQueue();
-    else if (tab === "engine") v.innerHTML = await viewEngine();
+    else if (tab === "engine") { v.innerHTML = await viewEngine(); afterEngine(); }
     else if (tab === "tags") { v.innerHTML = await viewTags(); afterTags(); }
     else if (tab === "xref") { v.innerHTML = viewXref(); subXref(); }
     else if (tab === "progress") v.innerHTML = viewProgress();
@@ -77,31 +93,54 @@ async function render() {
 }
 
 // ---------------- Jeux ----------------
+let gQuery = "";
+function agoRun(t) {
+  const d = (Date.now() / 1000 - t) / 86400;
+  return d < 1 / 24 ? "a l'instant" : d < 1 ? `il y a ${Math.round(d * 24)} h` : d < 60 ? `il y a ${Math.round(d)} j` : new Date(t * 1000).toLocaleDateString("fr-FR");
+}
+function lastRuns(last) {
+  const st = {done: "", failed: " &#10007;", cancelled: " (arrete)", interrupted: " (interrompu)"};
+  return [["auto", "Auto-match"], ["moulinette", "Moulinette"], ["misses", "Essais rates"]].map(([k, l]) => {
+    const r = (last || {})[k];
+    return `<div>${l} : ${r && r.ended ? `<span title="${new Date(r.ended * 1000).toLocaleString("fr-FR")}">${agoRun(r.ended)}</span>${st[r.state] || ""}` : "jamais"}</div>`;
+  }).join("");
+}
+function filterGames() {
+  const q = gQuery.trim().toLowerCase();
+  document.querySelectorAll("#gtable tr[data-q]").forEach(r => r.style.display = !q || q.split(/\s+/).every(w => r.dataset.q.includes(w)) ? "" : "none");
+}
 function viewGames() {
   const gs = O.games, tot = gs.reduce((a, g) => a + g.functions, 0), got = gs.reduce((a, g) => a + g.matched, 0);
   const live = O.queue.filter(c => !c.expired).length;
   let h = `<div class="kpis"><div class="kpi"><b>${gs.length}</b><span>jeux</span></div>
     <div class="kpi"><b>${fmt(got)}</b><span>fonctions matchees / ${fmt(tot)}</span></div>
     <div class="kpi"><b>${gs.filter(g => g.remote).length}</b><span>sur GitHub</span></div>
-    <div class="kpi"><b>${live}</b><span>blocs en cours</span></div></div>`;
+    <div class="kpi"><b>${live}</b><span>blocs en cours</span></div></div>
+    <div class="card"><h3>Total (tous les jeux, en octets)</h3>${segBar({...["bytes", "matched_bytes", "data_bytes", "data_matched"].reduce((o, k) => (o[k] = gs.reduce((a, g) => a + (g[k] || 0), 0), o), {}),
+      reuse: ["gain", "bytes", "eta_s"].reduce((o, k) => (o[k] = gs.reduce((a, g) => a + ((g.reuse || {})[k] || 0), 0), o), {measured: false})})}</div>`;
   const behind = gs.filter(g => g.tools_behind && g.tools_behind.length).length;
   h += `<div class="card"><h3>Mes jeux</h3><p class="hint">Clique sur un jeu pour travailler dessus. "Retirer" le range dans projets/_archive (rien n'est supprime).</p>
   <div class="btns" style="margin-bottom:8px"><button class="btn small" title="${esc(JD('progress').desc)}" onclick="api('run',{id:'progress'}).then(r=>r.n&&toast('Publication de l'avancement lancee (onglet Queue)'))">Publier l'avancement sur GitHub</button>
     <span class="hint">README de chaque jeu publie + tableau de tous les jeux dans ds-decomp-studio</span></div>
+  <div class="btns" style="margin-bottom:8px"><button class="btn small sec" title="${esc(JD('reuse_scan').desc)}" onclick="api('run',{id:'reuse_scan'}).then(r=>r.n&&toast('Estimation lancee (onglet Queue)'))">${esc(JD('reuse_scan').label)}</button>
+    <button class="btn small" title="${esc(JD('reuse_apply').desc)}" onclick="api('run',{id:'reuse_apply'}).then(r=>r.n&&toast('Gains sans IA lances (onglet Queue)'))">${esc(JD('reuse_apply').label)}</button>
+    <span class="hint">partie grise des barres : clones et donneurs, sans IA, commit local sans push</span></div>
   ${behind ? `<div class="btns" style="margin-bottom:8px"><span class="tag ko">${behind} jeux ont des outils en retard sur rayman-rr (auto_match...)</span>
     <button class="btn small" onclick="api('run',{id:'sync_all'}).then(r=>r.n&&toast('Mise a jour des outils lancee (onglet Queue)'))">Tout mettre a jour</button></div>` : ""}
   <div class="btns" style="margin-bottom:8px"><span class="hint">Trier par</span>
-    <select onchange="setSort(this.value, ASC_FIRST.includes(this.value) ? 1 : -1)">${[["pct", "% de code matche"], ["matched", "fonctions matchees"], ["left", "fonctions restantes"], ["functions", "taille (fonctions)"], ["title", "nom"], ["studio", "studio"], ["rom", "etat ROM"], ["github", "GitHub"]].map(([k, l]) => `<option value="${k}" ${gSort[0] === k ? "selected" : ""}>${l}</option>`).join("")}</select>
-    <button class="btn small sec" onclick="setSort(gSort[0], -gSort[1])">${gSort[1] > 0 ? "croissant &#9650;" : "decroissant &#9660;"}</button></div>
-  <table><tr>${th("title", "Jeu")}${th("studio", "Studio")}${th("rom", "Etat ROM")}${th("matched", "Fonctions", "num")}${th("pct", "Code matche")}${th("github", "GitHub")}<th></th></tr>`;
+    <select onchange="setSort(this.value, ASC_FIRST.includes(this.value) ? 1 : -1)">${[["pct", "% de code matche"], ["gain", "gain sans IA"], ["rate", "gain sans IA par minute"], ["matched", "fonctions matchees"], ["left", "fonctions restantes"], ["functions", "taille (fonctions)"], ["title", "nom"], ["studio", "studio"], ["rom", "etat ROM"], ["github", "GitHub"]].map(([k, l]) => `<option value="${k}" ${gSort[0] === k ? "selected" : ""}>${l}</option>`).join("")}</select>
+    <button class="btn small sec" onclick="setSort(gSort[0], -gSort[1])">${gSort[1] > 0 ? "croissant &#9650;" : "decroissant &#9660;"}</button>
+    <input id="gsearch" placeholder="Rechercher un jeu (nom, studio, code)..." value="${esc(gQuery)}" oninput="gQuery=this.value;filterGames()" style="flex:1;min-width:200px"></div>
+  <table id="gtable"><tr>${th("title", "Jeu")}${th("studio", "Studio")}${th("rom", "Etat ROM")}${th("matched", "Fonctions", "num")}${th("pct", "Code matche")}${th("github", "GitHub")}<th>Derniers passages</th><th></th></tr>`;
   const key = G_SORTS[gSort[0]] || G_SORTS.pct;
   const order = (a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * gSort[1] || a.title.localeCompare(b.title); };
   for (const g of [...gs].sort(order)) {
-    h += `<tr class="click" onclick="selectGame('${g.id}')"><td><b>${esc(g.title)}</b> ${g.id === game() ? '<span class="tag ok">actif</span>' : ""}<div class="hint">${esc(g.id)} &middot; ${esc(g.code)} ${esc(g.version || "")}</div></td>
+    h += `<tr class="click" data-q="${esc([g.title, g.id, g.studio, g.code].join(" ").toLowerCase())}" onclick="selectGame('${g.id}')"><td><b>${esc(g.title)}</b> ${g.id === game() ? '<span class="tag ok">actif</span>' : ""}<div class="hint">${esc(g.id)} &middot; ${esc(g.code)} ${esc(g.version || "")}</div></td>
       <td class="hint">${esc(g.studio)}</td>
       <td>${g.rom.ok ? '<span class="tag ok">ROM OK</span>' : `<span class="tag ko" title="${esc(g.rom.note)}">${esc(g.rom.note || "KO")}</span>`}</td>
-      <td class="num">${fmt(g.matched)} / ${fmt(g.functions)}${g.modules > 1 ? `<div class="hint">${g.modules} modules</div>` : ""}</td><td>${pctBar(g.pct_code)}${g.modules > 1 ? `<div class="hint">module principal : ${g.pct_main.toFixed(2)} %</div>` : ""}</td>
+      <td class="num">${fmt(g.matched)} / ${fmt(g.functions)}${g.modules > 1 ? `<div class="hint">${g.modules} modules</div>` : ""}</td><td>${segBar(g)}${g.modules > 1 ? `<div class="hint">module principal : ${g.pct_main.toFixed(2)} %</div>` : ""}</td>
       <td>${g.remote ? `<a class="tag gh" href="${esc(g.remote.replace(/\.git$/, ""))}" target="_blank" onclick="event.stopPropagation()">GitHub</a>` : '<span class="hint">local</span>'}</td>
+      <td class="hint" style="white-space:nowrap">${lastRuns(g.last)}</td>
       <td onclick="event.stopPropagation()"><button class="btn small sec" onclick="archiveGame('${g.id}')">Retirer</button></td></tr>`;
   }
   h += `</table></div><div class="split"><div class="card"><h3>Ajouter un jeu (depuis une ROM)</h3>
@@ -156,12 +195,12 @@ async function viewGame() {
     ${g.remote ? `<a class="tag gh" target="_blank" href="${esc(g.remote.replace(/\.git$/, ""))}">GitHub</a>
       <a class="tag" target="_blank" title="Page ByteMatch du jeu. Pas encore listee ? Bouton ajouter : choisir le depot, le rapport est publie automatiquement par la CI (artefact ${esc(g.code || g.version)}_report, job Publier l'avancement)" href="https://bytematch.dev/${esc(g.remote.replace(/^.*github\.com[:/]/, "").replace(/\.git$/, ""))}">ByteMatch</a>
       <a class="tag" target="_blank" title="Ajouter ce depot sur ByteMatch (une fois) : la CI y publie le rapport a chaque avancement" href="https://bytematch.dev/manage/new">+ ByteMatch</a>` : '<span class="tag">local</span>'}</span></div>
-    <div style="min-width:260px">${pctBar(g.pct_code)}<div class="hint" style="text-align:right">${fmt(g.matched)} / ${fmt(g.functions)} fonctions${g.modules > 1 ? ` (${g.modules} modules, principal ${g.pct_main.toFixed(2)} %)` : ""}</div>
+    <div style="min-width:260px">${segBar(g)}<div class="hint" style="text-align:right">${fmt(g.matched)} / ${fmt(g.functions)} fonctions${g.modules > 1 ? ` (${g.modules} modules, principal ${g.pct_main.toFixed(2)} %)` : ""}</div>
     ${G.data && G.data.bytes ? `<div class="hint" style="text-align:right"><a href="#game" onclick="sub='data';render();return false">donnees ${G.data.pct.toFixed(2)} %</a> : ${fmt(G.data.matched)} / ${fmt(G.data.symbols)} symboles (.data, .rodata, .bss)</div>` : ""}
     ${g.left_manual ? `<div class="hint" style="text-align:right"><a href="#game" onclick="sub='functions';fnKind='manual';render();return false">${fmt(g.left_manual)} a faire a la main</a> (Thumb, overlays, ITCM : pas d'outil auto)</div>` : ""}</div></div>
     ${G.misses && (G.misses.misses || G.misses.won_here) ? `<div class="hint" style="margin-top:8px" title="base des essais rates (missdb.sqlite) : chaque C qui compile sans matcher (Qwen, hunt, Claude, editeur, auto-match) est rejoue sur les fonctions non matchees de tous les jeux">Essais rates gardes : <b>${fmt(G.misses.misses)}</b> (${fmt(G.misses.functions)} fonctions, ${fmt(G.misses.replayable)} rejouables) &middot; matchs gagnes ici grace aux essais rates : <b>${fmt(G.misses.won_here)}</b> &middot; donnes aux autres jeux : <b>${fmt(G.misses.given)}</b></div>` : ""}
     <h3 style="margin-top:12px">Taches machine sur ce jeu</h3><div class="btns">
-    ${["moulinette", "auto", "ghidra", "wb_commit", "names", "regroup", "cleanup", "progress", "verify", "culprits", "build", "dis", "status", "permute", "misses"].map(k => `<button class="btn small ${k === "moulinette" ? "" : "sec"}" title="${esc(JD(k).desc)}" onclick="runJob('${k}')">${esc(JD(k).label)}</button>`).join("")}
+    ${["moulinette", "auto", "reuse", "ghidra", "wb_commit", "names", "regroup", "cleanup", "progress", "verify", "culprits", "build", "dis", "status", "permute", "misses"].map(k => `<button class="btn small ${k === "moulinette" ? "" : "sec"}" title="${esc(JD(k).desc)}" onclick="runJob('${k}')">${esc(JD(k).label)}</button>`).join("")}
     ${g.tools_behind && g.tools_behind.length ? `<button class="btn small" style="background:#b45309" title="${esc(g.tools_behind.join(", "))}" onclick="runJob('sync_tools',{})">Mettre a jour les outils (${g.tools_behind.length} en retard)</button>` : '<span class="tag ok">outils a jour</span>'}
     ${g.remote ? "" : `<button class="btn small green" onclick="publishGame()">Publier sur GitHub</button>`}
     </div></div>`;
@@ -414,8 +453,8 @@ const JOB_OPTS = {
     ["list", "Seulement lister les candidates (rapide, remplit le niveau Portable)", "check", false],
     ["dry_run", "Essai a blanc (ne change rien)", "check", false]],
   auto: [["jobs", "Coeurs utilises (-j)", "number", 16],
-    ["multi", "Multi recherche mwcc (chaque version aussi avec -O4,s / -O2 / -O3,p : plus lent)", "check", false],
-    ["batch", "Match par lot : N fonctions a la fois, integrees + verifiees a chaque lot (0 = un seul passage)", "number", 0], ["permute", "Permuter sur N near misses (0 = non)", "number", 0],
+    ["multi", "Multi recherche mwcc (chaque version aussi avec -O4,s / -O2 : 2 a 3 fois plus lent, environ 1 % de matchs en plus)", "check", false],
+    ["batch", "Match par lot : integre + verifie tous les 300 matchs ou 15 min, N fonctions minimum a la fois (0 = une seule verification, a la fin)", "number", 0], ["max_minutes", "Limite de temps en minutes : garde ce qui est trouve, la suite au prochain lancement (0 = aucune)", "number", 0], ["permute", "Permuter sur N near misses (0 = non)", "number", 0],
     ["minutes", "Minutes de permuter par fonction", "number", 2], ["fresh", "Tout refaire (ignorer le cache des echecs)", "check", false],
     ["dry_run", "Essai a blanc (ne change rien)", "check", false],
     ["cached_only", "Seulement integrer les matches deja trouves (reprise rapide)", "check", false], ["force", "Relancer meme si l'auto-match est marque termine", "check", false]],
@@ -489,11 +528,15 @@ function jobsButton() {
   return J.length > JOBS_SHOWN ? `<button class="btn small sec" onclick="toggleJobs()">${jobsAll ? "Reduire aux 10 dernieres" : `Voir toute la liste (${J.length})`}</button>` : "";
 }
 function jobRow(j) {
-  return `<tr><td class="hint">${j.n}</td><td>${esc(j.label)}${j.params && j.params.block ? " " + esc(j.params.block) : ""}</td><td class="hint">${esc(j.game || "-")}</td>
+  return `<tr><td class="hint">${j.n}</td><td>${esc(j.label)}${j.params && j.params.block ? " " + esc(j.params.block) : ""}</td><td>${j.game ? `<a href="#game" title="ouvrir ce jeu dans Travailler" onclick="selectGame('${esc(j.game)}');return false">${esc(j.game)}</a>` : '<span class="hint">-</span>'}</td>
     <td><span class="state ${j.state}">${ST[j.state] || j.state}</span></td><td style="min-width:140px"><div class="bar"><i style="width:${j.pct}%"></i></div></td>
     <td class="hint">${Math.floor(j.elapsed / 60)} min ${j.elapsed % 60} s</td>
     <td class="btns"><button class="btn small sec ${openLog === j.n ? "on" : ""}" onclick="showLog(${j.n})">Log</button>
-    ${j.state === "running" || j.state === "queued" ? `<button class="btn small red" onclick="cancelJob(${j.n})">Stop</button>` : ""}
+    ${j.state === "running" || j.state === "queued" ? `${RESUMABLE.includes(j.id) && j.state === "running" ? (j.stopping ? '<span class="hint">arret a la fin de l&#39;etape...</span>'
+      : `<button class="btn small" title="laisse finir l'etape en cours (build, commit, push...) puis s'arrete ; Continuer reprend a l'etape suivante" onclick="stopAfterStep(${j.n})">Arreter apres l'etape</button>`) : ""}
+    <button class="btn small red" title="${RESUMABLE.includes(j.id) ? "tue la tache tout de suite, meme au milieu d'un commit ou d'un build" : ""}" onclick="${RESUMABLE.includes(j.id) && j.state === "running" ? "killNow" : "cancelJob"}(${j.n})">${RESUMABLE.includes(j.id) && j.state === "running" ? "Arreter maintenant" : "Arreter"}</button>` : ""}
+    ${["stopped", "failed", "interrupted", "cancelled"].includes(j.state) && !J.some(k => k.n > j.n && k.id === j.id && k.game === j.game && ["running", "queued"].includes(k.state))
+      ? `<button class="btn small" title="relance la tache ; auto-match et essais rates reprennent a la derniere etape terminee" onclick="resumeJob(${j.n})">Continuer</button>` : ""}
     ${j.id === "qwen" && j.state === "running" ? `<button class="btn small sec" onclick="api('qwen_stop',{game:'${j.game}'}).then(()=>toast('Qwen s\\'arretera apres la fonction en cours'))">Finir apres la fonction</button>` : ""}</td></tr>`;
 }
 function jobsHtml() {
@@ -518,6 +561,10 @@ async function refreshQueue() {
   setHtml("jobsbox", jobsHtml());
   if (openLog) showLog(openLog, true);
 }
+const RESUMABLE = ["auto", "misses", "misses_all", "clone_all", "reuse_scan", "reuse_apply"];
+function killNow(n) { if (confirm("Couper tout de suite, meme au milieu d'un commit ou d'un build ?")) cancelJob(n); }
+async function stopAfterStep(n) { const r = await api("stop_after_step", {n}); if (r.ok) { toast("La tache s'arretera a la fin de l'etape en cours"); refreshQueue(); } else if (r.error) toast(r.error, true); }
+async function resumeJob(n) { const r = await api("resume", {n}); if (r.n) { toast(`Reprise : tache #${r.n}`); refreshQueue(); } else if (r.error) toast(r.error, true); }
 async function cancelJob(n) { await api("cancel", {n}); toast("Tache arretee"); refreshQueue(); }
 async function showLog(n, refresh) {
   if (!refresh) { openLog = n; setHtml("jobsbox", jobsHtml()); }
@@ -556,7 +603,48 @@ async function viewEngine() {
     <div class="card"><h3>Moteurs partages entre jeux</h3><p class="hint">Fonctions identiques entre deux jeux, hors SDK : du code moteur reutilise. Un match dans un jeu = gratuit dans l'autre (niveau "Portable").</p>
     <table><tr><th>Jeu A</th><th>Jeu B</th><th class="num">Moteur commun</th><th class="num">SDK commun</th></tr>
     ${d.pairs.slice(0, 40).map(p => `<tr><td>${esc(p.a)}</td><td>${esc(p.b)}</td><td class="num"><b>${fmt(p.engine)}</b></td><td class="num hint">${fmt(p.sdk)}</td></tr>`).join("")}</table></div></div>`;
+  const opts = sel => d.games.map(g => `<option value="${esc(g.id)}" ${g.id === sel ? "selected" : ""}>${esc(g.title)}</option>`).join("");
+  if (!cmpA && d.games.length > 1) { cmpA = d.games[0].id; cmpB = d.games[1].id; }
+  h += `<div class="split"><div class="card"><h3>Comparateur de jeux</h3><p class="hint">Fonctions identiques entre les deux jeux (empreinte stricte), les plus grosses d'abord.</p>
+    <div class="btns"><select id="cmpa" onchange="cmpA=this.value;subCompare()">${opts(cmpA)}</select><span>&harr;</span>
+    <select id="cmpb" onchange="cmpB=this.value;subCompare()">${opts(cmpB)}</select>
+    <label class="hint"><input type="checkbox" ${cmpNoSdk ? "checked" : ""} onchange="cmpNoSdk=this.checked;subCompare()"> sans le SDK</label></div>
+    <div id="cmpout" class="hint">Chargement...</div></div>
+    <div class="card"><h3>Fonctions les plus utilisees</h3><p class="hint">Presentes dans le plus de jeux. Clique pour voir les jeux qui l'utilisent.</p>
+    <div class="btns"><input placeholder="nom..." value="${esc(topQuery)}" onchange="topQuery=this.value;subTop()"></div>
+    <div id="topout" class="hint">Chargement...</div></div></div>`;
   return h;
+}
+let cmpA = "", cmpB = "", cmpNoSdk = false, topQuery = "";
+function afterEngine() { if ($("#cmpout")) { subCompare(); subTop(); } }
+async function subCompare() {
+  const box = $("#cmpout"); if (!box) return;
+  if (cmpA === cmpB) { box.innerHTML = "Choisis deux jeux differents."; return; }
+  box.innerHTML = "Chargement...";
+  const d = await api(`engine/compare?a=${encodeURIComponent(cmpA)}&b=${encodeURIComponent(cmpB)}`);
+  if (d.error) return;
+  const rows = d.functions.filter(f => !cmpNoSdk || !f.sdk), sdk = d.functions.filter(f => f.sdk).length;
+  box.innerHTML = `<div style="margin:6px 0"><b>${fmt(d.functions.length)}</b> fonctions en commun &middot; ${fmt(d.functions.length - sdk)} moteur &middot; ${fmt(sdk)} SDK</div>
+    <div class="scrollbox"><table><tr><th>Dans ${esc(cmpA)}</th><th>Dans ${esc(cmpB)}</th><th class="num">Taille</th><th class="num">Jeux</th></tr>
+    ${rows.slice(0, 1000).map(f => `<tr style="cursor:pointer" onclick="showUsers('${f.fp}')"><td>${esc(f.a)}</td><td>${esc(f.b)}</td><td class="num">${fmt(f.size)}</td>
+      <td class="num">${f.games}${f.sdk ? ' <span class="hint">SDK</span>' : ""}</td></tr>`).join("")}</table></div>
+    ${rows.length > 1000 ? `<div class="hint">${rows.length - 1000} de plus masquees</div>` : ""}`;
+}
+async function subTop() {
+  const box = $("#topout"); if (!box) return;
+  const d = await api(`engine/top?limit=300&q=${encodeURIComponent(topQuery)}`);
+  if (d.error) return;
+  box.innerHTML = `<div class="scrollbox"><table><tr><th>Fonction</th><th class="num">Jeux</th><th class="num">Taille</th><th>Mode</th></tr>
+    ${d.functions.map(f => `<tr style="cursor:pointer" onclick="showUsers('${f.fp}')"><td>${esc(f.name)}</td><td class="num"><b>${f.games}</b>${d.total_games ? `<span class="hint">/${d.total_games}</span>` : ""}</td>
+      <td class="num">${fmt(f.size)}</td><td class="hint">${esc(f.mode)}</td></tr>`).join("")}</table></div>`;
+}
+async function showUsers(fp) {
+  const d = await api(`engine/users?fp=${encodeURIComponent(fp)}`);
+  if (d.error) return;
+  modal(`<h2>${esc(d.name)}</h2><p class="hint">${d.size} octets &middot; utilisee par ${d.games.length} jeux</p>
+    <table><tr><th>Jeu</th><th>Nom dans ce jeu</th><th>Adresse</th><th></th></tr>
+    ${d.games.map(g => `<tr><td>${esc(g.title)}</td><td>${esc(g.name)}</td><td class="hint">${hex(g.addr)}</td>
+      <td><button class="btn small sec" onclick="closeModal();selectGame('${esc(g.id)}')">Ouvrir</button></td></tr>`).join("")}</table>`);
 }
 
 // ---------------- Data (gametools/xref.py: who uses a symbol, pointer slots of a table, functions sharing its data) ----------------

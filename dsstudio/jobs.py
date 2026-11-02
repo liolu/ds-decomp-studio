@@ -15,6 +15,8 @@ from . import config, games
 LOGS = config.DATA / "logs"
 LOGS.mkdir(exist_ok=True)
 STATE = config.DATA / "jobs.json"
+LAST = config.DATA / "last_runs.json"  # game -> kind -> {"ended", "state"}: kept forever (jobs.json keeps 200)
+LAST_KIND = {"auto": "auto", "permute": "auto", "moulinette": "moulinette", "misses": "misses", "misses_all": "misses"}
 MOULINETTE = config.PROJETS / "rayman-rr" / "tools" / "moulinette.py"
 
 # id: label, scope ("game" runs in the project, "global" in the workspace), expected seconds, description
@@ -44,6 +46,15 @@ DEFS = {
               "de nos jeux : C copie + renomme, compile + compare, puis verify"),
     "clone_all": ("Cloner les jumelles dans tous les jeux", "global", 7200,
                   "le clonage dans chaque jeu (1 match dans un jeu = 1 match dans chaque jeu qui a la meme fonction), verify, puis commit + push des jeux qui passent"),
+    "reuse": ("Gains sans IA", "game", 900,
+              "reprend les matchs des autres decomps puis clone les jumelles de nos autres jeux, verifie chaque passe "
+              "et commit en local, sans push. Laisse le jeu tranquille s'il a du travail non commite"),
+    "reuse_scan": ("Estimer les gains sans IA", "global", 3600,
+                   "essai a blanc des clones et des donneurs sur chaque jeu, un par un : calcule la partie grise des "
+                   "barres et le temps par jeu, ne change aucune source"),
+    "reuse_apply": ("Appliquer les gains sans IA", "global", 14400,
+                    "les jeux estimes, un par un, le plus de fonctions par minute d'abord : donneurs puis clones, verify, "
+                    "commit local sans push. Saute les jeux au travail non commite"),
     "misses": ("Rejouer les essais rates", "game", 1800,
                "base des essais rates (missdb : Qwen, hunt, Claude, editeur) : chaque C rate est essaye sur toutes les "
                "fonctions non matchees du jeu qui ont la meme forme, misses de TOUS nos jeux ; les DONNEES aussi "
@@ -109,6 +120,38 @@ def _block_functions(game, block_id: str) -> list[str]:
     return b["functions"]
 
 
+STEPS = config.DATA / "steps"
+STOP_RC = 99  # exit code of a task stopped between two steps (Continuer resumes it)
+
+
+def stop_file(jid: str, game_id: str | None):
+    return STEPS / f"{jid}-{game_id or 'all'}.stop"
+
+
+def stop_after_step(n: int) -> dict:
+    j = jobs.get(n)
+    if not j or j["state"] != "running" or j["id"] not in RESUMABLE:
+        return {"error": "pas une tache a etapes en cours"}
+    STEPS.mkdir(exist_ok=True)
+    stop_file(j["id"], j["game"]).write_text("stop")
+    j["stopping"] = True
+    return {"ok": True}
+
+
+def _steps(jid: str, game, parts: list[tuple[str, str]], p: dict) -> str:
+    """Checkpoints: each step that ends well is written to data/steps/<task>-<game>.txt; "Continuer" (resume) skips
+    the steps already done, a new run starts from scratch. Inside a step the tools keep their own caches."""
+    f = _q((STEPS / f"{jid}-{game.id if game else 'all'}.txt").as_posix())
+    stop = _q(stop_file(jid, game.id if game else None).as_posix())
+    out = [f"mkdir -p {_q(STEPS.as_posix())}", f"rm -f {stop}"] + ([] if p.get("resume") else [f"rm -f {f}"])
+    for name, cmd in parts:
+        # "Arreter apres l'etape": the file is checked between two steps, never in the middle of one
+        out.append(f"if [ -e {stop} ]; then rm -f {stop}; echo {_q('== arret demande : stop avant ' + name)}; exit {STOP_RC}; fi")
+        out.append(f"if grep -qxF {_q(name)} {f} 2>/dev/null; then echo {_q('== ' + name + ' : deja fait (reprise)')}; "
+                   f"else echo {_q('== ' + name)}; ({cmd}) && echo {_q(name)} >> {f}; fi")
+    return "; ".join(out)
+
+
 def command(jid: str, game, p: dict) -> str:
     v = game.version if game else ""
     if jid == "status":
@@ -123,6 +166,8 @@ def command(jid: str, game, p: dict) -> str:
         return f"rm -rf build/{v}/asm; ninja dis"
     if jid in ("auto", "permute"):
         env = "AUTO_FRESH=1 " if p.get("fresh") else ""
+        if jid == "auto":  # "Arreter": auto_match stops trying and keeps what it found, then the steps stop
+            env += f"AUTO_STOP_FILE={_q(stop_file(jid, game.id).as_posix())} "
         cmd = f"{env}python {_t(game, 'auto_match.py')}"
         if p.get("jobs"):
             cmd += f" -j {int(p['jobs'])}"
@@ -132,6 +177,8 @@ def command(jid: str, game, p: dict) -> str:
             cmd += " --multi"
         if int(p.get("batch") or 0):
             cmd += f" --batch {int(p['batch'])}"
+        if float(p.get("max_minutes") or 0):
+            cmd += f" --max-minutes {float(p['max_minutes'])}"
         if p.get("dry_run"):
             cmd += " --dry-run"
         if p.get("cached_only"):
@@ -144,10 +191,11 @@ def command(jid: str, game, p: dict) -> str:
                 pre.append(f"python {_t(game, 'clone_match.py')} --other-games" + dry)
             if config.game_tool(game.path, "donor_match.py").exists():
                 pre.append(f"python {_t(game, 'donor_match.py')}" + dry + (f" -j {int(p['jobs'])}" if p.get("jobs") else ""))
-            cmd = "; ".join(pre + [cmd])
+            parts = [("clone", x) if "clone_match" in x else ("donors", x) for x in pre] + [("auto_match", cmd)]
             # the misses of every game (AI, hand sessions, these near misses) on what is still unmatched here
             if config.game_tool(game.path, "missdb.py").exists():
-                cmd += f"; python {_t(game, 'missdb.py')} replay --all-games" + (" --dry-run" if p.get("dry_run") else "")
+                parts.append(("misses", f"python {_t(game, 'missdb.py')} replay --all-games" + (" --dry-run" if p.get("dry_run") else "")))
+            return _steps(jid, game, parts, p)
         return cmd
     if jid == "moulinette":
         cmd = f"python {_q(MOULINETTE.as_posix())} --game {_q(game.id)}"
@@ -197,25 +245,38 @@ def command(jid: str, game, p: dict) -> str:
         return cmd
     if jid == "clone_all":
         # one game after the other; a game busy with another pipeline is skipped (its lock), the others go on
-        return "; ".join(f"echo {_q('== projets/' + g.id)}; (cd {_q('projets/' + g.id)} && "
-                         f"python {_t(g, 'clone_match.py')} --other-games --commit --push)"
-                         for g in games.all_games() if g.ready and config.game_tool(g.path, "clone_match.py").exists())
+        return _steps(jid, None, [(g.id, f"cd {_q('projets/' + g.id)} && python {_t(g, 'clone_match.py')} --other-games --commit --push")
+                                  for g in games.all_games() if g.ready and config.game_tool(g.path, "clone_match.py").exists()], p)
+    if jid == "reuse":
+        return f"python {_q((config.GAMETOOLS / 'reuse.py').as_posix())} apply"
+    if jid in ("reuse_scan", "reuse_apply"):
+        tool = _q((config.GAMETOOLS / "reuse.py").as_posix())
+        ready = [g for g in games.all_games() if g.ready]
+        if jid == "reuse_scan":
+            return _steps(jid, None, [(g.id, f"cd {_q('projets/' + g.id)} && python {tool} scan") for g in ready], p)
+        # the most functions per second first: a game with few files gives far more than a slow link
+        todo = [(g, g.reuse()) for g in ready]
+        todo = sorted(((g, e) for g, e in todo if e.get("gain") and not e.get("blocked")),
+                      key=lambda x: -x[1]["gain"] / max(x[1].get("eta_s") or 1, 1))
+        if not todo:
+            return "echo aucun gain estime : lance d'abord l'estimation"
+        return _steps(jid, None, [(g.id, f"cd {_q('projets/' + g.id)} && python {tool} apply") for g, _e in todo], p)
     if jid == "misses":
-        cmd = f"python {_t(game, 'missdb.py')}"
-        pre = f"{cmd} import; " if p.get("import", True) else ""
-        cmd = pre + f"{cmd} replay" + ("" if p.get("this_game") else " --all-games")
+        tool = f"python {_t(game, 'missdb.py')}"
+        cmd = f"{tool} replay" + ("" if p.get("this_game") else " --all-games")
         if p.get("block"):
             cmd += " --names " + _q(",".join(_block_functions(game, p["block"])))
-        if p.get("dry_run"):
-            return cmd + " --dry-run"
-        return cmd + " --commit" + (" --push" if p.get("push", True) else "")
+        cmd += " --dry-run" if p.get("dry_run") else " --commit" + (" --push" if p.get("push", True) else "")
+        return _steps(jid, game, ([("import", f"{tool} import")] if p.get("import", True) else []) + [("replay", cmd)], p)
     if jid == "misses_all":
         # 1) every game records its older tries, 2) every game replays the misses of all games
         ready = [g for g in games.all_games() if g.ready and config.game_tool(g.path, "missdb.py").exists()]
-        imp = "; ".join(f"(cd {_q('projets/' + g.id)} && python {_t(g, 'missdb.py')} import)" for g in ready)
-        rep = "; ".join(f"echo {_q('== projets/' + g.id)}; (cd {_q('projets/' + g.id)} && "
-                        f"python {_t(g, 'missdb.py')} replay --all-games --commit --push)" for g in ready)
-        return f"{imp}; {rep}; python {_t(ready[0], 'missdb.py')} stats" if ready else "echo aucun jeu"
+        if not ready:
+            return "echo aucun jeu"
+        parts = [("import " + g.id, f"cd {_q('projets/' + g.id)} && python {_t(g, 'missdb.py')} import") for g in ready]
+        parts += [("replay " + g.id, f"cd {_q('projets/' + g.id)} && python {_t(g, 'missdb.py')} replay --all-games --commit --push")
+                  for g in ready]
+        return _steps(jid, None, parts, p) + f"; python {_t(ready[0], 'missdb.py')} stats"
     if jid == "donors":
         # by block (the functions of one block), by batch (--max N matches), or only the list of candidates
         cmd = f"python {_t(game, 'donor_match.py')}"
@@ -273,6 +334,37 @@ def command(jid: str, game, p: dict) -> str:
     raise KeyError(jid)
 
 
+def _note_last(j):
+    """Remember when auto-match / moulinette / replay of misses last ran on each game (a *_all task counts for all)."""
+    kind = LAST_KIND.get(j["id"])
+    if not kind or not j.get("started"):
+        return
+    last = last_runs()
+    for gid in [j["game"]] if j["game"] else [g.id for g in games.all_games()]:
+        last.setdefault(gid, {})[kind] = {"ended": j["ended"], "state": j["state"]}
+    LAST.write_text(json.dumps(last, ensure_ascii=False), encoding="utf-8")
+
+
+def last_runs() -> dict:
+    if not LAST.exists():  # first time: seed from the task history still in jobs.json
+        last = {}
+        try:
+            old = sorted(json.loads(STATE.read_text(encoding="utf-8")), key=lambda j: j.get("ended") or 0)
+        except Exception:
+            old = []
+        for j in old:
+            kind = LAST_KIND.get(j["id"])
+            if kind and j.get("started") and j.get("ended"):
+                for gid in [j["game"]] if j["game"] else [g.id for g in games.all_games()]:
+                    last.setdefault(gid, {})[kind] = {"ended": j["ended"], "state": j["state"]}
+        LAST.write_text(json.dumps(last, ensure_ascii=False), encoding="utf-8")
+        return last
+    try:
+        return json.loads(LAST.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 def _save():
     snap = [{k: v for k, v in j.items() if k != "log"} for j in jobs.values()]
     STATE.write_text(json.dumps(snap[-200:], ensure_ascii=False), encoding="utf-8")
@@ -303,7 +395,7 @@ def submit(jid: str, game_id: str | None, params: dict | None = None, who: str =
             return {"error": str(e)}
         if not game.ready and jid != "publish":
             return {"error": "projet incomplet : dsd init n'a pas abouti"}
-        if jid in ("auto", "permute") and (game.path / ".auto_done").exists() and not params.get("force"):
+        if jid in ("auto", "permute") and (game.path / ".auto_done").exists() and not (params.get("force") or params.get("resume")):
             return {"error": "auto-match deja termine pour ce jeu (cocher 'forcer' pour relancer)"}
         if jid == "qwen" and not (params.get("block") or params.get("blocks")):
             return {"error": "choisir un bloc pour Qwen"}
@@ -359,13 +451,15 @@ def _start(j):
         with _lock:
             j["rc"], j["ended"] = p.returncode, time.time()
             if j["state"] == "running":
-                j["state"] = "done" if p.returncode == 0 else "failed"
+                j["state"] = "done" if p.returncode == 0 else "stopped" if p.returncode == STOP_RC else "failed"
+            j.pop("stopping", None)
             if j["state"] == "done":
                 j["pct"] = 100
             if j["id"] == "verify" and j["state"] in ("done", "failed"):
                 ok = any("VERIFY PASSED" in l for l in j["log"])
                 games.set_health(j["game"], ok, "" if ok else (j["log"][-1] if j["log"] else "echec"))
             _procs.pop(j["n"], None)
+            _note_last(j)
             _save()
         _wake.set()
     threading.Thread(target=pump, daemon=True).start()
@@ -398,6 +492,17 @@ def _scheduler():
 def start_scheduler():
     _restore()
     threading.Thread(target=_scheduler, daemon=True).start()
+
+
+RESUMABLE = {"auto", "misses", "misses_all", "clone_all", "reuse_scan", "reuse_apply"}
+
+
+def resume(n: int, who: str = "") -> dict:
+    """Run a stopped / failed task again from its last checkpoint (same task, same game, same options)."""
+    j = jobs.get(n)
+    if not j:
+        return {"error": "tache inconnue"}
+    return submit(j["id"], j["game"], {**(j.get("params") or {}), "resume": j["id"] in RESUMABLE}, who)
 
 
 def cancel(n: int) -> bool:
@@ -433,7 +538,7 @@ def view(limit=40) -> list[dict]:
         pct = j["pct"]
         if j["state"] == "running" and pct == 0:
             pct = min(int(100 * el / max(j["expect"], 1)), 95)
-        out.append({k: j[k] for k in ("n", "id", "label", "game", "state", "who", "params", "rc")} |
+        out.append({k: j[k] for k in ("n", "id", "label", "game", "state", "who", "params", "rc")} | {"stopping": j.get("stopping", False)} |
                    {"pct": pct, "elapsed": int(el), "queued_at": j["queued"], "log": j["log"][-80:]})
     return out
 

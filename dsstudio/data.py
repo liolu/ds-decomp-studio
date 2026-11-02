@@ -1,6 +1,7 @@
 """The DATA of a game for the web app: every data symbol of .data / .rodata / .bss of every module, its size (up to
 the next symbol), whether a complete source file covers it, and how many data misses the miss database keeps for it.
 Read only: config/*/delinks.txt + symbols.txt (cached until they change) and missdb.sqlite."""
+import bisect
 import re
 import sqlite3
 
@@ -24,14 +25,18 @@ def _module_rows(module: str, folder) -> list[dict]:
     syms = sorted((int(a, 16), n, k) for n, k, a in SYM_RE.findall(
         (folder / "symbols.txt").read_text(encoding="utf-8", errors="replace")))
     rows = []
+    addrs = [x[0] for x in syms]
     for sec, (s, e) in secs.items():
-        inside = [x for x in syms if s <= x[0] < e]
+        inside = syms[bisect.bisect_left(addrs, s):bisect.bisect_left(addrs, e)]
         bounds = sorted({a for a, _n, _k in inside} | {e})
+        mine = sorted((ds, de, p) for ds, de, p, dsec in done if dsec == sec)
+        starts = [m[0] for m in mine]
         for a, n, k in inside:
             if k not in ("data", "bss"):
                 continue
-            nxt = next((b for b in bounds if b > a), e)
-            f = next((p for ds, de, p, dsec in done if dsec == sec and ds <= a and nxt <= de), None)
+            nxt = bounds[bisect.bisect_right(bounds, a)] if a < e else e
+            i = bisect.bisect_right(starts, a) - 1  # file ranges do not overlap: only the last one starting <= a
+            f = mine[i][2] if i >= 0 and nxt <= mine[i][1] else None
             rows.append({"name": n, "module": module, "section": sec, "addr": a, "size": nxt - a, "done": f is not None,
                          "file": f})
     return rows
@@ -47,7 +52,7 @@ def rows(g) -> list[dict]:
             if (f / "delinks.txt").exists() and (f / "symbols.txt").exists():
                 out += _module_rows(m, f)
         return out
-    return games._cached(("data", g.id), stamp, compute)
+    return games._disk_cached(("data", g.id), stamp, compute)
 
 
 def summary(g) -> dict:

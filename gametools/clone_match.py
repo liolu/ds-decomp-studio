@@ -44,7 +44,7 @@ FAMILIES = WORK / "families.json"
 ARM9_BASE = 0x02000000
 FUNC_RE = re.compile(r"^(\S+) kind:function\(arm,size=0x([0-9a-f]+)\).*?addr:0x([0-9a-f]+)", re.M)
 THUMB_RE = re.compile(r"^(\S+) kind:function\(thumb,size=0x([0-9a-f]+)\).*?addr:0x([0-9a-f]+)", re.M)
-SYM_RE = re.compile(r"^(\S+) kind:(function|data|bss)\S* addr:0x([0-9a-f]+)", re.M)
+SYM_RE = re.compile(r"^(\S+) kind:(function|data|bss|label)\S* addr:0x([0-9a-f]+)(?! local)", re.M)
 DELINK_RE = re.compile(r"^(src/\S+):\n((?:[ \t]+\S.*\n?)+)", re.M)
 TEXT_RE = re.compile(r"\.text\s+start:0x([0-9a-f]+) end:0x([0-9a-f]+)")
 MAX_COMBOS = 32  # C files tried per pair when constants are ambiguous
@@ -73,7 +73,7 @@ class Image:
         self.addr_of, self.name_at = {}, {}
         # an overlay / the ITCM calls the main module (and everything calls the ITCM): their symbols name the
         # calls too, after the module's own ones
-        others = [arm9 / "symbols.txt", arm9 / "itcm" / "symbols.txt"]
+        others = [arm9 / "symbols.txt", arm9 / "itcm" / "symbols.txt", arm9 / "dtcm" / "symbols.txt"]
         for text in [sym_text] + [p.read_text(encoding="utf-8", errors="replace")
                                   for p in others if p.exists() and p != cfg / "symbols.txt"]:
             for name, _kind, a in SYM_RE.findall(text):
@@ -173,8 +173,8 @@ class Image:
     _sources: dict = {}
 
     def source_of(self, name: str, path: str) -> str | None:
-        """C of one function: the whole file when it only defines this function, else its declarations + this
-        function (merged files of src/nitro...)."""
+        """C of one function: the whole file when it only defines this function, else its declarations, its inline
+        helpers + this function (merged files of src/nitro...)."""
         key = (str(self.root), name)
         if key not in Image._sources:
             try:
@@ -185,14 +185,16 @@ class Image:
             if text.startswith(am.MARKER):
                 text = text.split("\n", 1)[1]
             items = donorlib.top_level_items(text)
-            defined = [donorlib.function_name(it) for it in items if it.rstrip().endswith("}")]
+            inline = re.compile(r"\binline\b")  # emit no code of their own: dropping them turns their calls into real calls
+            defined = [donorlib.function_name(it) for it in items if it.rstrip().endswith("}") and not inline.search(it.split("{")[0])]
             defined = [d for d in defined if d]
             if name not in defined:
                 Image._sources[key] = None
             elif len(defined) == 1:
                 Image._sources[key] = text
             else:
-                keep = [it for it in items if not it.rstrip().endswith("}") or donorlib.function_name(it) == name]
+                keep = [it for it in items if not it.rstrip().endswith("}") or donorlib.function_name(it) == name
+                        or inline.search(it.split("{")[0])]
                 Image._sources[key] = "\n\n".join(keep) + "\n"
         return Image._sources[key]
 
@@ -343,6 +345,14 @@ def rename(source: str, names: dict[str, str]) -> str:
 OR_NUM = re.compile(r"\(?(0[xX][0-9a-fA-F]+|\d+)\)?\s*\|\s*(0[xX][0-9a-fA-F]+|\d+)\b")
 
 
+def c_int(text: str) -> int:
+    """Value of a C literal: int(text, 0) refuses the octal `01` and `000001` that drafts and donors contain, and the
+    `09` that is no C literal at all but comes out of the same regexes (read as decimal: the candidate is checked anyway)."""
+    if re.fullmatch(r"0\d+", text):
+        return int(text, 8) if re.fullmatch(r"0[0-7]+", text) else int(text, 10)
+    return int(text, 0)
+
+
 def or_variants(source: str, nums: dict[int, set[int]]) -> list[str]:
     """Sources where `BASE | OFFSET` expressions (e.g. `(0x04000000) | 0x8`, a register address built by OR) take
     the twin's value: the twin's loaded word is the OR of the same base and another offset. One site per line."""
@@ -352,7 +362,7 @@ def or_variants(source: str, nums: dict[int, set[int]]) -> list[str]:
         if line.lstrip().startswith(("#", "/*", "//")):
             continue
         for m in OR_NUM.finditer(line):
-            a, b = int(m.group(1), 0), int(m.group(2), 0)
+            a, b = c_int(m.group(1)), c_int(m.group(2))
             v = a | b
             if v not in nums or nums[v] == {v}:
                 continue
@@ -374,7 +384,7 @@ def with_constants(source: str, nums: dict[int, set[int]]) -> list[str]:
     seen = {}
     for i in code_lines:
         for m in NUMBER.finditer(lines[i]):
-            v = int(m.group(1), 0)
+            v = c_int(m.group(1))
             if v in nums and nums[v] != {v}:
                 seen[v] = sorted(nums[v])
     if not seen:
@@ -386,7 +396,7 @@ def with_constants(source: str, nums: dict[int, set[int]]) -> list[str]:
         choice = dict(zip(keys, combo))
 
         def sub(m):
-            v = int(m.group(1), 0)
+            v = c_int(m.group(1))
             if v not in choice:
                 return m.group(0)
             n = choice[v]
@@ -417,8 +427,10 @@ def check(img: Image, name: str, source: str, profile: str, allow_data: bool = F
     want_thumb = name in img.thumb
     with tempfile.TemporaryDirectory() as tmp:
         t = Path(tmp)
-        (t / "f.c").write_text(source, encoding="utf-8")
-        cmd = (f'"{mwcc}" {CC_FLAGS} -lang=c {flags} -i "{ROOT / "include"}" -d {project.VERSION} -c f.c -o f.o')
+        src, lang = ("f.cpp", "c++") if am.is_cpp_source(source) else ("f.c", "c")
+        (t / src).write_text(source, encoding="utf-8")
+        cmd = (f'"{mwcc}" {CC_FLAGS} -lang={lang} {flags} -i "{ROOT / "include"}" -d {project.VERSION} -c {src} '
+               f'-o f.o')
         r = am.run_limited(cmd, cwd=t, shell=True)
         if r.returncode != 0 or not (t / "f.o").exists():
             return "compile"
@@ -548,7 +560,7 @@ def search(img: Image, others: list[Image], only_sources: set[str] | None, jobs:
     `targets`: only these unmatched functions (a block)."""
     ex, tp = families(img, others)
     matched = img.matched()
-    stems = {p.stem.lower() for p in (ROOT / "src").rglob("*.c")}
+    stems = {p.stem.lower() for p in (ROOT / "src").rglob("*.c*") if p.suffix in (".c", ".cpp")}
     found, done = [], set(matched)
     sources = {(img, n): matched[n] for n in matched if only_sources is None or n in only_sources}
     for im in others:
@@ -601,7 +613,7 @@ def search(img: Image, others: list[Image], only_sources: set[str] | None, jobs:
             found.append((n, s, a, cand, kind, frm))
             done.add(n)
             stems.add(n.lower())
-            path = f"src/auto/{n}.c"
+            path = f"src/auto/{n}{'.cpp' if am.is_cpp_source(cand) else '.c'}"
             sources[(img, n)] = path
             Image._sources[(str(img.root), n)] = cand.split("\n", 1)[1] if cand.startswith(am.MARKER) else cand
             img.compilers[path] = profile
@@ -685,7 +697,7 @@ def integrate_verified(found: list[tuple[str, int, int, str]], log=print) -> lis
         # differently): auto_match drops them the same way
         out = verify.stdout + verify.stderr
         bad = set(re.findall(r'Referenced from "\w+" in (\w+)\.o', out))
-        bad |= {Path(p).stem for p in re.findall(r"FAIL: (src/auto/\S+?\.c) is marked complete", out)}
+        bad |= {Path(p).stem for p in re.findall(r"FAIL: (src/auto/\S+?\.c(?:pp)?) is marked complete", out)}
         bad_paths = [c for c in created if c.stem in bad]
         if verify.returncode == 0 or not bad_paths:
             break
@@ -721,7 +733,7 @@ def integrate_verified(found: list[tuple[str, int, int, str]], log=print) -> lis
 
 def commit(names: list[str], push: bool, msg: str | None = None) -> None:
     """Commits exactly what this run added (sources, delinks.txt, compilers.txt), never anything else."""
-    files = [f"src/auto/{n}.c" for n in names if (ROOT / "src" / "auto" / f"{n}.c").exists()]
+    files = [f"src/auto/{n}{e}" for n in names for e in (".c", ".cpp") if (ROOT / "src" / "auto" / f"{n}{e}").exists()]
     cfg = [p.relative_to(ROOT).as_posix() for p in (am.DELINKS, am.COMPILERS_TXT) if p.exists()]
     if run(["git", "diff", "--cached", "--quiet"]).returncode:
         print("commit skipped: other changes are already staged in this repository")

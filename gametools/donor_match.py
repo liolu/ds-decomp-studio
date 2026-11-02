@@ -15,12 +15,13 @@ of the main module that is not in a source file yet:
      but differs, other service packs / optimization modes are tried); only exact matches are kept, and only when
      the object holds nothing but that function (no string, no extra code, no COMMON symbol), checked again with
      the exact flags of the build (build_check);
-  4. matches go to src/donor/<name>.c (with the donor's name and file in a comment), are declared `complete` in
+  4. matches go to src/donor/<name>.c (.cpp for a C++ donor; with the donor's name and file in a comment), are declared `complete` in
      delinks.txt, and `tools/match.py verify` must pass, else the files that break the ROM are dropped: those the
-     build names, then those find_culprits finds (byte differences, linker map), then by bisection (--bisect N
-     builds at most, ninja only: seconds each), then one full `match.py verify`. Everything is rolled back only if
+     build names, then those find_culprits finds (byte differences, linker map), then by bisection (--bisect-minutes M
+     at most, ninja only: seconds each), then one full `match.py verify`. Everything is rolled back only if
      nothing verifies.
 Functions are tried in parallel (-j).
+C++ donors keep their own (mangled) names: the game symbols take them instead (see runtime_calls).
 """
 import argparse
 import json
@@ -32,6 +33,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -44,12 +46,14 @@ import auto_match as am  # noqa: E402
 import probe_compiler as pc  # noqa: E402
 from pipeline_lock import journal_begin, journal_created, journal_end  # noqa: E402
 
+BISECT_MINUTES = 30.0
+
 DS_ROOT = Path(os.environ.get("DS_ROOT", ROOT.parent.parent))  # decomp ds/ (projects live in decomp ds/projets/)
 DB = Path(os.environ.get("DONORS_DB", DS_ROOT / "donors.sqlite"))
 sys.path.insert(0, str(DS_ROOT / "tools"))
 DONOR_SRC = ROOT / "src" / "donor"
 WORK = ROOT / "build" / "donor"
-SYM_RE = re.compile(r"^(\S+) kind:(function|data|bss)\S* addr:0x([0-9a-f]+)")
+SYM_RE = re.compile(r"^(\S+) kind:(function|data|bss|label)\S* addr:0x([0-9a-f]+)(?! local)")
 BRANCH_RELOCS = {donorlib.R_ARM_PC24, donorlib.R_ARM_CALL, donorlib.R_ARM_JUMP24}
 # Other compiler profiles tried when the donor's own profile gives the right shape but not the exact code
 # ("near"/"size"): same source, another service pack or optimization mode. Patch levels with a compiler folder only.
@@ -59,6 +63,7 @@ _ALT_FLAGS_12 = ["-O4,p -lang c99 -inline on,noauto", "-O4,s -lang c99 -inline o
 _ALT_VERSIONS = {"2.0": ["sp1p5", "sp1p2", "sp1p6", "sp1p7", "sp2", "sp2p3", "sp1", "base"],
                  "1.2": ["sp2p3", "sp2", "sp3", "sp4", "base"]}
 ALT_BUDGET = 16  # compiles at most per donor function on top of its own profile
+CPP_MATCHES: set[str] = set()  # functions matched with a C++ donor: src/donor/<name>.cpp
 _pp_locks: dict[Path, threading.Lock] = {}
 _pp_guard = threading.Lock()
 
@@ -92,15 +97,16 @@ def _build_cc_flags() -> str:
 BUILD_CC_FLAGS = _build_cc_flags()
 
 
-def build_check(source: str, name: str, size: int, addr: int, version: str, flags: str) -> str:
+def build_check(source: str, name: str, size: int, addr: int, version: str, flags: str, cpp: bool = False) -> str:
     """Compiles the candidate exactly as ninja will (CC_FLAGS of configure.py + the compilers.txt flags) and checks
     what the link will get: the same code, nothing else, and a .text of exactly the function's size (an object
     bigger than its slot shifts everything after it in the module). Returns "" or why it fails."""
     with tempfile.TemporaryDirectory() as tmp:
         t = Path(tmp)
-        (t / "f.c").write_text(source)
-        cmd = (f'"{am.MWCC_ROOT / version / "mwccarm.exe"}" {BUILD_CC_FLAGS} -lang=c {flags} '
-               f'-i "{ROOT / "include"}" -d {project.VERSION} -c f.c -o f.o')
+        src = "f.cpp" if cpp else "f.c"
+        (t / src).write_text(source, encoding="latin-1", errors="replace")  # preprocessed sources are read as latin-1
+        cmd = (f'"{am.MWCC_ROOT / version / "mwccarm.exe"}" {BUILD_CC_FLAGS} -lang={"c++" if cpp else "c"} {flags} '
+               f'-i "{ROOT / "include"}" -d {project.VERSION} -c {src} -o f.o')
         r = am.run_limited(cmd, cwd=t, shell=True)
         if r.returncode != 0 or not (t / "f.o").exists():
             return "does not compile with the build flags"
@@ -125,29 +131,61 @@ def build_check(source: str, name: str, size: int, addr: int, version: str, flag
     return ""
 
 
+def cpp_flags(flags: str) -> str:
+    """A C profile's flags for a C++ file: the build passes -lang=c++ for .cpp files, and mwccarm given two
+    different -lang flags compiles C, so the flags written to compilers.txt must not have one."""
+    return " ".join(flags.replace("-lang c99", "").split())
+
+
+def compile_cpp_and_compare(t: Path, source: str, name: str, size: int, addr: int, mwcc: Path, extra: str) -> str:
+    """am.compile_and_compare for a C++ source."""
+    (t / "f.o").unlink(missing_ok=True)
+    (t / "f.cpp").write_text(source, encoding="latin-1", errors="replace")
+    cmd = f'"{mwcc}" -O4,p {pc.BASE_FLAGS.replace("-lang=c ", "-lang=c++ ")} {extra} -i "{ROOT / "include"}" -c f.cpp -o f.o'
+    r = am.run_limited(cmd, cwd=t, shell=True)
+    if r.returncode != 0 or not (t / "f.o").exists():
+        return "compile"
+    cand = pc.compiled_function(t / "f.o", name)
+    if cand is None:
+        return "compile"
+    bad, _ = pc.compare(pc.target_bytes(addr, size), cand)
+    if bad == 0:
+        return "match"
+    return "near" if len(cand) == size else "size"
+
+
 def compile_profiles(pre: str, dname: str, rename: dict, name: str, size: int, addr: int,
-                     profiles: list[tuple[str, str]]) -> tuple[str, str, str, str]:
+                     profiles: list[tuple[str, str]], cpp: bool = False) -> tuple[str, str, str, str]:
     """Tries the candidate source with each profile (the first is the donor's own; the others only while the code
     has the right shape). Returns (status, source, version, flags) of the best attempt."""
     best = ("source not rebuilt", "", "", "")
+    obj_name = rename.get(dname, name)  # C++: the donor's mangled name (the game symbol is renamed to it)
     for n, (version, flags) in enumerate(profiles):
         if n and best[0] not in ("near", "size"):
             break  # does not compile, or no source: another compiler will not fix that
+        if cpp:
+            flags = cpp_flags(flags)
         status = "source not rebuilt"
         source = ""
-        for minimal in (True, False):
-            source = donorlib.candidate_source(pre, dname, rename, minimal) if pre else None
+        if cpp:
+            variants = donorlib.cpp_candidate_sources(pre, dname, rename) if pre else []
+        else:
+            variants = (donorlib.candidate_source(pre, dname, rename, minimal) if pre else None
+                        for minimal in (True, False))
+        for source in variants:
             if source is None:
                 break
             with tempfile.TemporaryDirectory() as tmp:
                 t = Path(tmp)
-                status = am.compile_and_compare(t, source, name, size, addr, am.MWCC_ROOT / version / "mwccarm.exe",
-                                                flags)
-                if status == "match" and not only_function(t / "f.o", name):
-                    status = "extra code or data"
+                mwcc = am.MWCC_ROOT / version / "mwccarm.exe"
+                status = (compile_cpp_and_compare(t, source, obj_name, size, addr, mwcc, flags) if cpp else
+                          am.compile_and_compare(t, source, obj_name, size, addr, mwcc, flags))
+                if status == "match" and not only_function(t / "f.o", obj_name):
+                    o = donorlib.Obj(t / "f.o")
+                    status = f"extra code or data {[s for s in o.nonempty_sections() if not s.startswith('.text')]} {[f[0] for f in o.functions()][:4]}"
             if status == "match":
                 head = f"{am.MARKER}{version} {flags} */\n"
-                why = build_check(head + source, name, size, addr, version, flags)
+                why = build_check(head + source, obj_name, size, addr, version, flags, cpp)
                 if why:
                     status = f"no match in the build ({why})"
                 break
@@ -218,7 +256,7 @@ def data_symbol(addr: int, syms: dict[int, str]) -> str | None:
 # {our function: {game symbol: runtime name}}
 _RUNTIME: dict[str, dict[str, str]] = {}
 AUTO_NAME = re.compile(r"(func|data)_(ov\d+_)?[0-9a-f]{8}$")
-AUTO_FUNC = re.compile(r"func_(ov\d+_)?[0-9a-f]{8}$")
+AUTO_FUNC = re.compile(r"(func|lbl)_(ov\d+_)?[0-9a-f]{8}(_unk)?$")
 
 
 def runtime_calls(name: str, rename: dict, pre: str | None, syms: dict[int, str]) -> str:
@@ -330,7 +368,7 @@ def donor_tools():
 
 def preprocessed(dn, repo: str, rel: str, profile: str, incs: str) -> str | None:
     """The donor file after the preprocessor (cached next to its object)."""
-    out = dn.BUILD / "pp" / profile / repo / (rel[:-2] + ".i.c")
+    out = dn.BUILD / "pp" / profile / repo / (rel + ".i.cpp" if rel.endswith(".cpp") else rel[:-2] + ".i.c")
     with _pp_lock(out):
         return _preprocess(dn, repo, rel, profile, incs, out)
 
@@ -338,6 +376,7 @@ def preprocessed(dn, repo: str, rel: str, profile: str, incs: str) -> str | None
 def _preprocess(dn, repo: str, rel: str, profile: str, incs: str, out: Path) -> str | None:
     if not out.exists():
         version, flags = dn.PROFILES[profile]
+        flags = dn.lang_flags(flags, rel)
         out.parent.mkdir(parents=True, exist_ok=True)
         cmd = (f'"{dn.MWCC_ROOT / version / "mwccarm.exe"}" -E {flags} {dn.COMMON} {dn.DEFINES} {incs} '
                f'"{dn.EXT / repo / rel}" -o "{out}"')
@@ -375,8 +414,8 @@ def rename_map(dn, row, addr: int, target: bytes, syms: dict[int, str], our_name
 def only_function(obj_file: Path, name: str) -> bool:
     """The candidate object holds that function and nothing else that would be linked."""
     obj = donorlib.Obj(obj_file)
-    # .exceptix: exception tables, only because the test compile lacks -Cpp_exceptions off (the build has it)
-    if [s for s in obj.nonempty_sections() if not s.startswith((".text", ".exceptix"))]:
+    # .exceptix, .exception: exception tables, only because the test compile lacks -Cpp_exceptions off (the build has it)
+    if [s for s in obj.nonempty_sections() if not s.startswith((".text", ".exceptix", ".exception"))]:
         return False
     return [f[0] for f in obj.functions()] == [name]
 
@@ -412,7 +451,8 @@ def _project_index(game_dir: Path) -> dict | None:
     if not (binp.exists() and yml.exists()):
         return None
     cache = DS_ROOT / "donors_internal" / f"{game_dir.name}.json"
-    stamp = f"{dl.stat().st_mtime_ns}:{(dl.parent / 'symbols.txt').stat().st_mtime_ns}"
+    # cpp: built since .cpp files count (older caches only hold .c files)
+    stamp = f"{dl.stat().st_mtime_ns}:{(dl.parent / 'symbols.txt').stat().st_mtime_ns}:cpp"
     if cache.exists():
         try:
             d = json.loads(cache.read_text(encoding="utf-8"))
@@ -439,7 +479,7 @@ def _project_index(game_dir: Path) -> dict | None:
     for path, a, b in re.findall(r"^(src/\S+):\n\s+complete\n\s+\.text\s+start:0x([0-9a-f]+) end:0x([0-9a-f]+)",
                                  dl.read_text(), re.M):
         a, b = int(a, 16), int(b, 16)
-        if not path.endswith(".c"):
+        if not path.endswith((".c", ".cpp")):
             continue
         # every function of the file (tools/regroup.py merges them into real files): candidate_source keeps
         # only the one that is needed
@@ -514,7 +554,7 @@ def internal_rename(g: Path, idx: dict, d_addr: int, d_name: str, addr: int, siz
 
 
 def internal_preprocessed(g: Path, path: str, version: str, flags: str) -> str | None:
-    out = WORK / "pp_internal" / g.name / (path[:-2] + ".i.c")
+    out = WORK / "pp_internal" / g.name / (path + ".i.cpp" if path.endswith(".cpp") else path[:-2] + ".i.c")
     with _pp_lock(out):
         return _preprocess_internal(g, path, version, flags, out)
 
@@ -523,7 +563,8 @@ def _preprocess_internal(g: Path, path: str, version: str, flags: str, out: Path
     if not out.exists():
         out.parent.mkdir(parents=True, exist_ok=True)
         mwcc = am.MWCC_ROOT / version / "mwccarm.exe"
-        cmd = f'"{mwcc}" -E {pc.BASE_FLAGS} {flags} -i "{g / "include"}" "{g / path}" -o "{out}"'
+        base = pc.BASE_FLAGS.replace("-lang=c ", "-lang=c++ ") if path.endswith(".cpp") else pc.BASE_FLAGS
+        cmd = f'"{mwcc}" -E {base} {flags} -i "{g / "include"}" "{g / path}" -o "{out}"'
         subprocess.run(cmd, shell=True, cwd=g, capture_output=True, timeout=60)
     return out.read_text(encoding="latin-1") if out.exists() else None
 
@@ -546,9 +587,12 @@ def try_internal(f, target, fp, syms, log, style) -> tuple[str, str] | None:
                 log(f"  {name}: {g.name}:{d_name} skipped ({why})")
                 continue
             profiles = [(version, flags)] + alt_profiles(version, flags, style)
-            status, source, version, flags = compile_profiles(pre, d_name, rename, name, size, addr, profiles)
+            cpp = path.endswith(".cpp")
+            status, source, version, flags = compile_profiles(pre, d_name, rename, name, size, addr, profiles, cpp)
             log(f"  {name}: projets/{g.name}:{path}:{d_name} [{version} {flags}] -> {status}")
             if status == "match":
+                if cpp:
+                    CPP_MATCHES.add(name)
                 head = (f"{am.MARKER}{version} {flags} */\n"
                         f"/* {d_name} from projets/{g.name}/{path} (same code in another game of this workspace),"
                         f" reused by tools/donor_match.py */\n")
@@ -600,7 +644,8 @@ def try_one(dn, con, f, syms, log, licenses) -> tuple[str, str] | None:
         version, flags = dn.PROFILES[profile]
         # The donor's profile first, then the other compilers while the code has the right shape
         profiles = [(version, flags)] + alt_profiles(version, flags, style)
-        status, source, version, flags = compile_profiles(pre, dname, rename, name, size, addr, profiles)
+        cpp = rel.endswith(".cpp")
+        status, source, version, flags = compile_profiles(pre, dname, rename, name, size, addr, profiles, cpp)
         log(f"  {name}: {repo}:{rel}:{dname} [{version} {flags}] -> {status}")
         if os.environ.get('DONOR_DUMP') and source and status != 'match' and not repo.startswith('ntrtwl'):
             os.makedirs(os.environ['DONOR_DUMP'], exist_ok=True)
@@ -609,6 +654,8 @@ def try_one(dn, con, f, syms, log, licenses) -> tuple[str, str] | None:
             head = (f"{am.MARKER}{version} {flags} */\n"
                     f"/* {dname} from https://github.com/{repo.replace('_', '/', 1)} {rel}"
                     f" (license: {licenses[repo]}), reused by tools/donor_match.py */\n")
+            if cpp:
+                CPP_MATCHES.add(name)
             return name, head + source
     return None
 
@@ -619,7 +666,7 @@ def integrate(found: list[tuple[str, int, int, str]]) -> dict[str, tuple[str, st
     DONOR_SRC.mkdir(parents=True, exist_ok=True)
     entries = {}
     for name, size, addr, source in sorted(found, key=lambda x: x[2]):
-        path = DONOR_SRC / f"{name}.c"
+        path = DONOR_SRC / f"{name}{'.cpp' if name in CPP_MATCHES else '.c'}"
         path.write_text(source, encoding="utf-8", newline="\n")
         rel = path.relative_to(ROOT).as_posix()
         entries[rel] = (f"\n{rel}:\n    complete\n    .text       start:0x{addr:08x} end:0x{addr + size:08x}\n",
@@ -639,7 +686,9 @@ def declare(entries: dict[str, tuple[str, str]], keep: list[str], sources: dict[
         f.writelines(entries[k][1] for k in keep)
     for rel, text in sources.items():
         if rel in keep:
-            (ROOT / rel).write_text(text, encoding="utf-8", newline="\n")
+            # not rewritten when it did not change: a new date makes ninja compile it again, at every step of a bisection
+            if not (ROOT / rel).exists() or (ROOT / rel).read_text(encoding="utf-8") != text:
+                (ROOT / rel).write_text(text, encoding="utf-8", newline="\n")
         else:
             (ROOT / rel).unlink(missing_ok=True)
 
@@ -664,10 +713,10 @@ def rom_build() -> tuple[bool, str]:
 
 
 def verify(entries: dict[str, tuple[str, str]], delinks_backup: bytes, compilers_backup: bytes,
-           bisect_builds: int = 40) -> list[str]:
+           bisect_builds: int = 1000, bisect_minutes: float = BISECT_MINUTES) -> list[str]:
     """Declares the new files and keeps those the ROM accepts:
       1. ninja builds only: the files the build names (link errors, find_culprits: byte differences, linker map)
-         are dropped, then the remaining culprits are found by bisection (`bisect_builds` builds at most);
+         are dropped, then the remaining culprits are found by bisection (`bisect_builds` builds or `bisect_minutes` at most);
       2. one `match.py verify` once the ROM matches; files objdiff still rejects are dropped.
     Returns the kept files (everything is rolled back if nothing passes)."""
     import find_culprits
@@ -686,7 +735,8 @@ def verify(entries: dict[str, tuple[str, str]], delinks_backup: bytes, compilers
     for _ in range(4):
         if ok:
             break
-        bad = {f"src/donor/{n}.c" for n in re.findall(r'Referenced from "\S+" in (func_\w+?)\.o', out)}
+        bad = {f"src/donor/{n}{e}" for n in re.findall(r'Referenced from "\S+" in ([^\s"/\\]+?)\.o', out)
+               for e in (".c", ".cpp")}
         culprits = find_culprits.find(out)
         for c in culprits:
             print(f"  {c['file']}: {'; '.join(c['reasons'][:2])}", flush=True)
@@ -710,7 +760,7 @@ def verify(entries: dict[str, tuple[str, str]], delinks_backup: bytes, compilers
                 print("  ninja: " + failed[0][:200], flush=True)
             keep = []
     if not ok and keep:
-        keep = bisect(entries, keep, sources, delinks_backup, compilers_backup, bisect_builds)
+        keep = bisect(entries, keep, sources, delinks_backup, compilers_backup, bisect_builds, bisect_minutes)
         declare(entries, keep, sources, delinks_backup, compilers_backup)
         ok, out = rom_build() if keep else (False, out)
     v = None
@@ -720,7 +770,7 @@ def verify(entries: dict[str, tuple[str, str]], delinks_backup: bytes, compilers
             v = run_verify()
             if v.returncode == 0:
                 break
-            bad = set(re.findall(r"FAIL: (src/donor/\S+?\.c) is marked complete", v.stdout + v.stderr)) & set(keep)
+            bad = set(re.findall(r"FAIL: (src/donor/\S+?\.c(?:pp)?) is marked complete", v.stdout + v.stderr)) & set(keep)
             if not bad:
                 break
             drop(bad, "objdiff finds them different once linked")
@@ -739,34 +789,34 @@ def verify(entries: dict[str, tuple[str, str]], delinks_backup: bytes, compilers
 
 
 def bisect(entries, files: list[str], sources, delinks_backup: bytes, compilers_backup: bytes,
-           budget: int) -> list[str]:
+           budget: int, minutes: float = BISECT_MINUTES) -> list[str]:
     """The largest set of `files` found to keep the ROM byte-identical (ninja builds): a half that passes is kept
-    whole, a half that does not is split again, down to single files (the culprits). Files left when the build
-    budget is spent are neither kept nor blamed: the next run finds them again."""
-    accepted, rejected, untested = [], [], []
-    left = [budget]
-
-    def add(group: list[str]):
+    whole, a half that does not is split again, down to single files (the culprits). The largest group goes first, so
+    culprits close together cannot use the whole budget on a few files. Files left when the budget (builds or minutes)
+    is spent are neither kept nor blamed: the next run finds them again."""
+    accepted, rejected = [], []
+    position = {f: i for i, f in enumerate(files)}  # delinks.txt stays in address order
+    groups = [files[:len(files) // 2], files[len(files) // 2:]]  # the whole set is known to fail
+    deadline = time.monotonic() + 60 * minutes
+    builds = 0
+    print(f"Bisecting {len(files)} file(s) (at most {minutes:g} minutes)...", flush=True)
+    while groups and builds < budget and time.monotonic() < deadline:
+        groups.sort(key=len)
+        group = groups.pop()
         if not group:
-            return
-        if left[0] <= 0:
-            untested.extend(group)
-            return
-        left[0] -= 1
-        declare(entries, accepted + group, sources, delinks_backup, compilers_backup)
-        print(f"  bisect: {len(accepted)} kept + {len(group)} tested ({left[0]} build(s) left)...", flush=True)
+            continue
+        builds += 1
+        declare(entries, sorted(accepted + group, key=position.get), sources, delinks_backup, compilers_backup)
+        print(f"  bisect: {len(accepted)} kept + {len(group)} tested ({builds} build(s), {sum(map(len, groups))} waiting)...", flush=True)
         if rom_build()[0]:
             accepted.extend(group)
         elif len(group) == 1:
             print(f"  bisect: culprit {group[0]}", flush=True)
             rejected.extend(group)
         else:
-            add(group[:len(group) // 2])
-            add(group[len(group) // 2:])
-
-    print(f"Bisecting {len(files)} file(s) (at most {budget} builds)...", flush=True)
-    add(files[:len(files) // 2])  # the whole set is known to fail
-    add(files[len(files) // 2:])
+            groups += [group[:len(group) // 2], group[len(group) // 2:]]
+    accepted.sort(key=position.get)
+    untested = [f for g in groups for f in g]
     _note("culprits.txt", rejected)
     if untested:
         _note("untested.txt", untested)
@@ -805,8 +855,10 @@ def main():
     ap.add_argument("--max", type=int, default=0, help="Stop after N matches (0 = all): work in small batches")
     ap.add_argument("-j", "--jobs", type=int, default=max(1, (os.cpu_count() or 2) - 2),
                     help="Functions tried in parallel (default: CPU count - 2)")
-    ap.add_argument("--bisect", type=int, default=40,
+    ap.add_argument("--bisect", type=int, default=1000,
                     help="ninja builds at most to find the files that break the ROM by bisection (0 = roll back instead)")
+    ap.add_argument("--bisect-minutes", type=float, default=BISECT_MINUTES,
+                    help="Minutes at most for that bisection: builds take 15 s on a small game and minutes on a big one")
     ap.add_argument("--list", action="store_true",
                     help="Only list the unmatched functions that have a donor twin (build/donor/hits.json), fast")
     args = ap.parse_args()
@@ -894,11 +946,13 @@ def main():
     journal_created([ROOT / rel for rel in entries])
     # The game repos check clang-format in CI: format now, the verification below covers the formatted files
     try:
-        subprocess.run(["pre-commit", "run", "clang-format", "--files", *entries], cwd=ROOT, capture_output=True)
+        files = list(entries)
+        for k in range(0, len(files), 100):  # chunks: a command line of a thousand paths is too long for Windows
+            subprocess.run(["pre-commit", "run", "clang-format", "--files", *files[k:k + 100]], cwd=ROOT, capture_output=True)
     except OSError:
         print("pre-commit not found: files left unformatted")
     print(f"Added {len(entries)} functions to src/donor/, verifying...", flush=True)
-    kept = verify(entries, delinks_backup, compilers_backup, args.bisect)
+    kept = verify(entries, delinks_backup, compilers_backup, args.bisect, args.bisect_minutes)
     if not kept and saved:
         # the runtime names go with the matches that needed them (verify restored delinks/compilers itself)
         for f in created:

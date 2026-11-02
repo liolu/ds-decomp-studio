@@ -15,11 +15,30 @@ from . import blocks, brief, config, data, difficulty, engine, gameenv, games, j
 _games_cache = {"t": 0.0, "games": None, "busy": False}
 _games_lock = threading.Lock()
 GAMES_TTL = 5  # seconds: an older list is still answered at once, and recomputed in the background
+GAMES_DISK = config.DATA / "games_cache.json"  # last list, shown at once when the studio starts
+
+
+def _load_disk_games():
+    try:
+        return json.loads(GAMES_DISK.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _data_bytes(g) -> dict:
+    d = data.summary(g) if g.ready else {"bytes": 0, "matched_bytes": 0}
+    return {"data_bytes": d["bytes"], "data_matched": d["matched_bytes"]}
 
 
 def _compute_games():
-    gl = [{**g.info(), "tools_behind": toolsync.status(g)["behind"]} for g in games.all_games()]
+    gl = [{**g.info(), "tools_behind": toolsync.status(g)["behind"], **_data_bytes(g)} for g in games.all_games()]
     _games_cache.update(t=time.time(), games=gl)
+    try:
+        tmp = GAMES_DISK.with_suffix(".tmp")
+        tmp.write_text(json.dumps(gl, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(GAMES_DISK)
+    except OSError:
+        pass
     return gl
 
 
@@ -35,6 +54,10 @@ def _refresh_games():
 def games_list(fresh=False):
     """Info of every game (~60: a few hundred ms of file dates). Served from memory; recomputed in the background
     when older than GAMES_TTL, right away after an action that adds or removes a game (fresh=True)."""
+    if _games_cache["games"] is None and not fresh:
+        disk = _load_disk_games()  # studio start: the last list at once, the real one computed in the background
+        if disk is not None:
+            _games_cache.update(t=0.0, games=disk)
     if fresh or _games_cache["games"] is None:
         with _games_lock:
             return _compute_games()
@@ -46,6 +69,8 @@ def games_list(fresh=False):
 
 def overview(fresh=False):
     gl = games_list(fresh)
+    last = jobs.last_runs()
+    gl = [{**g, "last": last.get(g["id"], {})} for g in gl]
     return {"games": gl, "settings": config.settings(), "levels": difficulty.LEVELS, "kinds": blocks.KINDS,
             "queue": blocks.queue_overview(), "archived": projects.archived(),
             "jobdefs": {k: {"label": v[0], "scope": v[1], "desc": v[3]} for k, v in jobs.DEFS.items()}}
@@ -60,7 +85,7 @@ def game_view(gid):
         e["blocks"] += 1
         e["left"] += b["left"]
         e["free" if b["state"] in ("free", "expired") else b["state"]] += 1
-    return {"game": {**g.info(), "tools_behind": toolsync.status(g)["behind"]}, "blocks": bl, "per_level": per_level, "generation": blocks.load(g).get("generation", 0),
+    return {"game": {**g.info(), "tools_behind": toolsync.status(g)["behind"], **_data_bytes(g)}, "blocks": bl, "per_level": per_level, "generation": blocks.load(g).get("generation", 0),
             "misses": misses.stats(g.id), "data": data.summary(g) if g.ready else None}
 
 
@@ -122,6 +147,8 @@ def warm_up():
         _compute_games()
     except Exception:
         traceback.print_exc()
+    finally:
+        _games_cache["busy"] = False
 
 
 class H(BaseHTTPRequestHandler):
@@ -167,6 +194,12 @@ class H(BaseHTTPRequestHandler):
                 return self.send(engine.memory_map(games.get(q["game"])))
             if p == "engine":
                 return self.send({**engine.cross_games(), "studios": engine.studios()})
+            if p == "engine/compare":
+                return self.send(engine.compare(q["a"], q["b"]))
+            if p == "engine/top":
+                return self.send(engine.top_functions(int(q.get("limit", 300)), q.get("q", "")))
+            if p == "engine/users":
+                return self.send(engine.function_users(q["fp"]))
             if p == "tags":
                 return self.send(techtags.overview())
             if p == "tags/func":
@@ -242,6 +275,10 @@ class H(BaseHTTPRequestHandler):
                 return self.send({"ok": True, "blocks": len(data["blocks"])})
             if p == "run":
                 return self.send(jobs.submit(d["id"], d.get("game"), d.get("params") or {}, s["who"]))
+            if p == "stop_after_step":
+                return self.send(jobs.stop_after_step(int(d["n"])))
+            if p == "resume":
+                return self.send(jobs.resume(int(d["n"]), s["who"]))
             if p == "cancel":
                 return self.send({"ok": jobs.cancel(int(d["n"]))})
             if p == "qwen_stop":
@@ -294,6 +331,7 @@ def serve(open_browser=True):
             webbrowser.open(url)
         return
     jobs.start_scheduler()
+    _games_cache["busy"] = True  # warm_up recomputes the list: no second refresh meanwhile
     threading.Thread(target=warm_up, daemon=True).start()
     print(f"DS Decomp Studio sur {url}  (Ctrl+C pour arreter)")
     if open_browser:

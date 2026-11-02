@@ -56,3 +56,56 @@ def studios() -> list[dict]:
     for g in games.all_games():
         groups[games.STUDIOS.get(g.id, "Inconnu")].append(g.id)
     return [{"studio": s, "games": sorted(v)} for s, v in sorted(groups.items(), key=lambda kv: (-len(kv[1]), kv[0]))]
+
+
+def _best_name(names) -> str:
+    """A real symbol name if any game has one, else the first func_XXXX."""
+    names = list(names)
+    return next((n for n in names if not n.startswith("func_")), names[0] if names else "")
+
+
+def compare(a: str, b: str) -> dict:
+    """Functions identical (strict fingerprint) in games a and b, with their name in each and how many games share them."""
+    if not config.FPDB.exists():
+        return {"functions": []}
+    ka, kb = games.FP_KEY.get(a, a), games.FP_KEY.get(b, b)
+    con = sqlite3.connect(config.FPDB)
+    rows = con.execute("""SELECT x.strict, x.name, y.name, x.size, x.mode,
+                                 (SELECT COUNT(DISTINCT game) FROM fn z WHERE z.strict = x.strict)
+                          FROM fn x JOIN fn y ON y.strict = x.strict AND y.game = ?
+                          WHERE x.game = ? GROUP BY x.strict ORDER BY x.size DESC""", (kb, ka)).fetchall()
+    con.close()
+    return {"functions": [{"fp": s, "a": na, "b": nb, "size": sz, "mode": m, "games": n, "sdk": n >= 5}
+                          for s, na, nb, sz, m, n in rows]}
+
+
+def top_functions(limit: int = 300, q: str = "") -> dict:
+    """The functions found in the most games (by strict fingerprint)."""
+    if not config.FPDB.exists():
+        return {"functions": []}
+    con = sqlite3.connect(config.FPDB)
+    rows = con.execute("""SELECT strict, COUNT(DISTINCT game) n, MAX(size), MAX(mode), GROUP_CONCAT(name, '|')
+                          FROM fn GROUP BY strict HAVING n >= 2 ORDER BY n DESC, MAX(size) DESC""").fetchall()
+    con.close()
+    out = []
+    for s, n, sz, m, names in rows:
+        name = _best_name(names.split("|"))
+        if q and q.lower() not in names.lower():
+            continue
+        out.append({"fp": s, "name": name, "games": n, "size": sz, "mode": m})
+        if len(out) >= limit:
+            break
+    return {"functions": out, "total_games": len({k for k in games.FP_KEY.values()}) or None}
+
+
+def function_users(fp: str) -> dict:
+    """Every game that contains this function (strict fingerprint), with its name and address there."""
+    if not config.FPDB.exists():
+        return {"games": []}
+    con = sqlite3.connect(config.FPDB)
+    rows = con.execute("SELECT game, name, addr, size FROM fn WHERE strict = ? ORDER BY game", (fp,)).fetchall()
+    con.close()
+    inv = {v: k for k, v in games.FP_KEY.items()}
+    return {"name": _best_name(r[1] for r in rows), "size": rows[0][3] if rows else 0,
+            "games": [{"id": inv.get(g, g), "title": games.TITLES.get(inv.get(g, g), g), "name": nm, "addr": ad}
+                      for g, nm, ad, _ in rows]}

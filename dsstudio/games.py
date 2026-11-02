@@ -1,6 +1,7 @@
 """Discovery of the DS projects and of their functions (matched or not, auto_match result, sharing)."""
 import bisect
 import json
+import pickle
 import re
 import sqlite3
 import time
@@ -46,6 +47,34 @@ STUDIOS = {  # who made the game: games of one studio often share an engine
     "resident-evil-deadly-silence": "Capcom", "eyeshield-21": "Eighting", "fairy-tail-kardia": "Konami",
     "fairy-tail-madoushi": "Konami", "tom-and-jerry-tales": "Sensory Sweep", "farm-frenzy": "Alawar",
     "powerpuff-girls-z": "Bandai Namco", "star-wars-lethal-alliance": "Ubisoft",
+    "battle-of-giants-dinosaurs": "Ubisoft Quebec",
+    "blue-dragon-plus": "Feelplus",
+    "children-of-mana": "Nex Entertainment",
+    "crafting-mama": "Office Create",
+    "dragon-ball-z-attack-of-the-saiyans": "Monolith Soft",
+    "harry-potter-and-the-deathly-hallows-par": "EA Bright Light",
+    "how-to-train-your-dragon": "Griptonite Games",
+    "iron-man-2": "Griptonite Games",
+    "luminous-arc-2": "Imageepoch",
+    "myst": "Hoplite Research",
+    "nintendogs-chihuahua-friends": "Nintendo EAD",
+    "nintendogs-miniature-dachshund-friends": "Nintendo EAD",
+    "nintendogs-shiba-friends": "Nintendo EAD",
+    "plants-vs-zombies": "PopCap",
+    "plants-vs-zombies-eu": "PopCap",
+    "plants-vs-zombies-eu-2": "PopCap",
+    "pokemon-dash": "Ambrella",
+    "pokemon-ranger": "HAL Laboratory",
+    "rayman-raving-rabbids-2": "Ubisoft Casablanca",
+    "saga-3-jikuu-no-hasha-shadow-or-light": "Square Enix",
+    "sims-2-the": "Amaze Entertainment",
+    "spider-man-2-eu": "Vicarious Visions",
+    "spider-man-2-usa": "Vicarious Visions",
+    "spider-man-shattered-dimensions": "Griptonite Games",
+    "star-wars-the-clone-wars-republic-heroes": "Krome Studios",
+    "thrillville-off-the-rails": "Frontier Developments",
+    "toy-story-3-eu": "n-Space",
+    "viva-pinata-pocket-paradise": "Rare",
 }
 # ROM rebuild state seen during onboarding; `verify` jobs update data/health.json, which wins
 KNOWN_BROKEN = {}  # all fixed 2026-10-15: gametools rom_build.py (banner icon, DSProtect, empty files), delink_fix.py
@@ -59,6 +88,37 @@ def _cached(key, path_or_mtime, fn):
     if hit is None or hit[0] != m:
         hit = _cache[key] = (m, fn())
     return hit[1]
+
+
+DISK_CACHE = config.DATA / "fncache"  # functions of each game, kept between two starts of the studio
+
+
+def _disk_cached(key, stamp, fn):
+    """_cached + a copy on disk: at the next start the rows come from one file (fast even with a cold disk) as long as
+    the files they were computed from did not change (same stamp)."""
+    hit = _cache.get(key)
+    if hit is not None and hit[0] == stamp:
+        return hit[1]
+    f = DISK_CACHE / ("_".join(map(str, key)) + ".pkl")
+    try:
+        with f.open("rb") as fh:
+            st, val = pickle.load(fh)
+        if st == stamp:
+            _cache[key] = (stamp, val)
+            return val
+    except Exception:
+        pass
+    val = fn()
+    _cache[key] = (stamp, val)
+    try:
+        DISK_CACHE.mkdir(exist_ok=True)
+        tmp = f.with_suffix(".tmp")
+        with tmp.open("wb") as fh:
+            pickle.dump((stamp, val), fh, protocol=pickle.HIGHEST_PROTOCOL)
+        tmp.replace(f)
+    except OSError:
+        pass
+    return val
 
 
 def _mtime(p: Path) -> float:
@@ -204,7 +264,7 @@ class Game:
     def _functions_and_summary(self):
         mods = self.modules()
         stamp = self._stamp(mods)
-        return _cached(("fns", self.id), stamp, lambda: self._compute(mods))
+        return _disk_cached(("fns", self.id), stamp, lambda: self._compute(mods))
 
     def _compute(self, mods):
         st = self.auto_status()
@@ -239,10 +299,17 @@ class Game:
                 "pct_main": round(100 * mgb / mb, 2) if mb else 0, "modules": len({r["module"] for r in rows}),
                 "left_manual": sum(1 for r in rows if not r["done"] and not r["auto_tools"])}
 
+    def reuse(self) -> dict:
+        """What gametools/reuse.py scan estimated: functions and bytes to gain with no AI, seconds per game."""
+        try:
+            return json.loads((self.path / "build" / "reuse" / "estimate.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+
     def info(self) -> dict:
         return {"id": self.id, "title": self.title, "version": self.version, "code": self.code, "ready": self.ready,
                 "studio": STUDIOS.get(self.id, ""), "remote": self.remote(), "rom": self.rom_state(),
-                "auto_done": (self.path / ".auto_done").exists(), **self.summary()}
+                "auto_done": (self.path / ".auto_done").exists(), "reuse": self.reuse(), **self.summary()}
 
 
 def all_games(include_broken=True) -> list[Game]:

@@ -383,3 +383,307 @@ def _declaration(item: str) -> str:
     if not re.match(r"\s*extern\b", s):
         s = "extern " + s
     return s
+
+
+# ---------------------------------------------------------------- C++ donors
+# A C++ function cannot be renamed in its source (its object symbol is a mangled name such as Bar__3FooFi, built
+# from its class and parameters): the candidate keeps the donor's names and the game symbol takes the mangled name
+# instead (donor_match.runtime_calls). Here: find the definition a mangled name stands for and reduce the file to it.
+
+def _itanium_skip_args(m: str, i: int) -> int:
+    """Index after the template arguments `I...E` starting at m[i] (source names skipped by their length)."""
+    depth = 0
+    while i < len(m):
+        c = m[i]
+        if c.isdigit():
+            ml = re.match(r"\d+", m[i:])
+            i += ml.end() + int(ml.group())
+            continue
+        if c in "INXL":
+            depth += 1
+        elif c == "E":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return i
+
+
+def itanium_target(mangled: str) -> tuple[str, list[str]] | None:
+    """(name, class/namespace path) of an Itanium mangled name (the ARM EABI one mwccarm uses):
+    _ZN3Foo3BarEi -> ("Bar", ["Foo"]), _ZN3FooC2Ev -> ("Foo", ["Foo"]), _ZN3FooD1Ev -> ("~Foo", ["Foo"]),
+    _ZN3FooaSERKS_ -> ("operator", ["Foo"]), _Z3fooi -> ("foo", []). None for what no source spells (thunks,
+    vtables, std templates) and for the names this simple reader does not follow (substitutions in the prefix)."""
+    if not mangled.startswith("_Z") or mangled.startswith(("_ZT", "_ZGV", "_ZNSt", "_ZSt", "_ZNKSt")):
+        return None
+    i, parts = 2, []
+    nested = mangled[i:i + 1] == "N"
+    if nested:
+        i += 1
+        while i < len(mangled) and mangled[i] in "rVKRO":
+            i += 1
+    while i < len(mangled):
+        c = mangled[i]
+        if c.isdigit():
+            ml = re.match(r"\d+", mangled[i:])
+            n = int(ml.group())
+            parts.append(mangled[i + ml.end():i + ml.end() + n])
+            i += ml.end() + n
+        elif c == "C" and mangled[i + 1:i + 2] in "123" and parts:
+            parts.append(parts[-1])
+            i += 2
+        elif c == "D" and mangled[i + 1:i + 2] in "012" and parts:
+            parts.append("~" + parts[-1])
+            i += 2
+        elif c == "I":
+            i = _itanium_skip_args(mangled, i)
+        elif c.islower() and mangled[i + 1:i + 2].isalpha() and (nested or not parts):
+            parts.append("operator")
+            i += 2
+        elif c == "S" and mangled[i + 1:i + 2] == "t" and not parts:
+            parts.append("std")
+            i += 2
+        elif c == "S":
+            return None
+        else:
+            break
+        if not nested:
+            if mangled[i:i + 1] == "I":
+                i = _itanium_skip_args(mangled, i)
+            break
+        if mangled[i:i + 1] == "E":
+            break
+    if not parts:
+        return None
+    return parts[-1], parts[:-1]
+
+
+def cw_target(mangled: str) -> tuple[str, list[str]]:
+    """(name, class/namespace path) of a CodeWarrior mangled name: Bar__3FooFi -> ("Bar", ["Foo"]),
+    __ct__Q23Foo3BarFv -> ("Bar", ["Foo", "Bar"]), __dt__3FooFv -> ("~Foo", ["Foo"]), operators -> ("operator",
+    path), foo__Fi -> ("foo", []), an unmangled (extern "C") name -> (name, [])."""
+    k = mangled.find("__", 2 if mangled.startswith("__") else 1)
+    while k >= 0 and not re.match(r"[QFC1-9]", mangled[k + 2:k + 3]):
+        k = mangled.find("__", k + 1)
+    if k < 0:
+        return mangled, []
+    base, rest = mangled[:k], mangled[k + 2:]
+    path = []
+    m = re.match(r"Q(\d)_?", rest)
+    count = int(m.group(1)) if m else (1 if rest[:1].isdigit() else 0)
+    pos = m.end() if m else 0
+    for _ in range(count):
+        ml = re.match(r"\d+", rest[pos:])
+        if not ml:
+            break
+        n = int(ml.group())
+        pos += ml.end()
+        path.append(re.sub(r"<.*", "", rest[pos:pos + n]))
+        pos += n
+    if base == "__ct" and path:
+        base = path[-1]
+    elif base == "__dt" and path:
+        base = "~" + path[-1]
+    elif base.startswith("__"):
+        base = "operator"
+    return base, path
+
+
+_OPERATOR = re.compile(r"\boperator\s*(?:\(\s*\)|\[\s*\]|new\b|delete\b|[^\s(\w]+|[\w\s*&]+?(?=\s*\())")
+_CTRL = {"if", "while", "for", "switch", "return", "sizeof", "__attribute__", "__declspec", "decltype", "throw",
+         "alignof", "__alignof__", "asm", "__asm"}
+
+
+def _cpp_is_function(head: str) -> bool:
+    h = _OPERATOR.sub("operator", head)
+    if "(" not in h or re.match(r"(?:template\s*<[^{]*?>\s*)?(?:typedef|using)\b", h):
+        return False
+    if re.match(r"(?:template\s*<[^{]*?>\s*)?(?:class|struct|union|enum)\s+[\w:]+\s*(?:final\s*)?(?::|$)", h):
+        return False
+    return "=" not in _strip_parens(h)
+
+
+def _cpp_declarator(head: str) -> list[str] | None:
+    """['Foo', 'Bar'] for `void Foo::Bar(int x) const`, ['Foo', 'Foo'] for `Foo::Foo() : a(0)`."""
+    h = _OPERATOR.sub("operator", head)
+    h = re.sub(r"^\s*template\s*<[^{]*?>\s*", "", h)
+    for m in re.finditer(r"((?:\w+\s*(?:<[^<>()]*>)?\s*::\s*)*~?\s*\w+)\s*\(", h):
+        parts = [re.sub(r"<.*", "", p).strip() for p in re.sub(r"\s+", "", m.group(1)).split("::")]
+        if parts[-1] not in _CTRL and parts[-1] not in KEYWORDS:
+            return parts
+    return None
+
+
+def cpp_items(text: str) -> list[tuple[str, str, str, list[str]]]:
+    """Top-level items of a preprocessed C++ file: (kind, text, head, scope). kind: 'open' / 'close' (namespace and
+    extern "C" blocks, kept as they are, their contents are top-level items too), 'func' (function definition, head
+    = everything before its body), 'decl', '#' (preprocessor line). scope: the enclosing namespaces."""
+    items, start, depth, i, n = [], 0, 0, 0, len(text)
+    func_head, stack = None, []
+
+    def scope():
+        return [s for s in stack if s]
+
+    while i < n:
+        c = text[i]
+        if c in "\"'":
+            m = _SKIP_RE.match(text, i)
+            i = m.end() if m else i + 1
+            continue
+        if c == "/" and text.startswith("//", i):
+            j = text.find("\n", i)
+            i = n if j < 0 else j
+            continue
+        if c == "/" and text.startswith("/*", i):
+            j = text.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+            continue
+        if c == "#" and depth == 0 and text[start:i].strip() == "":
+            j = text.find("\n", i)
+            j = n if j < 0 else j
+            items.append(("#", text[i:j].strip(), "", scope()))
+            i = start = j + 1
+            continue
+        if c in "([":
+            depth += 1
+        elif c in ")]":
+            depth -= 1
+        elif c == "{":
+            if depth == 0:
+                head = text[start:i].strip()
+                m = re.fullmatch(r"(?:inline\s+)?namespace(?:\s+(\w+))?", head)
+                if m or re.fullmatch(r'extern\s*"C(?:\+\+)?"', head):
+                    items.append(("open", head + " {", "", scope()))
+                    stack.append((m.group(1) or "") if m else "")
+                    i = start = i + 1
+                    continue
+                func_head = head if _cpp_is_function(head) else None
+            depth += 1
+        elif c == "}":
+            if depth == 0 and stack:
+                if text[start:i].strip():
+                    items.append(("decl", text[start:i].strip(), "", scope()))
+                stack.pop()
+                items.append(("close", "}", "", scope()))
+                i = start = i + 1
+                continue
+            depth -= 1
+            if depth == 0 and func_head is not None:
+                items.append(("func", text[start:i + 1].strip(), func_head, scope()))
+                start = i + 1
+                func_head = None
+        elif c == ";" and depth == 0:
+            if text[start:i].strip():
+                items.append(("decl", text[start:i + 1].strip(), "", scope()))
+            start = i + 1
+        i += 1
+    if text[start:].strip():
+        items.append(("decl", text[start:].strip(), "", scope()))
+    return items
+
+
+def _cpp_declaration(item: str) -> str:
+    """A declaration that allocates nothing: type definitions, templates, typedefs and constants stay as they are,
+    static members defined out of their class go (the class declares them), variables become extern."""
+    s = item.strip()
+    if re.match(r"(?:template\b|typedef\b|using\b|friend\b|static_assert\b|(?:static\s+)?const(?:expr)?\b)", s):
+        return s
+    flat = _flat(s, "{", "}")
+    if re.fullmatch(r"(?:class|struct|union|enum)(?:\s+class)?\s+[\w:]+\s*(?:final\s*)?(?::[^{;]*)?(?:\{\})?\s*;",
+                    flat):
+        return s
+    if re.search(r"\w\s*::\s*~?\w+\s*(?:\[|=|;|\()", _flat(flat, "(", ")")):
+        return ""
+    return _declaration(s)
+
+
+def _cpp_free_function(head: str) -> bool:
+    """A function that may be declared again at namespace scope: not a member (no `::`), no initializer list."""
+    parts = _cpp_declarator(head)
+    return parts is not None and len(parts) == 1 and not re.search(r"\)\s*:", _OPERATOR.sub("operator", head))
+
+
+def _cpp_declared(item: str) -> set[str]:
+    out = declared_names(item)
+    out |= set(re.findall(r"\b(?:class|struct|union|enum)\s+(\w+)\s*(?:final\s*)?(?::[^{;]*)?\{", item))
+    out |= set(re.findall(r"\b(?:class|struct|union)\s+(\w+)\s*;", item))
+    if "{" in item and item.rstrip().endswith("}"):
+        parts = _cpp_declarator(item[:item.index("{")])
+        if parts:
+            out.add(parts[-1])
+    return out
+
+
+def _cpp_prune(parts: list[tuple[str, str]], target: int) -> str:
+    """Keeps the parts the target needs (transitively, by identifier), the namespace blocks around them, and drops
+    the blocks left empty."""
+    info = [(_cpp_declared(t), _idents(t)) if k != "block" else (set(), set()) for k, t in parts]
+    needed, keep = set(info[target][1]), {target}
+    changed = True
+    while changed:
+        changed = False
+        for i, (defs, refs) in enumerate(info):
+            if i not in keep and parts[i][0] == "item" and defs & needed:
+                keep.add(i)
+                needed |= refs
+                changed = True
+    out = [t for i, (k, t) in enumerate(parts) if k == "block" or i in keep]
+    text = "\n".join(out)
+    while True:
+        new = re.sub(r'(?:(?:inline\s+)?namespace(?:\s+\w+)?|extern\s*"C(?:\+\+)?")\s*\{\s*\}\n?', "", text)
+        if new == text:
+            return text
+        text = new
+
+
+def cpp_candidate_sources(pre: str, target: str, rename: dict[str, str]) -> list[str]:
+    """Like candidate_source for a C++ file: one source per definition `target` may stand for (overloads share a
+    name: the caller keeps the one whose object defines `target`), each first with only the declarations it needs,
+    then with all of them. Other functions: free ones become prototypes, inline and template ones stay, members
+    defined out of their class go (the class declares them)."""
+    t = itanium_target(target) if target.startswith("_Z") else cw_target(target)
+    if t is None:
+        return []
+    base, path = t
+    items = cpp_items(pre)
+    wanted = []
+    for k, (kind, text, head, sc) in enumerate(items):
+        if kind != "func" or re.search(r"\binline\b", head) or re.match(r"\s*template\b", head):
+            continue
+        parts = _cpp_declarator(head)
+        if parts and sc + parts[:-1] == path and (parts[-1] == base or base == "operator"
+                                                   and parts[-1] == "operator"):
+            wanted.append(k)
+    pat = re.compile(r"\b(" + "|".join(re.escape(k) for k in sorted(rename, key=len, reverse=True)) + r")\b") \
+        if rename else None
+    out = []
+    for w in wanted[:4]:
+        parts, pragmas = [], []
+        for k, (kind, text, head, sc) in enumerate(items):
+            if kind == "#":
+                if text.startswith("#pragma"):
+                    pragmas.append(text)
+                continue
+            if kind in ("open", "close"):
+                parts.append(("block", text))
+            elif k == w:
+                parts.append(("target", "\n".join(pragmas + [_drop_static(text)])))
+            elif kind == "func":
+                if re.search(r"\binline\b", head) or re.match(r"\s*template\b", head):
+                    parts.append(("item", text))
+                elif _cpp_free_function(head):
+                    parts.append(("item", _drop_static(_drop_asm(head)) + ";"))
+            else:
+                parts.append(("item", _cpp_declaration(text)))
+            pragmas = []
+        # #line directives inside class bodies (the splitter keeps them): noise in the game's source
+        parts = [(k, re.sub(r"^\s*#line\b.*\n?", "", t, flags=re.M)) for k, t in parts if t]
+        found = next(i for i, (k, _t) in enumerate(parts) if k == "target")
+        # clang-format (run by the game repos' CI) joins assembly lines: keep it away from asm code
+        parts = [(k, f"// clang-format off\n{x}\n// clang-format on" if re.search(r"\basm\b", x) else x)
+                 for k, x in parts]
+        for src in (_cpp_prune(parts, found), "\n".join(t for _k, t in parts)):
+            if pat:
+                src = _sub_code(src, pat, lambda m: rename[m.group(1)])
+            out.append(src + "\n")
+    return out
