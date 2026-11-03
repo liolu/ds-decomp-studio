@@ -34,7 +34,8 @@ for d in sorted(p for p in R.iterdir() if p.is_dir() and p.name not in ('all', '
 print(f'{len(names)} agent files collected')
 if not names: sys.exit()
 files = [str(ALL / f'{n}.c') for n in names]
-subprocess.run([sys.executable, str(HERE / 'symfix.py'), *files], check=False)
+for i in range(0, len(files), 150):  # Windows command line limit (r32: 841 files)
+    subprocess.run([sys.executable, str(HERE / 'symfix.py'), *files[i:i + 150]], check=False)
 env = dict(os.environ, AUTO_EXTRA_PROFILES=PROFILES)
 if not a.no_judge:
     try:  # fj.py's Pool can hang forever on Windows (seen on -profile funcs): cap it, judge stragglers alone

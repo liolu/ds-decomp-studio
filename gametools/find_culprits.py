@@ -246,15 +246,27 @@ def globalize_labels(build_output: str) -> int:
     return n
 
 
-def build() -> str:
-    """configure + ninja (labels that must be global are fixed on the way, see globalize_labels)."""
+LAST_RC = [0]
+
+
+def build(fast: bool = False) -> str:
+    """configure + ninja (labels that must be global are fixed on the way, see globalize_labels).
+    fast: link + module checks + the rebuilt modules find() reads, no ROM (24-275 s saved; see modules_ok)."""
+    targets = ["-k", "0", (OUT / "rom_config.yaml").relative_to(ROOT).as_posix(), "check_modules",
+               "check_symbols"] if fast else []
     for _ in range(5):
         run([sys.executable, "tools/configure.py", project.VERSION])
-        r = run(["ninja"])
+        r = run(["ninja", *targets])
+        LAST_RC[0] = r.returncode
         out = (r.stdout or "") + (r.stderr or "")
         if not globalize_labels(out):
             return out
     return out
+
+
+def modules_ok(build_output: str) -> bool:
+    """A build(fast=True) passed: every module and symbol is identical (the ROM only packs them)."""
+    return LAST_RC[0] == 0 and "FAILED:" not in build_output
 
 
 def find(build_output: str) -> list[dict]:
@@ -275,6 +287,16 @@ def find(build_output: str) -> list[dict]:
             if (ROOT / (stem + ext)).exists():
                 add(stem + ext, "does not compile (ninja: FAILED)")
                 break
+    # dsd delink refuses the whole build: `.data in file 'src/auto/X.c' (...) overlaps with previous file 'src/...'`
+    for m in re.finditer(r"in file '(src/[^']+)' \([^)]*\) overlaps with previous file '(src/[^']+)'", build_output):
+        add(m.group(1), f"overlaps {m.group(2)} (delink)")
+        add(m.group(2), f"overlaps {m.group(1)} (delink)")
+    # Link errors: `Undefined : "x"` then `Referenced from "y" in X.o` (a stale name the agent used)
+    for m in re.finditer(r'Referenced from "[^"]+" in (\S+?)\.o', re.sub(r"\x1b\[[0-9;]*m", "", build_output)):
+        stem = m.group(1).replace("\\", "/")
+        for f in [p.relative_to(ROOT).as_posix() for p in (ROOT / "src").rglob(Path(stem).name + ".*")]:
+            if f.endswith((".c", ".cpp", ".s")):
+                add(f, "undefined symbol at link")
     all_files = [(f, s, e) for mod in modules() for f, s, e in complete_files(mod["delinks"])]
     for m in re.finditer(r"Symbol '(\S+)' at 0x([0-9a-f]+) in (.+?) (is .*)", build_output):
         addr = int(m.group(2), 16)

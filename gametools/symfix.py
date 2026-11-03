@@ -8,7 +8,7 @@ for p in pathlib.Path("config").rglob("symbols.txt"):
         by[(mod, int(m.group(3), 16))] = m.group(1)
 names = set(by.values())
 for f in sys.argv[1:]:
-    t = open(f).read()
+    t = open(f, encoding="utf-8-sig", errors="replace").read()  # agent files may start with a BOM
     def rn(m):
         if m.group(0) in names:
             return m.group(0)
@@ -16,5 +16,5 @@ for f in sys.argv[1:]:
         return by.get((mod, int(m.group(3), 16)), m.group(0))
     t2 = re.sub(r"\b(func|data)_(?:ov(\d{3})_)?([0-9a-f]{8})\b", rn, t)
     if t2 != t:
-        open(f, "w").write(t2)
+        open(f, "w", encoding="utf-8", newline=chr(10)).write(t2)
         print(f, "renamed", len(set(re.findall(r"\b\w+\b", t)) ^ set(re.findall(r"\b\w+\b", t2))) // 2)

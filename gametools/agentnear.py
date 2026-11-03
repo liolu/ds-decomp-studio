@@ -19,11 +19,15 @@ import hunt  # noqa: E402
 ap = argparse.ArgumentParser()
 ap.add_argument('round'); ap.add_argument('--per', type=int, default=15)
 ap.add_argument('--max-diffs', type=int, default=9); ap.add_argument('--lists', type=int, default=1)
+ap.add_argument('--again', action='store_true', help='ignore near_assigned.json, skip only the names of this round (r32)')
 a = ap.parse_args()
 
 H = Path('build/hunt'); R = H / a.round; R.mkdir(parents=True, exist_ok=True)
 NA = H / 'near_assigned.json'
 done = set(json.loads(NA.read_text())) if NA.exists() else set()
+assigned = set(done)
+if a.again:
+    done = {n for f in R.glob('list*.txt') for n in f.read_text().split()}
 unmatched = set(hunt.unmatched_sizes()) - hunt.matched_names()
 best = {}  # name -> (diffs, file, profile)
 for res in H.glob('*/all/results.json'):
@@ -50,5 +54,5 @@ for i in range(a.lists):
         dst.write_text(f'/* near start: {dif} diffs with profile "{prof}" */\n' + f.read_text(errors='replace'))
         done.add(n)
     print(K)
-NA.write_text(json.dumps(sorted(done)))
+NA.write_text(json.dumps(sorted(done | assigned)))
 print(f'{len(order)} near misses <= {a.max_diffs} diffs available before this call', file=sys.stderr)

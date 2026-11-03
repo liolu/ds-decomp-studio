@@ -498,8 +498,8 @@ def cmd_submit(a) -> None:
         journal_created(created)
         clang_format(created)
         t0 = time.time()
-        build = find_culprits.build()
-        if not find_culprits.rom_ok(build):
+        build = find_culprits.build(fast=True)  # modules only: `commit` builds and checks the ROM once
+        if not find_culprits.modules_ok(build):
             for p, b in saved.items():
                 if b is None:
                     p.unlink(missing_ok=True)
@@ -547,7 +547,8 @@ def cmd_submit_many(a) -> None:
     files = [project.ARM9 / "delinks.txt", project.ARM9 / "itcm" / "delinks.txt", *sorted(OVL_DIR.glob("ov*/delinks.txt")), am.COMPILERS_TXT]
 
     def attempt(group):
-        """Integrates `group` and builds once: kept if the ROM is byte-identical, undone otherwise."""
+        """Integrates `group` and builds once (modules only, no ROM): kept if every module is byte-identical,
+        undone otherwise; the files find_culprits blames are in state["bad"]."""
         saved = {p: p.read_bytes() if p.exists() else None for p in files}
         journal_begin(files)
         created = []
@@ -556,11 +557,28 @@ def cmd_submit_many(a) -> None:
             created += am.integrate([(f["name"], f["size"], f["addr"], src)])
         journal_created(created)
         clang_format(created)
-        build = find_culprits.build()
-        if find_culprits.rom_ok(build):
+        t0 = time.time()
+        build = find_culprits.build(fast=True)
+        ok = find_culprits.modules_ok(build)
+        print(f"submit-many: {len(group)} file(s), {'OK' if ok else 'failed'} in {time.time() - t0:.0f} s",
+              file=sys.stderr, flush=True)
+        if ok:
             journal_end()
             return created
         state["build"] = build
+        try:
+            why = {c["file"]: c["reasons"] for c in find_culprits.find(build)}
+        except Exception as e:  # noqa: BLE001 - a diagnosis failure only means bisection
+            print(f"submit-many: find_culprits failed ({e}): bisecting", file=sys.stderr)
+            why = {}
+        blamed = set(why)
+        # blamed on their own bytes (not only on a broken build or a moved neighbour): no need to retry them
+        state["sure"] = all(any(re.search(r"differ|size changed|overlaps|compile error|does not compile|undefined", r) for r in
+                                why.get(p.relative_to(ROOT).as_posix(), [])) for p in created)
+        state["bad"] = [g for g, p in zip(group, created) if p.relative_to(ROOT).as_posix() in blamed]
+        print(f"submit-many: {len(state['bad'])} of the group blamed; culprits: {sorted(blamed)[:8]}",
+              file=sys.stderr, flush=True)
+        (WORK / "last_failed_build.txt").write_text(build[-200000:], encoding="utf-8")
         for p, b in saved.items():
             if b is None:
                 p.unlink(missing_ok=True)
@@ -582,6 +600,12 @@ def cmd_submit_many(a) -> None:
         bad_ov = set(re.findall(r"Check overlay (\d+): checksum failed", state["build"]))
         if len(group) == 1:
             return []
+        bad = state.get("bad") or []
+        if len(bad) == len(group) and state.get("sure"):  # every file has its own reason to fail: drop them all
+            return []
+        if bad and len(bad) < len(group):  # the build named its culprits: one more build instead of a bisection
+            rest = [g for g in group if g not in bad]
+            return solve(rest) + (solve(bad) if len(bad) > 1 else [])
         if bad_ov:
             bad = [g for g in group if g[0] in {f"ov{int(n):03d}" for n in bad_ov}]
             rest = [g for g in group if g not in bad]
