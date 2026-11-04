@@ -10,12 +10,11 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 ## Avancement des jeux
 
 <!-- games:start -->
-84 jeux, 25 publiés · 111371/688085 fonctions matchées au total · mis à jour le 2026-11-04 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
+83 jeux, 25 publiés · 106941/683323 fonctions matchées au total · mis à jour le 2026-11-04 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
 
 | Jeu | Version | Studio | Code matché | Fonctions | ROM | Dépôt |
 |---|---|---|---|---|---|---|
 | Tom and Jerry Tales | eu AJTP | Sensory Sweep | `█████████░` 92.07% | 1888/1930 | ✅ | [tom-and-jerry-tales-decomp](https://github.com/liolu/tom-and-jerry-tales-decomp) |
-| LEGO Star Wars II | usa AL7E | Amaze Entertainment | `███████░░░` 73.47% | 4441/4762 | ✅ | local (pas encore de match) |
 | LEGO Star Wars II | usa AL7E | Amaze Entertainment | `███████░░░` 67.82% | 4365/4763 | ✅ | [lego-star-wars-ii-the-original-trilogy-decomp](https://github.com/liolu/lego-star-wars-ii-the-original-trilogy-decomp) |
 | Rayman Raving Rabbids | usa AR5E | Ubisoft Casablanca | `█████░░░░░` 52.99% | 2818/3607 | ✅ | [Rayman-RR-usa-decomp](https://github.com/liolu/Rayman-RR-usa-decomp) |
 | Heroes of Mana | eu AHEP | Brownie Brown | `█████░░░░░` 52.47% | 7801/9264 | ✅ | [heroes-of-mana-decomp](https://github.com/liolu/heroes-of-mana-decomp) |
@@ -24,7 +23,7 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Nintendogs | jp AD3J | Nintendo EAD | `███░░░░░░░` 32.88% | 4302/8614 | ✅ | local (pas encore de match) |
 | Farm Frenzy | usa BFZE | Alawar | `███░░░░░░░` 26.13% | 876/1208 | ✅ | [farm-frenzy-decomp](https://github.com/liolu/farm-frenzy-decomp) |
 | Powerpuff Girls Z | jp YPPJ | Bandai Namco | `███░░░░░░░` 26.01% | 1489/2359 | ✅ | [powerpuff-girls-z-decomp](https://github.com/liolu/powerpuff-girls-z-decomp) |
-| Blue Dragon: Awakened Shadow | ger YBUD | Brownie Brown | `██░░░░░░░░` 23.95% | 5504/11800 | ✅ | [blue-dragon-awakened-shadow-decomp](https://github.com/liolu/blue-dragon-awakened-shadow-decomp) |
+| Blue Dragon: Awakened Shadow | ger YBUD | Brownie Brown | `██░░░░░░░░` 24.08% | 5515/11800 | ✅ | [blue-dragon-awakened-shadow-decomp](https://github.com/liolu/blue-dragon-awakened-shadow-decomp) |
 | Resident Evil: Deadly Silence | usa ABHE | Capcom | `██░░░░░░░░` 23.33% | 3045/5824 | ✅ | [resident-evil-deadly-silence-decomp](https://github.com/liolu/resident-evil-deadly-silence-decomp) |
 | The Sims 2 | eu ASJP | Amaze Entertainment | `██░░░░░░░░` 22.55% | 3186/5060 | ✅ | [sims-2-the-decomp](https://github.com/liolu/sims-2-the-decomp) |
 | SimCity Creator | eu YC2P | EA | `██░░░░░░░░` 22.11% | 3619/6580 | ✅ | local (pas encore de match) |
