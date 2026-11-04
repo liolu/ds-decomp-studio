@@ -10,7 +10,7 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 ## Avancement des jeux
 
 <!-- games:start -->
-83 jeux, 25 publiés · 106941/683323 fonctions matchées au total · mis à jour le 2026-11-04 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
+82 jeux, 25 publiés · 105126/680044 fonctions matchées au total · mis à jour le 2026-11-04 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
 
 | Jeu | Version | Studio | Code matché | Fonctions | ROM | Dépôt |
 |---|---|---|---|---|---|---|
@@ -32,7 +32,6 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Nintendogs Dachshund | usa ADGE | Nintendo EAD | `██░░░░░░░░` 21.08% | 3931/8609 | ✅ | [nintendogs-dachshund-decomp](https://github.com/liolu/nintendogs-dachshund-decomp) |
 | Dragon Ball Origins | eu CDZP | Game Republic | `██░░░░░░░░` 20.93% | 3052/5118 | ✅ | [dragon-ball-origins-decomp](https://github.com/liolu/dragon-ball-origins-decomp) |
 | Pokemon_Dash | usa APDE | Ambrella | `██░░░░░░░░` 19.61% | 1817/3279 | ✅ | [pokemon-dash-decomp](https://github.com/liolu/pokemon-dash-decomp) |
-| Pokemon_Dash | usa APDE | Ambrella | `██░░░░░░░░` 19.57% | 1815/3279 | ✅ | local (pas encore de match) |
 | Luminousarc2 | eu YL2P | Imageepoch | `██░░░░░░░░` 18.72% | 2878/7441 | ✅ | local (pas encore de match) |
 | Zoo Keeper | eu AZKP | Success | `██░░░░░░░░` 18.56% | 822/2206 | ✅ | local (pas encore de match) |
 | Cooking Mama | usa ACCE | Office Create | `██░░░░░░░░` 15.35% | 1034/2551 | ✅ | [cooking-mama-decomp](https://github.com/liolu/cooking-mama-decomp) |
