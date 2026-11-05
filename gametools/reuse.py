@@ -13,8 +13,8 @@ from pathlib import Path
 G = Path(__file__).resolve().parent
 OUT = Path('build/reuse/estimate.json')
 SYM = re.compile(r'^(\S+) kind:function\(\w+,size=0x([0-9a-f]+)\)', re.M)
-CLONE_HIT = re.compile(r'^\s+(\S+) <- .*\(\w+, \d+ bytes\)', re.M)
-DONOR_HIT = re.compile(r'^\s*match \d+: (\S+) <- ', re.M)
+CLONE_HIT = re.compile(r'^\s+(\S+) <- (\S+) \((\w+), \d+ bytes\)', re.M)
+DONOR_HIT = re.compile(r'^\s*match \d+: (\S+) <- (\S+)', re.M)
 BASE_S, FILE_S = 45, 0.12  # one verify pass: dawn-of-heroes 88 files 55 s, rayman-rr 3885 files 466 s, club-house-games 20615 files > 2900 s
 
 
@@ -71,7 +71,12 @@ def scan():
     t0 = time.time()
     _, o1, _ = run(G / 'clone_match.py', '--other-games', '--dry-run')
     _, o2, _ = run(G / 'donor_match.py', '--dry-run', '-j', '4')
-    clones, donors = set(CLONE_HIT.findall(o1)), set(DONOR_HIT.findall(o2))
+    # hits: what each function would be copied from; the Studio puts them in the level Portable
+    hits = {n: ['donor:' + repo, '', ''] for n, repo in DONOR_HIT.findall(o2)}
+    for n, frm, kind in CLONE_HIT.findall(o1):
+        g, _, f = frm.rpartition(':')
+        hits[n] = [g, f, ''] if g else ['clone:', f, '']
+    clones, donors = {m[0] for m in CLONE_HIT.findall(o1)}, {m[0] for m in DONOR_HIT.findall(o2)}
     size = sizes()
     names = clones | donors
     files = git('ls-files', 'src').count('\n')
@@ -80,7 +85,7 @@ def scan():
     d = {'at': round(time.time()), 'gain': len(names), 'clones': len(clones), 'donors': len(donors),
          'bytes': sum(size.get(n, 0) for n in names), 'files': files, 'pass_s': pass_s, 'measured': bool(old.get('measured')),
          'eta_s': pass_s * ((1 if donors else 0) + (1 if clones else 0)), 'scan_s': round(time.time() - t0),
-         'blocked': blocked(), 'last': old.get('last')}
+         'blocked': blocked(), 'last': old.get('last'), 'hits': hits}
     save(d)
     print(f"reuse scan: +{d['gain']} functions ({d['clones']} clones, {d['donors']} donors, {d['bytes']} bytes), about {d['eta_s']} s", flush=True)
 
@@ -116,7 +121,7 @@ def apply():
     if changes():
         print('reuse apply: clone_match left changes', flush=True)
         return 1
-    d.update(gain=0, clones=0, donors=0, bytes=0, eta_s=0, blocked='',
+    d.update(gain=0, clones=0, donors=0, bytes=0, eta_s=0, blocked='', hits={},
              last={'at': round(time.time()), 'gained': gained, 'seconds': round(time.time() - t0),
                    'commits': git('log', '--oneline', f'{head}..HEAD').count('\n')})
     if verify_s:

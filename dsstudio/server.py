@@ -9,7 +9,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import blocks, brief, config, data, difficulty, engine, gameenv, games, jobs, misses, projects, techtags, toolsync, xp, xrefs
+from . import blocks, brief, config, data, difficulty, engine, gameenv, games, jobs, misses, projects, similar, techtags, toolsync, xp, xrefs
 
 
 _games_cache = {"t": 0.0, "games": None, "busy": False}
@@ -114,9 +114,11 @@ def function_list(gid, level, q, state, limit, kind=""):
     out.sort(key=lambda r: (r.get("level", 0), r.get("score", 0)) if state != "done" else r["addr"])
     # block of each function
     owner = {f: b["id"] for b in blocks.load(g)["blocks"] for f in b["functions"]}
-    for r in out:
+    sim = similar.counts(gid)
+    for r in out[:limit]:
         r["block"] = owner.get(r["name"], "")
-    return {"total": len(out), "rows": out[:limit]}
+        r["sim"] = sim.get((r["module"], r["addr"]))
+    return {"total": len(out), "rows": out[:limit], "similar": {"indexed": True} if sim else {**similar.state(gid), "pending": similar.busy(gid)}}
 
 
 def asm_of(gid, name):
@@ -200,6 +202,12 @@ class H(BaseHTTPRequestHandler):
                 return self.send(engine.top_functions(int(q.get("limit", 300)), q.get("q", "")))
             if p == "engine/users":
                 return self.send(engine.function_users(q["fp"]))
+            if p == "similar":  # look-alike functions of one function, in this game and in the other games
+                a = q.get("addr")
+                return self.send(similar.of(q["game"], q.get("name", ""), q.get("module", ""),
+                                            int(a, 0) if a else None))
+            if p == "similar/source":
+                return self.send(similar.source(q["game"], q["file"]))
             if p == "tags":
                 return self.send(techtags.overview())
             if p == "tags/func":

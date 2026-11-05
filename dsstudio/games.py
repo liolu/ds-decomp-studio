@@ -388,10 +388,13 @@ def weight(fn: dict) -> int:
 def portable(game: Game) -> dict:
     """{addr: (source, function name, source file)} for unmatched functions whose exact twin is already matched
     elsewhere: in another of our projects (source = game id), in this game (source = "clone:<twin>", copied with
-    tools/clone_match.py), or in an external decompilation (source = "donor:<repo>", see donor_hits)."""
+    tools/clone_match.py), or in an external decompilation (source = "donor:<repo>", see donor_hits). Also what the
+    last "sans IA" scan (gametools/reuse.py scan, build/reuse/estimate.json) compiled and found identical: those are
+    the functions the "Gains sans IA" task will match."""
     out = dict(_portable_projects(game))
     hits, fam = donor_hits(game), clone_families(game)
-    if hits or fam:
+    scan = game.reuse().get("hits") or {}
+    if hits or fam or scan:
         for name, addr, _size, _mode in game.symbols():
             if addr in out:
                 continue
@@ -403,6 +406,9 @@ def portable(game: Game) -> dict:
             elif name in hits:
                 repo, dname, rel = hits[name]
                 out[addr] = ("donor:" + repo, dname, rel)
+            elif name in scan and len(scan[name]) == 3:
+                src, other, rel = scan[name]
+                out[addr] = ("clone:" + game.id if src == "clone:" else src, other, rel)
     return out
 
 

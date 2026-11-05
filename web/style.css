@@ -80,3 +80,4 @@ th.sort{cursor:pointer;user-select:none;white-space:nowrap}th.sort:hover,th.sort
 .bar .seg>i{display:block;height:100%}.seg.code>i,.dot.code{background:linear-gradient(90deg,var(--acc2),var(--acc))}
 .seg.data>i,.dot.data{background:#e0a23a}.dot{display:inline-block;width:8px;height:8px;border-radius:2px;vertical-align:middle}
 .bar .seg.code{display:flex}.bar .seg.code>i{flex:none}.bar .seg>i.pot,.dot.pot{background:#7a8194}
+span.ok{color:var(--l1)}

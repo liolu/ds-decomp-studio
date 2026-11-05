@@ -322,6 +322,7 @@ async function openEditor(name) {
     <button class="btn small green" id="edsubmit" disabled onclick="edSubmit()" title="dans src/auto + delinks.txt, ROM reconstruite (garde si identique)">Integrer au jeu</button>
     <button class="btn small sec" onclick="edReset()">Revenir au depart</button>
     <button class="btn small sec" onclick="edShowAsm()">Assembleur</button>
+    <button class="btn small sec" onclick="edSimilar()" title="les fonctions qui lui ressemblent, dans ce jeu et dans nos autres jeux ; un clic sur une fonction matchee montre son C">Ressemblantes</button>
     ${d.ghidra ? `<button class="btn small sec" onclick="$('#edout').textContent=ED.info.ghidra" title="la lecture de Ghidra (tache Brouillons Ghidra) : structure et noms utiles, types souvent faux">Ghidra</button>` : ""}
     <button class="btn small sec" onclick="closeModal()">Fermer</button></div></div>
     <div class="hint" style="margin:6px 0">${facts}</div>
@@ -375,11 +376,57 @@ async function subFunctions() {
     <input placeholder="nom..." value="${esc(fnQuery)}" onchange="fnQuery=this.value;subFunctions()"><span class="hint" id="fncount"></span></div><div id="fntable" class="hint">Chargement...</div><div id="asm"></div></div>`;
   const d = await api(q);
   if (d.error) return;
+  if (d.similar && d.similar.pending) setTimeout(() => { if (tab === "game" && sub === "functions" && $("#fntable")) subFunctions(); }, 3000);  // look-alike counts still computing
   $("#fncount").textContent = `${fmt(d.total)} fonctions${d.total > d.rows.length ? " (400 premieres)" : ""}`;
-  $("#fntable").innerHTML = `<table><tr><th>Fonction</th><th>Adresse</th><th class="num">Taille</th><th>Mode</th><th>Niveau</th><th>auto_match</th><th>Bloc</th><th>Note</th></tr>
+  $("#fntable").innerHTML = `<table><tr><th>Fonction</th><th>Adresse</th><th class="num">Taille</th><th>Mode</th><th>Niveau</th><th>auto_match</th><th>Bloc</th><th title="fonctions de meme forme (memes instructions, autres constantes) : dans ce jeu et dans nos autres jeux. &#10003; = deja matchees : leur C est un bon depart">Ressemble a</th><th>Note</th></tr>
     ${d.rows.map(f => `<tr class="click" onclick="${f.mode === "arm" && f.module === "main" ? "openEditor" : "showAsm"}('${esc(f.name)}')" title="${f.mode === "arm" && f.module === "main" ? "ouvrir l'editeur C" : "assembleur (l'editeur gere le module principal ARM)"}"><td><b>${esc(f.name)}</b></td><td class="hint">${hex(f.addr)}</td><td class="num">${f.size}</td>
     <td class="hint">${f.mode}${f.module !== "main" ? " &middot; " + esc(f.module) : ""}</td><td>${f.done ? (esc(f.file || "")) : `<span class="c${f.level}">${esc(LV(f.level).label)}</span>`}</td><td class="hint">${esc(f.auto || "")}</td>
-    <td class="hint">${esc(f.block || "")}</td><td class="hint">${f.port ? portNote(f.port) : f.shared >= 2 ? "SDK (" + f.shared + ")" : ""}</td></tr>`).join("")}</table>`;
+    <td class="hint">${esc(f.block || "")}</td><td>${simCell(f)}</td><td class="hint">${f.port ? portNote(f.port) : f.shared >= 2 ? "SDK (" + f.shared + ")" : ""}</td></tr>`).join("")}</table>
+    ${d.similar && !d.similar.indexed ? `<p class="hint">Colonne "Ressemble a" vide : ce jeu n'est pas encore dans l'index des ressemblances.
+      <button class="btn small sec" onclick="runJob('techtag',{})" title="${esc(JD('techtag').desc)}">Mettre a jour l'index (tous les jeux, ~15 min)</button></p>` : ""}`;
+}
+// look-alike functions (dsstudio/similar.py): same shape = same instructions with other registers / constants
+function simCell(f) {
+  const s = f.sim; if (!s) return "";
+  const part = (n, ok, label) => n ? `${n} ${label}${ok ? ` <span class="ok" title="${ok} deja matchee(s)">(${ok} &#10003;)</span>` : ""}` : "";
+  const txt = [part(s.here, s.here_done, "ici"), part(s.other, s.other_done, `dans ${s.games} jeu${s.games > 1 ? "x" : ""}`)].filter(Boolean).join(" &middot; ");
+  return txt ? `<a href="#" class="hint" onclick="event.stopPropagation();showSimilar('${esc(f.name)}','${esc(f.module)}',${f.addr});return false" title="voir les fonctions qui lui ressemblent">${txt}</a>` : "";
+}
+const SIM_HOW = {"meme code": "meme code (forme + taille)", "meme forme": "meme forme", "meme squelette": "meme squelette"};
+async function simFetch(name, module, addr) {
+  return api(`similar?game=${encodeURIComponent(game())}&name=${encodeURIComponent(name)}` + (addr != null ? `&module=${encodeURIComponent(module || "main")}&addr=${addr}` : ""));
+}
+function simTables(d, here) {
+  const tbl = (rows, withGame) => rows.length ? `<div class="scrollbox"><table><tr>${withGame ? "<th>Jeu</th>" : ""}<th>Fonction</th><th class="num">Taille</th><th>Ressemblance</th><th>Etat</th></tr>
+    ${rows.map(x => `<tr${x.matched ? ` class="click" onclick="simSource('${esc(x.game)}','${esc(x.file)}','${esc(x.name)}')" title="voir son C"` : ""}>${withGame ? `<td>${esc(x.game)}</td>` : ""}<td><b>${esc(x.name)}</b> <span class="hint">${esc(x.module !== "main" ? x.module : "")}</span></td>
+      <td class="num">${x.size}</td><td class="hint">${esc(SIM_HOW[x.how] || x.how)}</td><td>${x.matched ? `<span class="ok">&#10003; ${esc(x.file)}</span>` : '<span class="hint">pas encore matchee</span>'}</td></tr>`).join("")}</table></div>` : '<p class="hint">Aucune.</p>';
+  return `<h3>Dans ce jeu <span class="hint">${d.n_here} (${d.matched_here} matchees)</span></h3>${tbl(d.here, false)}
+    <h3>Dans nos autres jeux <span class="hint">${d.n_other} dans ${d.games} jeux (${d.matched_other} matchees)</span></h3>${tbl(d.other, true)}
+    <p class="hint">Meme code : memes instructions et meme taille (constantes / registres masques). Meme forme : memes instructions, autres constantes.
+    Meme squelette : meme suite de lectures / ecritures / calculs / tests / appels. Clique une fonction matchee pour voir son C.</p>`;
+}
+async function showSimilar(name, module, addr) {
+  modal('<p class="hint">Chargement...</p>');
+  const d = await simFetch(name, module, addr);
+  if (d.error && !d.here) return closeModal();
+  modal(`<div class="btns" style="justify-content:space-between"><h2 style="margin:0">${esc(name)} <span class="hint">ressemble a...</span></h2>
+    <button class="btn small sec" onclick="closeModal()">Fermer</button></div><div id="simsrc"></div>
+    ${d.error ? `<p class="hint">${esc(d.error)}</p>` : simTables(d)}`);
+}
+async function simSource(g, file, name) {
+  const d = await api(`similar/source?game=${encodeURIComponent(g)}&file=${encodeURIComponent(file)}`);
+  const box = $("#edout") && window.ED && $("#edsrc") ? $("#edout") : $("#simsrc");
+  if (!box) return;
+  const text = d.error ? d.error : d.text;
+  if (box.id === "edout") { box.textContent = `// ${g} : ${file}
+` + text; box.scrollTop = 0; return; }
+  box.innerHTML = `<h3>${esc(name)} <span class="hint">${esc(g)} : ${esc(file)}</span></h3><pre>${esc(text)}</pre>`;
+  box.scrollIntoView({behavior: "smooth"});
+}
+async function edSimilar() {
+  const box = $("#edout"); box.textContent = "Chargement...";
+  const d = await simFetch(ED.name);
+  box.innerHTML = `<div style="white-space:normal">${d.error ? esc(d.error) : simTables(d)}</div>`;
 }
 
 // ---- data: every .data / .rodata / .bss symbol of every module, matched or not; a click shows its bytes and a C

@@ -97,7 +97,10 @@ def main():
         from dsstudio import toolsync
         targets = [games.get(a.game)] if a.game else [g for g in games.all_games() if g.ready]
         for g in targets:
-            r = toolsync.sync(g, push=not a.no_push, slim=a.slim)
+            try:
+                r = toolsync.sync(g, push=not a.no_push, slim=a.slim)
+            except OSError as e:  # a folder being moved or deleted meanwhile (the -native copies): the next games still go
+                r = {"error": f"ignore ({e})", "changed": []}
             print(f"{g.id}: " + (r.get("error") or (", ".join(r["changed"]) + " mis a jour" if r["changed"] else "a jour"))
                   + (f" ({r['warning']})" if r.get("warning") else ""))
         if not a.no_progress:  # update protocol: README progress + ByteMatch report follow every tool update
