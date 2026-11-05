@@ -47,11 +47,11 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Zootycoonds | eu AZTP | Altron | `█░░░░░░░░░` 14.91% | 773/1353 | ✅ | local (pas encore de match) |
 | Spyro: Shadow Legacy | usa ASSE | Amaze Entertainment | `█░░░░░░░░░` 13.62% | 1708/3697 | ✅ | [spyro-shadow-legacy-decomp](https://github.com/liolu/spyro-shadow-legacy-decomp) |
 | Nfsu2 | usa AUGE | Pocketeers | `█░░░░░░░░░` 13.48% | 721/2147 | ✅ | local (pas encore de match) |
+| Nintendogs | jp AD2J | Nintendo EAD | `█░░░░░░░░░` 12.28% | 2347/8614 | ✅ | local (pas encore de match) |
 | MySims | usa AQIE | EA | `█░░░░░░░░░` 11.97% | 2595/6820 | ✅ | [mysims-decomp](https://github.com/liolu/mysims-decomp) |
 | Thrillville | usa YTVE | Frontier Developments | `█░░░░░░░░░` 11.70% | 2948/9903 | ✅ | local (pas encore de match) |
 | Code Lyoko | usa AL5E | Game Machine Studios | `█░░░░░░░░░` 11.02% | 2114/7474 | ✅ | [code-lyoko-decomp](https://github.com/liolu/code-lyoko-decomp) |
 | Spore Creatures | usa YSPE | Amaze Entertainment | `█░░░░░░░░░` 10.83% | 3585/12008 | ✅ | local (pas encore de match) |
-| Nintendogs | jp AD2J | Nintendo EAD | `█░░░░░░░░░` 10.68% | 2347/8614 | ✅ | local (pas encore de match) |
 | Harvest Moon DS | usa ABCE | Marvelous | `█░░░░░░░░░` 10.38% | 2719/5133 | ✅ | [harvest-moon-ds-decomp](https://github.com/liolu/harvest-moon-ds-decomp) |
 | Harvest Moon DS | usa ABCE |  | `█░░░░░░░░░` 10.38% | 2719/5133 | ✅ | local (pas encore de match) |
 | Harvest Moon DS | usa ABCE |  | `█░░░░░░░░░` 10.38% | 2719/5133 | ✅ | local (pas encore de match) |
