@@ -10,7 +10,7 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 ## Avancement des jeux
 
 <!-- games:start -->
-92 jeux, 25 publiés · 148468/730785 fonctions matchées au total · mis à jour le 2026-11-05 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
+92 jeux, 25 publiés · 147804/730785 fonctions matchées au total · mis à jour le 2026-11-05 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
 
 | Jeu | Version | Studio | Code matché | Fonctions | ROM | Dépôt |
 |---|---|---|---|---|---|---|
@@ -33,7 +33,6 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Powerpuff Girls Z | jp YPPJ | Bandai Namco | `███░░░░░░░` 26.01% | 1489/2359 | ✅ | [powerpuff-girls-z-decomp](https://github.com/liolu/powerpuff-girls-z-decomp) |
 | Sudokumaniac | eu AQMP | Frontline Studios | `███░░░░░░░` 25.92% | 417/704 | ✅ | local (pas encore de match) |
 | Blue Dragon: Awakened Shadow | ger YBUD | Brownie Brown | `██░░░░░░░░` 24.08% | 5515/11800 | ✅ | [blue-dragon-awakened-shadow-decomp](https://github.com/liolu/blue-dragon-awakened-shadow-decomp) |
-| Nintendogs | jp AD2J | Nintendo EAD | `██░░░░░░░░` 23.95% | 3343/8614 | ✅ | local (pas encore de match) |
 | Resident Evil: Deadly Silence | usa ABHE | Capcom | `██░░░░░░░░` 23.33% | 3045/5824 | ✅ | [resident-evil-deadly-silence-decomp](https://github.com/liolu/resident-evil-deadly-silence-decomp) |
 | SimCity Creator | eu YC2P | EA | `██░░░░░░░░` 22.11% | 3619/6580 | ✅ | local (pas encore de match) |
 | Madagascar | eu AMGP | Vicarious Visions | `██░░░░░░░░` 22.02% | 1803/3444 | ✅ | local (pas encore de match) |
@@ -44,6 +43,7 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Pokemon_Dash | usa APDE |  | `██░░░░░░░░` 19.57% | 1815/3279 | ✅ | local (pas encore de match) |
 | Luminousarc2 | eu YL2P | Imageepoch | `██░░░░░░░░` 18.72% | 2878/7441 | ✅ | local (pas encore de match) |
 | Zoo Keeper | eu AZKP | Success | `██░░░░░░░░` 18.56% | 822/2206 | ✅ | local (pas encore de match) |
+| Nintendogs | jp AD2J | Nintendo EAD | `██░░░░░░░░` 16.21% | 2679/8614 | ✅ | local (pas encore de match) |
 | Cooking Mama | usa ACCE | Office Create | `██░░░░░░░░` 15.35% | 1034/2551 | ✅ | [cooking-mama-decomp](https://github.com/liolu/cooking-mama-decomp) |
 | Zootycoonds | eu AZTP | Altron | `█░░░░░░░░░` 14.91% | 773/1353 | ✅ | local (pas encore de match) |
 | Spyro: Shadow Legacy | usa ASSE | Amaze Entertainment | `█░░░░░░░░░` 13.62% | 1708/3697 | ✅ | [spyro-shadow-legacy-decomp](https://github.com/liolu/spyro-shadow-legacy-decomp) |
