@@ -10,7 +10,7 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 ## Avancement des jeux
 
 <!-- games:start -->
-92 jeux, 25 publiés · 147804/730785 fonctions matchées au total · mis à jour le 2026-11-05 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
+92 jeux, 25 publiés · 147472/730785 fonctions matchées au total · mis à jour le 2026-11-05 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
 
 | Jeu | Version | Studio | Code matché | Fonctions | ROM | Dépôt |
 |---|---|---|---|---|---|---|
@@ -43,7 +43,6 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Pokemon_Dash | usa APDE |  | `██░░░░░░░░` 19.57% | 1815/3279 | ✅ | local (pas encore de match) |
 | Luminousarc2 | eu YL2P | Imageepoch | `██░░░░░░░░` 18.72% | 2878/7441 | ✅ | local (pas encore de match) |
 | Zoo Keeper | eu AZKP | Success | `██░░░░░░░░` 18.56% | 822/2206 | ✅ | local (pas encore de match) |
-| Nintendogs | jp AD2J | Nintendo EAD | `██░░░░░░░░` 16.21% | 2679/8614 | ✅ | local (pas encore de match) |
 | Cooking Mama | usa ACCE | Office Create | `██░░░░░░░░` 15.35% | 1034/2551 | ✅ | [cooking-mama-decomp](https://github.com/liolu/cooking-mama-decomp) |
 | Zootycoonds | eu AZTP | Altron | `█░░░░░░░░░` 14.91% | 773/1353 | ✅ | local (pas encore de match) |
 | Spyro: Shadow Legacy | usa ASSE | Amaze Entertainment | `█░░░░░░░░░` 13.62% | 1708/3697 | ✅ | [spyro-shadow-legacy-decomp](https://github.com/liolu/spyro-shadow-legacy-decomp) |
@@ -52,6 +51,7 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Thrillville | usa YTVE | Frontier Developments | `█░░░░░░░░░` 11.70% | 2948/9903 | ✅ | local (pas encore de match) |
 | Code Lyoko | usa AL5E | Game Machine Studios | `█░░░░░░░░░` 11.02% | 2114/7474 | ✅ | [code-lyoko-decomp](https://github.com/liolu/code-lyoko-decomp) |
 | Spore Creatures | usa YSPE | Amaze Entertainment | `█░░░░░░░░░` 10.83% | 3585/12008 | ✅ | local (pas encore de match) |
+| Nintendogs | jp AD2J | Nintendo EAD | `█░░░░░░░░░` 10.68% | 2347/8614 | ✅ | local (pas encore de match) |
 | Harvest Moon DS | usa ABCE | Marvelous | `█░░░░░░░░░` 10.38% | 2719/5133 | ✅ | [harvest-moon-ds-decomp](https://github.com/liolu/harvest-moon-ds-decomp) |
 | Harvest Moon DS | usa ABCE |  | `█░░░░░░░░░` 10.38% | 2719/5133 | ✅ | local (pas encore de match) |
 | Harvest Moon DS | usa ABCE |  | `█░░░░░░░░░` 10.38% | 2719/5133 | ✅ | local (pas encore de match) |
