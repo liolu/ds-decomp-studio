@@ -10,7 +10,7 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 ## Avancement des jeux
 
 <!-- games:start -->
-92 jeux, 25 publiés · 149820/730785 fonctions matchées au total · mis à jour le 2026-11-05 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
+92 jeux, 25 publiés · 149799/730785 fonctions matchées au total · mis à jour le 2026-11-05 par le bouton « Publier l'avancement sur GitHub » (onglet Jeux) ou `python studio.py progress`
 
 | Jeu | Version | Studio | Code matché | Fonctions | ROM | Dépôt |
 |---|---|---|---|---|---|---|
@@ -25,7 +25,7 @@ difficulty, cuts them into blocks of 50, and runs a shared work queue (claims li
 | Heroes of Mana | eu AHEP | Brownie Brown | `█████░░░░░` 52.47% | 7801/9264 | ✅ | [heroes-of-mana-decomp](https://github.com/liolu/heroes-of-mana-decomp) |
 | Heroes of Mana | eu AHEP |  | `█████░░░░░` 52.47% | 7801/9264 | ✅ | local (pas encore de match) |
 | Heroes of Mana | eu AHEP |  | `█████░░░░░` 52.47% | 7801/9264 | ✅ | local (pas encore de match) |
-| Nintendogs | jp AD2J | Nintendo EAD | `████░░░░░░` 39.54% | 4695/8614 | ✅ | local (pas encore de match) |
+| Nintendogs | jp AD2J | Nintendo EAD | `████░░░░░░` 39.07% | 4674/8614 | ✅ | local (pas encore de match) |
 | Spider-Man 2 | usa AS2E | Vicarious Visions | `████░░░░░░` 38.68% | 1679/2837 | ✅ | local (pas encore de match) |
 | Ultimate Spider-Man | fra AUSF | Vicarious Visions | `███░░░░░░░` 32.90% | 2530/4592 | ✅ | [ultimate-spider-man-decomp](https://github.com/liolu/ultimate-spider-man-decomp) |
 | Nintendogs | jp AD3J | Nintendo EAD | `███░░░░░░░` 32.88% | 4302/8614 | ✅ | local (pas encore de match) |
