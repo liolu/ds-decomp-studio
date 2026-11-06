@@ -403,11 +403,21 @@ def compile_one(source: str, profile: str) -> tuple[bytes | None, str, Path | No
     return (obj.read_bytes() if obj.exists() and r.returncode == 0 else None), msg, (obj if obj.exists() else None), tmp
 
 
+def asm_allowed() -> set[str]:
+    """Functions the user allowed as `asm` although ASM_ONLY does not see an instruction the compiler never emits
+    (hand-written library code: soft-float compares, ITCM routines, stm block clears), listed in the game's
+    config/asm_allowed.txt as `NAME  reason` (# comments). The fake-match check is skipped for them only."""
+    p = ROOT / "config" / "asm_allowed.txt"
+    if not p.is_file():
+        return set()
+    return {l.split()[0] for l in p.read_text(encoding="utf-8").splitlines() if l.strip() and not l.lstrip().startswith("#")}
+
+
 def judge(name: str, source: str, profile: str | None = None) -> dict:
     f = function(name)
     size, addr = f["size"], f["addr"]
     asm = am.function_asm(name) or ""
-    if not am.ASM_ONLY.search(asm):
+    if not am.ASM_ONLY.search(asm) and name not in asm_allowed():
         # what the starting files already had is allowed: the near miss, the matched file (an asm function a donor
         # brought, e.g. a stm loop)
         base = ""

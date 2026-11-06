@@ -37,7 +37,8 @@ python ../../studio/gametools/ghidra_draft.py --names a,b            # Ghidra dr
 1. Work only inside `projets/<game>/`. Run `source env.sh` (Git Bash) first.
 2. Never commit unless `python tools/match.py verify` prints `VERIFY PASSED`. Commit only the files you changed
    (`src/`, `include/`, `config/`), never `git add -A`.
-3. ASCII-only sources, comments in English. `asm` functions only for instructions the compiler never emits.
+3. ASCII-only sources, comments in English. `asm` functions only for instructions the compiler never emits, or for
+   functions the user listed in the game's `config/asm_allowed.txt` (hand-written code proven not to be C).
    Fake matches are refused by the tools (`gametools/fakematch.py`): asm, new `#define`/`#pragma`/`#include` lines,
    `##`, `_Pragma`, `__declspec`/`__attribute__`, machine code written as numbers. Only exception: a `__sinit_*`
    function (C++ static initializer, which the compiler puts in `.init`, with a pointer to it in `.ctor`) may declare
