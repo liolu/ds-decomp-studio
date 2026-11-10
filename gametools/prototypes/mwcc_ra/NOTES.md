@@ -52,3 +52,22 @@ select: walk the stack from the head (= reverse removal order). available = allo
 - func_0200c138: in the last print block the pool address vreg interferes with precoloured r0 (r0 live during the
   address computation in the pre-schedule order), so it cannot get r0 -> r2/r1 instead of the target's r1/r0.
   Putting ded8()/the address in locals does not change it: needs the pre-schedule pcode order (next tool).
+
+## Pcode (session 2, 2026-11-10)
+- Blocks: list at DAT_0063a828 (next at +0, index +0x1c, pcode list head +0x18 = LAST instruction, chained backwards
+  through +4). Pcode: flags +0x0c (0x20002 / 0x40004 memory classes, 0x80/0x200/0x400/0x800 special deps), opcode
+  u16 at +0x28 (0x76 bl, 0xb2 mov imm, 0xf3 sub imm, 0xf1 strh, 0xee str, 0x80 ldr literal), +0x2b addressing kind,
+  operand count +0x2c, operands of 0xe bytes from +0x2e: [0] kind (0 = register, 1 = ?, 2.. = immediates/symbols),
+  [1] class, [2] u16 flags (1 = use, 2 = def), [4] s16 vreg/register number, [6]/[10] s32 values.
+- `pcdump.py FILE.c FUNC` (Frida) prints the pcode at the allocator's entry (hook FUN_00513ca0): this is ALREADY the
+  pre-RA scheduled order (mwcc schedules before allocation, and again after).
+- Scheduler: FUN_004ff1f0 (Scheduler.c) builds the dependency DAG per instruction (register defs/uses via
+  FUN_004fefe0, memory classes by the pcode flags, special resources DAT_0061668e..9e); FUN_004f5bd0 (SchedulerARM9.c)
+  = latency per opcode (ldr/str with register offset kinds 4/6/8/10 +1, mul 3-4, ldm/stm by count, reg 15 operand = 3).
+
+## func_0203075c explained
+Target: allocation of the `sel`-first draft (0 in r3, -1 in r2) + `strh [#2]` before `strh [#0]` + `mov #1` after both.
+Writing `prevSel` first gives the right strh order but the PRE-RA scheduler then puts `mov v19 = 1` between the two
+strh, so v19 interferes with v17 (-1) and every register shifts (0 -> r2, -1 -> r3, 1 -> r2). What source puts the
+`1` after both strh with prevSel first is a scheduler-priority question: next step = dump the DAG and the ready-list
+choices (hook FUN_004ff1f0 callers / the list scheduler loop) and compare both orders.
