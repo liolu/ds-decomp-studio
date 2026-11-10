@@ -173,3 +173,8 @@ pred left) or with another stack-store order (fixed by codegen). Not reached fro
 - func_02035f64 (15): strict map: product (mul) = v45 -> r1, reload of bl->a = v36 -> r3 (target reverse): the
   bl->a temp is created before the product in the optimized IR; products-first source orders do not survive the IR
   optimizer (30+). Open.
+- func_0203bd24 (11): entry-block DAG: load res->h (vague alias, res is a param) depends on the w store -> the
+  original read w/h into locals before the stores (locals variants give the right load order, 12 diffs). Then the
+  remaining gap: target loads stack param `pal` ([sp,#64]) early into r9 (pal load node has h 3 in our DAG -> late),
+  and cur*0x32c stays in r0; ours puts the product in r9. Hypothesis: in the original, pal is used inside the entry
+  block (longer chain). Copies `pal = pal0` are propagated (no effect). Open.
