@@ -13,6 +13,10 @@ with a pointer to them in `.ctor`): `#pragma define_section NAME ".init" ".init"
 `#pragma define_section NAME ".ctor" ".ctor"` and `__declspec(NAME)` with those NAMEs are allowed, so the C version
 lands in the same sections as the original (user decision 2026-10-29 for .ctor). No other section, and no other
 function, gets it.
+
+Second exception, for `BuildInfo` only (NitroSDK crt0 `_start_ModuleParams` + the `[SDK+...]` version string, data the
+original build places inside `.text`): `#pragma define_section NAME ".text" ".text"` and `__declspec(NAME)` with that
+NAME are allowed (user decision 2026-11-10).
 """
 import re
 
@@ -35,12 +39,19 @@ INIT_SECTION = re.compile(r'^[ \t]*#[ \t]*pragma[ \t]+define_section[ \t]+(\w+)[
                           re.M)
 
 
-def _allow_sinit(code: str) -> str:
-    """Remove the .init/.ctor section declarations and their __declspec uses (only for __sinit_ functions)."""
+# BuildInfo: crt0 module params + SDK version string, data the original build places inside .text
+TEXT_SECTION = re.compile(r'^[ \t]*#[ \t]*pragma[ \t]+define_section[ \t]+(\w+)[ \t]+"\.text"[ \t]+"\.text"(?:[ \t]+RW)?[ \t]*\r?$',
+                          re.M)
+TEXT_DATA_NAMES = ("BuildInfo",)
+
+
+def _allow_sinit(code: str, section: re.Pattern = INIT_SECTION) -> str:
+    """Remove the allowed section declarations and their __declspec uses (__sinit_ functions: .init/.ctor;
+    BuildInfo: .text)."""
     code = re.sub(r"\\\r?\n[ \t]*", " ", code)  # clang-format splits the long #pragma line with a continuation
-    for sec in INIT_SECTION.findall(code):
+    for sec in section.findall(code):
         code = re.sub(r"\b__declspec\s*\(\s*" + re.escape(sec) + r"\s*\)", " ", code)
-    return INIT_SECTION.sub("", code)
+    return section.sub("", code)
 
 
 def fake_match(code: str, base: str | None, name: str | None = None) -> str | None:
@@ -48,6 +59,8 @@ def fake_match(code: str, base: str | None, name: str | None = None) -> str | No
     `name` = the function being matched: a `__sinit_*` may declare the .init section (see module doc)."""
     if name and name.startswith("__sinit_"):
         code = _allow_sinit(code)
+    elif name in TEXT_DATA_NAMES:
+        code = _allow_sinit(code, TEXT_SECTION)
     c, b = _STRIP.sub(" ", code), _STRIP.sub(" ", base or "")
     for pattern, why in FAKE:
         if len(pattern.findall(c)) > len(pattern.findall(b)):

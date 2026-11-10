@@ -43,7 +43,9 @@ python ../../studio/gametools/ghidra_draft.py --names a,b            # Ghidra dr
    `##`, `_Pragma`, `__declspec`/`__attribute__`, machine code written as numbers. Only exception: a `__sinit_*`
    function (C++ static initializer, which the compiler puts in `.init`, with a pointer to it in `.ctor`) may declare
    `#pragma define_section INIT ".init" ".init"` / `#pragma define_section CTOR ".ctor" ".ctor"` and use
-   `__declspec(INIT)` / `__declspec(CTOR)` for that function and its `.ctor` entry.
+   `__declspec(INIT)` / `__declspec(CTOR)` for that function and its `.ctor` entry. Same for `BuildInfo` (NitroSDK
+   crt0 module params + `[SDK+...]` version string, data the original build places in `.text`):
+   `#pragma define_section NAME ".text" ".text"` and `__declspec(NAME)`.
 4. Never use leaked source code. Never commit ROMs, extracted assets or build outputs.
 5. `.studio/` is written by the studio only (through the commands above).
 6. Level "Portable" functions have an identical twin already matched in another game: the brief names the source
