@@ -110,3 +110,17 @@ Seen: each access is asked twice, once at its offset and once at a DOUBLED offse
 2 -> 4): with a 4-byte struct, prevSel's doubled range overflows -> vague; sel (offset 0) never can.
 func_0203075c: smaller declared sizes (char/s16/s16[1]/[2], struct of 2, G[5]/[6]) -> best still 2 (128 variants).
 Total ~1850 source variants on this function; mechanism understood, original form still unknown.
+
+## func_0200c138 explained (session 6, 2026-11-10)
+The last print block lives in its own scheduling block that STARTS at `bl func_0203ded8` (pcode block 10). There the
+root has height 11, so at cycle 3 the pool load of data_020b8b44 (h 11, chain ldr -> mla (latency 6) -> str [sp,#8])
+is urgent while the copy `v3 = v0` (h 5) is not -> pool load first -> it overlaps r0 (ded8 result) -> interferes
+with r0 -> r2/r1 instead of the target's r1/r0. In block 1 (same source shape) the block is long, everything is
+urgent and the copy wins on "unblocked successors" -> matches.
+PROOF: removing func_0203d098 moves the block cut after func_0203d740 and the last block then comes out exactly like
+the target (copy, ldr r1, mov r0 #40, mla). So the original has the cut elsewhere: block 9 has a different pcode
+count at that stage (copies invisible in the final asm). Cut rule NOT "16 calls" (an extra call did not move it);
+looks like a size limit (~60 pcodes, cut at the last call boundary): draft 53/67, no-d098 60/62, extra call 54/68.
+Semantic variants (locals/pointers/natural division/double locals, 192) are normalized: cut unchanged, still 3.
+Next: find the block-splitting code (writers of the pcode block lists: FUN_004f8240, FUN_004f85e0, FUN_004f8750;
+not FUN_00514xxx = per-function setup) and the exact limit, then pick a source form with the right pcode count.
