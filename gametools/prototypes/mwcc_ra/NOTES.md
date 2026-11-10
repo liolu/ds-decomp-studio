@@ -149,3 +149,16 @@ ip, copy first). File: projets/tom-and-jerry-tales/build/hunt/s38f/c138/REGS_OK_
 Remaining: `str r4,[sp]` + `stmib sp,{r5,ip}` instead of `stm sp,{r4,r5,ip}` (+4 B): the 3 stack-arg stores are
 merged into one stm by a pass BEFORE the post-RA schedule (pass 12 already sees 0xdd stmib), and t4's store is no
 longer adjacent in the pre-RA order. Next: decode the str->stm merge pass (peephole) and its adjacency rule.
+
+## stm merge (session 10, 2026-11-10)
+Backend order after coloring (FUN_00471850): FUN_00505100(1) local CSE, FUN_0050ba40 PEEPHOLE (pattern engine
+FUN_0050b6d0/FUN_0050b980) -> creates the stm (opcode 0xd9) from str, FUN_004fd380, FUN_004fbf70, prologue
+FUN_004fd9e0, epilogue FUN_004fe100, FUN_00503bf0, FUN_00503c10, post-RA scheduler FUN_004ff8c0, FUN_004fe660.
+The phase dump hooks (FUN_005051b0) are empty stubs in this build. `phasesnap.py FILE.c FUNC` = opcode histogram
+after each pass (Frida).
+Merge rule observed: str to [sp,#k] are merged into one stm when only NON-memory instructions separate them in the
+pre-RA-scheduled order (movs ok, a literal-pool ldr between them breaks it).
+0200c138 REGS_OK variant: pre-RA picks at the ded8 return: copy (kind 0) then `str t4` (urgent, unl 1 because the 3
+stack stores are chained by vague aliases) beats the pool ldr (urgent, unl 0) -> ldr lands between str t4 and
+str t5 -> stm splits. The pool ldr would win only with `mov #40` placed before it (its mla successor then has 1
+pred left) or with another stack-store order (fixed by codegen). Not reached from C so far.
