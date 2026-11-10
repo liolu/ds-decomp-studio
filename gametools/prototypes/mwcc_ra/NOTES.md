@@ -142,3 +142,10 @@ t4 call 97, copy 100, ded8 call 101 -> cut. Variadic `int sprintf(char *, const 
 starts the block, ded8 returns too early). To cut on a call (deb8) needs +4, on dec8 +8; or -1 to cut after ded8.
 No effect on the count: K&R/variadic d740/d098/getters/_dflt, explicit vs natural division, u8* + (s32 *) deref,
 index forms, local/return/param types (they either keep the count or change the visible code).
+Session 9: +1 levers found: a call result stored in a LOCAL adds a 1-pcode copy statement (nested results do not);
+variadic sprintf +1 each. `{ int t = dea8(); d098(&tab[t]); }` + variadic sprintf x2 + block-1 `t3 = ded8()` local
+moves the cut onto an earlier CALL -> the last block's registers become EXACTLY the target's (pool r1, 40 r0, mla
+ip, copy first). File: projets/tom-and-jerry-tales/build/hunt/s38f/c138/REGS_OK_loc_var_l4_var_n3.c.
+Remaining: `str r4,[sp]` + `stmib sp,{r5,ip}` instead of `stm sp,{r4,r5,ip}` (+4 B): the 3 stack-arg stores are
+merged into one stm by a pass BEFORE the post-RA schedule (pass 12 already sees 0xdd stmib), and t4's store is no
+longer adjacent in the pre-RA order. Next: decode the str->stm merge pass (peephole) and its adjacency rule.
