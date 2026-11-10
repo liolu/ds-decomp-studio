@@ -22,7 +22,12 @@ function pc(p) {
     const kind = o.readU8(), fl = o.add(2).readU16();
     ops.push(kind === 0 ? ((fl & 2) ? 'v' + o.add(4).readS16() + '=' : 'v' + o.add(4).readS16())
                         : (kind === 1 ? 'r' + o.add(4).readS16() : 'k' + o.add(6).readS32())); }
-  return '0x' + p.add(0x28).readU16().toString(16) + ' ' + ops.join(' ');
+  let al = '';
+  try { const a = p.add(0x1c).readPointer();
+    if (!a.isNull()) { const k = a.add(0x30).readU8(); const base = a.add(0x14).readPointer();
+      let bn = base.isNull() ? '0' : base.toString();
+      al = ` [alias k${k} obj ${bn} off ${a.add(0x18).readS32()} sz ${a.add(0x1c).readS32()} id ${a.add(0x2c).readS32()} @${a}]`; } } catch (e) {}
+  return '0x' + p.add(0x28).readU16().toString(16) + ' ' + ops.join(' ') + al;
 }
 function unl(node) { let c = 0; let s = node.add(8).readPointer();
   while (!s.isNull()) { if (s.add(4).readPointer().add(0x1a).readS16() === 1) c++; s = s.readPointer(); } return c; }

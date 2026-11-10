@@ -89,3 +89,14 @@ func_0203075c: with prevSel written first, the target order needs: the `result =
 prevSel store (else it ties with `sub` and wins on kind), while the final `flag = 1` store DOES depend on the sel
 store (else `mov 1` jumps between the two strh). Accessor form never changes alias objects (1024 combos = 3
 classes); declared TYPES do partly (340 combos, best 2). Next: FUN_00444c10 / alias object creation rules.
+
+## Alias objects (session 4, 2026-11-10)
+pcode +0x1c -> alias object: +0x14 base object, +0x18 offset, +0x1c size, +0x2c id, +0x30 kind.
+FUN_00559a20: kind0/kind0 = same alias object; 0/1 = same base (FUN_00444c10 is ==); 1/1 = same base AND ranges
+overlap (FUN_00559790); kind 2 = set (bitmap +0x28, membership by id); first rule: different bases both in the escaped
+set and one of them the special unknown object (FUN_00558e50) -> alias. schedtrace.py prints `[alias kK obj off sz id]`.
+Observed on func_0203075c: a constant-index array element = precise k0 (whole object); a struct field at offset 0 =
+precise k0/k1; a struct field at a NON-zero offset (prevSel +2, G.result +16) = vague k2 set (id 1, aliases the
+globals); local pointers are propagated (still precise); volatile casts / unions change nothing.
+Target needs (prevSel first): `sel` store linked to the `flag` store AND `result` store NOT linked to `prevSel` ->
+sel vague + prevSel precise, the opposite of what the struct gives; no form found yet (≈1700 variants, best 2).
