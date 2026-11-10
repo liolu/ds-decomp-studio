@@ -29,5 +29,6 @@ Current prototypes (details in each docstring and in `../TECHNIQUES.md`):
 | mscore.py | no | rank variants by mnemonic/shape mismatches, registers ignored |
 | regions.py | no | count diffs per region of the target (where is the function still wrong) |
 | regcause.py | no | deletes/duplicates each statement and counts which wrong target instructions become right: which statement drives a register/schedule choice |
+| regfocus.py | no | after regcause: mutations of the named lines only (move, swap, reuse/inline, split, cast, temp), climbs |
 | pragsweep.py | no | every pragma hidden in mwccarm.exe on/off x -O levels, then pairs of those that change the code |
 | schedscan.py | no | parallel judge of many variants, compare an exact instruction window (scheduling puzzles) |

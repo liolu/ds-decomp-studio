@@ -52,6 +52,7 @@ Three levels:
 - **region-diff** `regions.py` - mismatches per region of the target
 - **sched-scan** `schedscan.py` - exact instruction window across thousands of variants (scheduling puzzles)
 - **proto:regcause** / **reg-cause** `regcause.py` - diagnosis: delete/duplicate each statement, count wrong target instructions fixed/broken (registers kept) = which statement drives the allocator there (TnJ 0200c138: the earlier calls, not the block)
+- **proto:regfocus** / **reg-focus** `regfocus.py` - targeted mutations of the lines regcause names, greedy rounds (TnJ 0203bd24/01ff8188/0200c138: no gain, 2026-11-10)
 - **proto:pragsweep** / **pragma-profile** `pragsweep.py` - every pragma name read out of mwccarm.exe (77 for 2.0/sp1p5) on/off x -O levels, keeps those that change the code, then pairs. A source `#pragma` of the original = a `-pragma` profile in compilers.txt (TnJ: `opt_propagation off` solved 6 functions, `opt_dead_assignments off`+`opt_propagation off` kept an empty loop, CTRDGi -O2+propagation off)
 
 ## Manual techniques (no script yet - turn into a prototype when reused)
