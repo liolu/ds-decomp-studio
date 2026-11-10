@@ -124,3 +124,15 @@ looks like a size limit (~60 pcodes, cut at the last call boundary): draft 53/67
 Semantic variants (locals/pointers/natural division/double locals, 192) are normalized: cut unchanged, still 3.
 Next: find the block-splitting code (writers of the pcode block lists: FUN_004f8240, FUN_004f85e0, FUN_004f8750;
 not FUN_00514xxx = per-function setup) and the exact limit, then pick a source form with the right pcode count.
+
+## Block cut rule (session 7, 2026-11-10)
+CodeGenStmts.c FUN_005002d0 walks the optimized IR statements; for each it calls FUN_004ffc90, which starts a NEW
+pcode block (FUN_004f8740 -> FUN_004f8700 -> FUN_004f85e0) when the current block already holds > 100 pcodes
+(raw codegen count, before pcode-level cleanup) - or at every statement when DAT_0063d733 is set and opt level < 2.
+Scheduling never crosses blocks, so where this cut falls changes urgency, then allocation.
+Tools: `stmtcount.py FILE.c` (block number + pcode count at each statement), `blocktrace.py FILE.c FUNC` (backtrace
+of every block creation).
+func_0200c138: block 9 statement starts ... 96 97 100 101 -> the statement starting at 101 (ded8) is cut. ONE raw
+pcode less before it (or the right extra ones) moves the cut; removing func_0203d098 proves the last block then
+matches. Source forms are normalized before codegen (index/division/buf/locals: same counts); float division
+changes counts but also the code; callee return/param types and local types (2600 variants): no exact count found.
