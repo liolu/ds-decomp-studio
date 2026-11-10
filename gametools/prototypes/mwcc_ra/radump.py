@@ -7,7 +7,7 @@ Spawns tools/mwccarm/2.0/sp1p5/mwccarm.exe (unmodified) with the game flags, hoo
   node index, colour chosen (rN), flags, spill cost, degree, neighbours, and the order nodes came off the stack.
 See NOTES.md for the structures.
 """
-import argparse, json, os, subprocess, sys
+import argparse, json, os, re, subprocess, sys
 from pathlib import Path
 import frida
 
@@ -122,8 +122,13 @@ def vmap(cfile, func, extra, include):
             continue
         run(cfile, extra, include, force=(func, n["i"], marker), out="radump_force.o")
         alt = disasm(str(Path(cfile).resolve().parent / "radump_force.o"), func)
+        if len(alt) != len(base):
+            continue
+        mk = REGN[marker]
+        orig = REGN[n["color"]] if 0 <= n["color"] < 16 else None
         for k, (x, y) in enumerate(zip(base, alt)):
-            if x != y:
+            # strict: the line differs only by the marker standing where the vreg's own register was
+            if x != y and orig and re.sub(rf"\b{mk}\b", orig, y) == x:
                 notes[k].append(f"v{n['i']}")
     return final, base, notes
 

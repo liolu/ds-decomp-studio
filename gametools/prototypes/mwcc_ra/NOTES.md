@@ -162,3 +162,14 @@ pre-RA-scheduled order (movs ok, a literal-pool ldr between them breaks it).
 stack stores are chained by vague aliases) beats the pool ldr (urgent, unl 0) -> ldr lands between str t4 and
 str t5 -> stm splits. The pool ldr would win only with `mov #40` placed before it (its mla successor then has 1
 pred left) or with another stack-store order (fixed by codegen). Not reached from C so far.
+
+## Tool test on other leftovers (session 11, 2026-11-10)
+- radump.py --map is now STRICT: a vreg is shown on a line only if forcing it changes nothing but that register.
+- func_0201666c (3): format block (pre-RA pass 5): at cycle 2 the 0xDEADC0DE ldr (h 5) beats the first reset strh
+  (h 4). strh would win (kind 1 < 4) at h 5, i.e. with an ALIAS edge (latency 1) from `strh bad` to `str hdr.a`;
+  today only a volatile-order edge (latency 0) to `str hdr.b` exists. Needs the bad store or hdr.a store to be a
+  vague alias: smaller Save declaration makes everything vague (118); pointer locals/inline pointer helpers are
+  propagated (3). Open.
+- func_02035f64 (15): strict map: product (mul) = v45 -> r1, reload of bl->a = v36 -> r3 (target reverse): the
+  bl->a temp is created before the product in the optimized IR; products-first source orders do not survive the IR
+  optimizer (30+). Open.
