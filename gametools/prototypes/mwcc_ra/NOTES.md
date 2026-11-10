@@ -178,3 +178,9 @@ pred left) or with another stack-store order (fixed by codegen). Not reached fro
   remaining gap: target loads stack param `pal` ([sp,#64]) early into r9 (pal load node has h 3 in our DAG -> late),
   and cur*0x32c stays in r0; ours puts the product in r9. Hypothesis: in the original, pal is used inside the entry
   block (longer chain). Copies `pal = pal0` are propagated (no effect). Open.
+- func_01ff8188 (11): stmtcount shows the face-loop body is CUT by the >100 rule inside the 3rd vertex: block 7
+  statements ... k=i2 84, p[11] 86, p[12] 88 (17 pcodes) -> p[13] starts at 105 -> new block 8 = p[13], p[14],
+  f++, p+=15, loop test. That is why "the odd allocation follows whichever vertex is last" (agents' r4 finding) and
+  why the loop counter ops (sub/cmp/add r8) are mixed into p[13] instead of p[14] as in the target. Target likely
+  has the cut after p[13] (needs p[13] to start <= 100: 5 pcodes less before it). Index forms only add pcodes
+  (512 combos, best 11); per-vertex pointer locals change the code (smaller). Open.
