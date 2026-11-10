@@ -71,3 +71,21 @@ Writing `prevSel` first gives the right strh order but the PRE-RA scheduler then
 strh, so v19 interferes with v17 (-1) and every register shifts (0 -> r2, -1 -> r3, 1 -> r2). What source puts the
 `1` after both strh with prevSel first is a scheduler-priority question: next step = dump the DAG and the ready-list
 choices (hook FUN_004ff1f0 callers / the list scheduler loop) and compare both orders.
+
+## List scheduler (session 3, 2026-11-10)
+FUN_004ff750 = per block: one DAG node per pcode (FUN_004fedb0, 0x1c bytes: +0 ready-list next, +8 successor edges
+{next, node, u16 latency}, +0xc pcode, +0x10 latency, +0x12 kind, +0x14 earliest cycle, +0x16 deadline,
++0x18 height, +0x1a unscheduled preds), deps by FUN_004ff1f0, deadlines FUN_004ff530, then each cycle
+FUN_004ff590 picks among ready nodes (preds 0, earliest <= cycle, resource ok):
+  1. urgent (deadline <= cycle) beats non-urgent; 2. more successors it unblocks (FUN_004ff560: succs with 1 pred);
+  3. greater height; 4. smaller kind (FUN_004febf0: 0 move, 1 no reg def, 2 def+use, 3 flag 2, 4 def only);
+  5. list order = program order.
+Memory deps: loads FUN_004ff0e0 vs stores, stores FUN_004ff140 vs loads+stores, edge only if FUN_00559ba0 ->
+FUN_00559a20 (Alias.c: alias objects at pcode+0x1c, kind +0x30: 0 exact (same object), 1/4 FUN_00444c10 +
+FUN_00559790, 2 = set membership). Call = barrier for everything (flag 0x100108 -> FUN_004fef80).
+`schedtrace.py FILE.c FUNC [--pass 1] [--dag]` prints candidates + pick per cycle and the DAG with latencies.
+
+func_0203075c: with prevSel written first, the target order needs: the `result = 0` store NOT dependent on the
+prevSel store (else it ties with `sub` and wins on kind), while the final `flag = 1` store DOES depend on the sel
+store (else `mov 1` jumps between the two strh). Accessor form never changes alias objects (1024 combos = 3
+classes); declared TYPES do partly (340 combos, best 2). Next: FUN_00444c10 / alias object creation rules.
