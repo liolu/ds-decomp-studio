@@ -136,3 +136,9 @@ func_0200c138: block 9 statement starts ... 96 97 100 101 -> the statement start
 pcode less before it (or the right extra ones) moves the cut; removing func_0203d098 proves the last block then
 matches. Source forms are normalized before codegen (index/division/buf/locals: same counts); float division
 changes counts but also the code; callee return/param types and local types (2600 variants): no exact count found.
+Session 8 (0200c138 count levers): statement starts in block 9 (draft): t6 call 89, copy 92, t5 call 93, copy 96,
+t4 call 97, copy 100, ded8 call 101 -> cut. Variadic `int sprintf(char *, const char *, ...)` adds +1 per call
+(double passed through varargs): with both, the cut moves to the `t4 = v0` copy (102) - still 3 diffs (the copy
+starts the block, ded8 returns too early). To cut on a call (deb8) needs +4, on dec8 +8; or -1 to cut after ded8.
+No effect on the count: K&R/variadic d740/d098/getters/_dflt, explicit vs natural division, u8* + (s32 *) deref,
+index forms, local/return/param types (they either keep the count or change the visible code).
