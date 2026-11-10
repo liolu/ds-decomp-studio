@@ -51,6 +51,7 @@ Three levels:
 - **shape-score** `mscore.py` - variant ranking with registers masked (big functions)
 - **region-diff** `regions.py` - mismatches per region of the target
 - **sched-scan** `schedscan.py` - exact instruction window across thousands of variants (scheduling puzzles)
+- **proto:pragsweep** / **pragma-profile** `pragsweep.py` - every pragma name read out of mwccarm.exe (77 for 2.0/sp1p5) on/off x -O levels, keeps those that change the code, then pairs. A source `#pragma` of the original = a `-pragma` profile in compilers.txt (TnJ: `opt_propagation off` solved 6 functions, `opt_dead_assignments off`+`opt_propagation off` kept an empty loop, CTRDGi -O2+propagation off)
 
 ## Manual techniques (no script yet - turn into a prototype when reused)
 Compiler flags
@@ -112,6 +113,11 @@ Data / addresses
 - **block-init** `V3 z = {0,0,0};` initializer (not assignments) = stores through a pointer reg; initialized locals use reverse-declaration stack order
 - **stack-order** stack arrays are laid out in reverse declaration order; a 4-long array forces padding
 - **runtime-names** name runtime helpers as mwcc emits them (`_ll_udiv`, `_ull_mod`, `_ll_sdiv`, `_ll_mod`, `_dneq`...) then plain `/`, `%`
+- **global-as-array** `extern u8 X[]` / `extern s32 X[]` / `extern T *X[]` + casts instead of `extern G X;`: mwcc moves loads of an array global above stores to locals and stops sinking `n + 1` (TnJ s38, 7 functions)
+- **volatile-field** volatile on ONE struct field (not the object) pins one store/copy order (TnJ func_02030388)
+- **inline-subexpr** repeat `k - 3` / `idx + dir` at each use instead of a local (temp register swaps, loop IV order)
+- **inline-helper** a `static inline` per repeated block / getter changes register colouring (TnJ func_02039e84 84 -> 0)
+- **callee-sig** real callee arity, names and param types (missing arg = constant in a register; names alone moved registers in TnJ func_020289e8; u8 stack param fixed the entry arg-save order)
 Control flow
 - **loop-form** `for`/`do while`/`if (i < end) do {} while` instead of goto loops; unsigned `n > 0` guard only as a for loop
 - **if-invert** invert a branch / early return / `if (f()) break; continue;` vs `if (!f()) continue; break;`
@@ -119,10 +125,11 @@ Control flow
 - **dead-bx-merge** a 4-byte `bx lr` after a no-return function split by dsd: merge it into the previous symbol
 Section / build
 - **init-section** `#pragma define_section INIT ".init"` + `__declspec(INIT)` for `__sinit_*` only
+- **text-data** `#pragma define_section TEXTDATA ".text" ".text"` + `__declspec(TEXTDATA)` on NON-const data, BuildInfo only (crt0 module params + SDK version string; one file per object)
 - **link-time-const** relocs `kind:link_time_const(X)` -> `extern T X[];`
 
 ## Known dead ends (do not retry without a new idea)
-- 5th stack-argument register order for calls to func_0203d498 (TnJ func_02016a94, 020116d8, 0200d854, 02028714)
+- (SOLVED 2026-11-10: profile `-pragma "opt_propagation off"` + first arg in a block local) 5th stack-argument register order for calls to func_0203d498 (TnJ func_02016a94, 020116d8, 0200d854, 02028714)
 - "param kept in r0 + copy" (TnJ func_02013198, func_02031cf0): copies/u32/const/inline all coalesce
 - func_0203075c: sub hoisted above str only with a longer chain (~7500 variants + permuter)
 - vsweep on TnJ: 2.0/sp1p5 is the only compiler; leftovers are source-level
