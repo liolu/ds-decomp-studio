@@ -100,3 +100,13 @@ precise k0/k1; a struct field at a NON-zero offset (prevSel +2, G.result +16) = 
 globals); local pointers are propagated (still precise); volatile casts / unions change nothing.
 Target needs (prevSel first): `sel` store linked to the `flag` store AND `result` store NOT linked to `prevSel` ->
 sel vague + prevSel precise, the opposite of what the struct gives; no form found yet (≈1700 variants, best 2).
+
+## Alias construction (session 5, 2026-11-10)
+Alias.c FUN_00559450(object, offset, size): cached per (object, range); whole object -> kind 0; sub-range -> kind 1
+(parent = whole object); ends with: if (type kind != 12 (array) || type size > 0) && type size < offset + size ->
+returns DAT_0063bb40 (the "everything" set, kind 2). Incomplete arrays (`extern T x[];`, size 0) are never "out of
+range". Object +0xc = type (byte kind: 4 struct, 12 array; s32 size at +2). `aliaslog.py FILE.c` logs every call.
+Seen: each access is asked twice, once at its offset and once at a DOUBLED offset (G 16/20 -> 32/40, Cfg prevSel
+2 -> 4): with a 4-byte struct, prevSel's doubled range overflows -> vague; sel (offset 0) never can.
+func_0203075c: smaller declared sizes (char/s16/s16[1]/[2], struct of 2, G[5]/[6]) -> best still 2 (128 variants).
+Total ~1850 source variants on this function; mechanism understood, original form still unknown.
