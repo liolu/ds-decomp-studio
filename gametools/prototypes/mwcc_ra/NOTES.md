@@ -184,3 +184,17 @@ pred left) or with another stack-store order (fixed by codegen). Not reached fro
   why the loop counter ops (sub/cmp/add r8) are mixed into p[13] instead of p[14] as in the target. Target likely
   has the cut after p[13] (needs p[13] to start <= 100: 5 pcodes less before it). Index forms only add pcodes
   (512 combos, best 11); per-vertex pointer locals change the code (smaller). Open.
+
+## s39 results (5 Opus agents with these tools, 2026-11-11): +4 matches, TnJ 97.30 % (1923/1932)
+- 0203bd24: locals for res->h/res->w read before the stores + last stack param declared `u16 pal` (word ldr of a
+  2-byte object = out-of-range = vague alias -> the pal load gets edges to the stack stores, height 3 -> 10, loaded
+  early into r9). Trick: narrow type on a late-loaded stack param.
+- 01ff8188: normals written `((u16 *) &B[k])[3..5]` instead of B[k].nx..nz: the optimizer shares &B[k] instead of B
+  (about 4 raw pcodes less per vertex, same asm) -> the > 100 cut moves to p[14]. Trick: u16-index view to lower
+  raw pcode counts.
+- 0201666c: declare the global as its real 8-byte head object (as the bss data file does), slots via their own
+  symbols, magic reads through a (Save *) view -> the `bad` store becomes vague -> alias edges to the hdr stores.
+- 0200c138: matches only with compiler 2.0/sp1p2 (compilers.txt), natural C (variadic sprintf, locals); sp1p5
+  needs the ded8 call to start at 98-100 raw pcodes, natural forms give >= 101. Trick: judge stuck drafts on sp1p2/sp1.
+- 0203075c still 2: cast pointer + data_02088450[9] gives the exact target ORDER but pointer vregs are created
+  too early (registers wrong); direct global literals are created late.
