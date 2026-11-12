@@ -198,3 +198,22 @@ pred left) or with another stack-store order (fixed by codegen). Not reached fro
   needs the ded8 call to start at 98-100 raw pcodes, natural forms give >= 101. Trick: judge stuck drafts on sp1p2/sp1.
 - 0203075c still 2: cast pointer + data_02088450[9] gives the exact target ORDER but pointer vregs are created
   too early (registers wrong); direct global literals are created late.
+
+## s41 (5 Opus, 2026-11-12): 0 match, mechanisms decoded
+- AliasPropagationARM.c FUN_00591bf0 (from FUN_00598660, per def->use, to fixpoint): a store whose base vreg comes
+  from a literal load with alias (obj, L, 1) gets alias(obj, L + imm, size) merged with its codegen alias: same object
+  different range -> whole object k0; out of range -> ALL; same range -> k1 kept. => a direct field access keeps k1
+  only at offset 0 created by an offset-0 access (the "doubled offset").
+- Direct global accesses are codegen'd as symbol-operand stores (0x39/0x3e); a later lowering creates the literal
+  loads (0x80) with vregs after all codegen vregs; an explicit address (0x17: (s32) cast, non-propagated pointer)
+  gets its vreg at its statement and is reused by the lowering for every direct access to that symbol. Inside a
+  statement the value is created before the address. (0203075c: no natural C satisfies alias + vreg constraints.)
+- Spill cost (FUN_00592340): cost = 2*X + defs - copies, X = use regions walking pre-RA pcode backwards; a region
+  ends at any last-use pcode. A named `d = kN - t;` statement moves a last use and lowers a temp's cost -> it
+  spills (02011d5c: exact target spill set, frame 96; registers still permuted, 112 diffs, s41/func_02011d5c/v314.c).
+- Peephole deletes a dead first spill store only if no non-sp memory store sits between it and the reload in the
+  pre-RA order (01ff9518: the `count = 0` strh blocks it; removing it gives the target prologue).
+- Plain assignment: mwcc always builds the RHS before the destination address; only compound assignment and
+  bitfield stores put the address first (020368fc 8 diffs left).
+- 020343a4: the original keeps working x/y/z distinct from sx/sy/sz (no copy-propagation): a helper taking &x/&y/&z
+  like sibling func_02033f58's func_01ff9e70 probably existed.
