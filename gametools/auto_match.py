@@ -59,6 +59,46 @@ COMPILERS = [("2.0/sp1p5", ""), ("1.2/sp2p3", ""), ("1.2/sp2p3", "-proc arm7tdmi
 # split only on commas starting a new version ("1.2/sp3 -O2,p" keeps its comma)
 EXTRA_PROFILES = [(v.strip(), "") for v in re.split(r",(?=\s*\d)", os.environ.get("AUTO_EXTRA_PROFILES", "")) if v.strip()]
 COMPILERS += [c for c in EXTRA_PROFILES if c not in COMPILERS]
+BASE_COMPILERS = list(COMPILERS)  # what every run tried before the game prior (old cache lines without "p")
+# Global defaults added 2026-11-16: profiles that matched near misses in many games although no run tried them
+# (prototypes/nearsweep.py over 45 games, ~260 matches: 1.2/sp3 95, -O4,s 60, -O2,p 30, no-opt_rebuildconditionals 26,
+# 1.2/sp3 -O2,p 13, -O1,p 6). The grouped first pass compiles all drafts in one call per profile: cheap.
+GLOBAL_PROFILES = [("1.2/sp3", ""), ("2.0/sp1p5", "-O4,s"), ("1.2/sp2p3", "-O4,s"), ("2.0/sp1p5", "-O2,p"),
+                   ("2.0/sp1p5", "-flag no-opt_rebuildconditionals"), ("1.2/sp3", "-O2,p"), ("2.0/sp1p5", "-O1,p")]
+if not os.environ.get("AUTO_NO_PRIOR"):
+    COMPILERS += [c for c in GLOBAL_PROFILES if c not in COMPILERS and (MWCC_ROOT / c[0] / "mwccarm.exe").exists()]
+
+
+def _prof_split(p: str) -> tuple[str, str]:
+    v, _, e = p.strip().partition(" ")
+    return v, e.strip()
+
+
+def prof_str(c: tuple[str, str]) -> str:
+    return f"{c[0]} {c[1]}".strip()
+
+
+def _game_prior():
+    """Profile prior of this game (prototypes/profprior.py): the profiles of compilers.txt, and per address the ones of
+    the nearest matched files (one original source file = one set of flags). AUTO_NO_PRIOR=1 turns it off."""
+    if os.environ.get("AUTO_NO_PRIOR"):
+        return None
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent / "prototypes"))
+        import profprior
+        return profprior.prior(str(ROOT))
+    except Exception:  # noqa: BLE001  (a broken prior must never stop a run)
+        return None
+
+
+PRIOR = _game_prior()
+# Game census (2026-11-16): profiles already used by >= AUTO_PRIOR_MIN files of this game, at most AUTO_PRIOR_MAX of them.
+# Before, a game-specific profile (Cooking Mama: 287 files `1.2/sp2p3 -O4,p -lang c99 -inline on,noauto`) was never
+# tried on a new function unless AUTO_EXTRA_PROFILES named it.
+if PRIOR is not None:
+    _have = lambda c: (MWCC_ROOT / c[0] / "mwccarm.exe").exists()
+    _census = [_prof_split(p) for p, n in PRIOR.census() if n >= int(os.environ.get("AUTO_PRIOR_MIN", 3))]
+    COMPILERS += [c for c in _census if c not in COMPILERS and _have(c)][:int(os.environ.get("AUTO_PRIOR_MAX", 6))]
 # Multi search (--multi / AUTO_MULTI=1): every version also with these optimisation flags (they come after -O4,p and
 # override it); a match with one of them is recorded in compilers.txt like any other profile
 MULTI_FLAGS = ["-O4,s", "-O2"]  # not -O3,p: no match in 56,076 over 49 games
@@ -159,6 +199,9 @@ def cache_key(f):
     return hashlib.sha1((function_asm(f[0]) or "").encode()).hexdigest()[:20] + f[0]
 
 
+_CACHE_TRIED = {}
+
+
 def load_cache():
     out = {}
     if CACHE.exists() and not os.environ.get("AUTO_FRESH"):
@@ -167,6 +210,7 @@ def load_cache():
                 d = json.loads(line)
                 if d["r"][3] == "match" or d.get("v") in ACCEPTED_FAILURES:
                     out[d["k"]] = tuple(d["r"])
+                    _CACHE_TRIED[d["k"]] = d.get("p")  # profiles tried (None: a line from before 2026-11-16)
             except Exception:
                 pass  # a line cut by an interruption
     return out
@@ -346,23 +390,49 @@ def code_style(addr: int, size: int) -> str:
     return "other"
 
 
-def profiles_for(name: str, size: int, addr: int) -> list[tuple[str, str]]:
-    """Compiler profiles worth trying for one function (all of them when in doubt; AUTO_ALL_PROFILES=1 forces that)."""
+def profiles_for(name: str, size: int, addr: int, prior: bool = True) -> list[tuple[str, str]]:
+    """Compiler profiles worth trying for one function (all of them when in doubt; AUTO_ALL_PROFILES=1 forces that).
+    With the game prior: the profiles of the nearest matched neighbours come first (and are added when the census left
+    them out). prior=False: the list of the runs before the prior (old cache lines)."""
+    comps = COMPILERS if prior else BASE_COMPILERS
     if os.environ.get("AUTO_ALL_PROFILES") or ASM_ONLY.search(function_asm(name) or ""):
-        return COMPILERS
+        return comps
     style = code_style(addr, size)
-    if style == "v20":
-        return [c for c in COMPILERS if c[0].startswith("2.") or c in EXTRA_PROFILES]
-    if style == "v12":
-        return [c for c in COMPILERS if c[0].startswith("1.") and c not in EXTRA_PROFILES or c in EXTRA_PROFILES]
-    return COMPILERS
+    ok = lambda c: (style == "other" or c in EXTRA_PROFILES or c[0].startswith("2." if style == "v20" else "1."))
+    out = [c for c in comps if ok(c)]
+    if prior and PRIOR is not None:
+        try:
+            near = [_prof_split(p) for p, _ in PRIOR.predict(addr)]
+        except Exception:  # noqa: BLE001
+            near = []
+        near = [c for c in near if ok(c) and (c in out or (MWCC_ROOT / c[0] / "mwccarm.exe").exists())]
+        out = near + [c for c in out if c not in near]
+    return out
+
+
+_RETRY = None  # name -> profiles still to try (cache failures from runs that did not have them): retry_profiles.json
+
+
+def profiles_to_try(f: tuple[str, int, int]) -> list[tuple[str, str]]:
+    """profiles_for, minus the profiles an earlier run already tried on this function (written by main)."""
+    global _RETRY
+    if _RETRY is None:
+        try:
+            _RETRY = json.loads((WORK / "retry_profiles.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            _RETRY = {}
+    full = profiles_for(*f)
+    if f[0] in _RETRY:
+        miss = set(_RETRY[f[0]])
+        return [c for c in full if prof_str(c) in miss] or full
+    return full
 
 
 def try_function(f: tuple[str, int, int]) -> tuple[str, int, int, str, str]:
     """Tries every compiler; a match with a non-default compiler is tagged with a marker comment."""
     first = None
     t0 = time.time()
-    for version, extra in profiles_for(*f):
+    for version, extra in profiles_to_try(f):
         if first is not None and time.time() - t0 > FUNCTION_BUDGET:
             break
         result = try_function_with(f, MWCC_ROOT / version / "mwccarm.exe", extra)
@@ -452,9 +522,9 @@ def grouped_first_pass(group: list[tuple[str, int, int]]) -> dict[str, tuple[str
     by_profile = {}
     for f in group:
         if f[0] in drafts:
-            for prof in profiles_for(*f):
+            for prof in profiles_to_try(f):
                 by_profile.setdefault(prof, []).append(f)
-    for prof in COMPILERS:
+    for prof in list(dict.fromkeys(COMPILERS + list(by_profile))):
         fs = [f for f in by_profile.get(prof, []) if f[0] not in won]
         items = [(f[0], f[1], f[2], src) for f in fs for src in drafts[f[0]]]
         if not items:
@@ -1378,6 +1448,23 @@ def main():
         todo = [f for f in todo if f[0] in focus]
     cached = load_cache()
     keys = {f[0]: cache_key(f) for f in todo}
+    # A failure only counts for the profiles it was tried with: the ones added since (game prior, AUTO_EXTRA_PROFILES)
+    # are tried now, and only them (retry_profiles.json, read by the workers).
+    retry, tried_before, old_fail = {}, {}, {}
+    for f in todo:
+        k = keys[f[0]]
+        if focus is None and k in cached and cached[k][3] not in ("match", "m2c"):  # m2c: no draft, no profile helps
+            p = _CACHE_TRIED.get(k)
+            done_p = set(p) if p else {prof_str(c) for c in profiles_for(*f, prior=False)}
+            miss = [prof_str(c) for c in profiles_for(*f) if prof_str(c) not in done_p]
+            if miss:
+                retry[f[0]], tried_before[f[0]] = miss, sorted(done_p)
+                old_fail[f[0]] = cached.pop(k)  # kept when the new profiles do no better (its draft stays the near miss)
+    WORK.mkdir(parents=True, exist_ok=True)
+    (WORK / "retry_profiles.json").write_text(json.dumps(retry), encoding="utf-8")
+    by_name_f = {f[0]: f for f in todo}
+    if retry:
+        print(f"{len(retry)} cached failures get new profiles only ({sum(map(len, retry.values()))} compiles)", flush=True)
     results = [cached[keys[f[0]]] for f in todo if keys[f[0]] in cached and (focus is None or cached[keys[f[0]]][3] == "match")]
     pending = [f for f in todo if keys[f[0]] not in cached or (focus is not None and cached[keys[f[0]]][3] != "match")]
     if args.cached_only:
@@ -1412,10 +1499,18 @@ def main():
             chunk = pending[start:start + size]
             groups = make_groups(chunk, max(8, min(GROUP, -(-len(chunk) // jobs))))
             for r in (x for grp in pool.imap_unordered(try_group, groups) for x in grp):
+                o = old_fail.get(r[0])
+                if o is not None and r[3] != "match" and RANK.get(r[3], 0) <= RANK.get(o[3], 0):
+                    r = o
                 results.append(r)
                 if r[3] == "match":
                     waiting.append(r)
-                cache_out.write(json.dumps({"k": keys[r[0]], "v": AUTO_VERSION, "r": list(r)}) + chr(10))
+                line = {"k": keys[r[0]], "v": AUTO_VERSION, "r": list(r)}
+                if r[3] != "match":
+                    fx = by_name_f.get(r[0])
+                    if fx is not None:
+                        line["p"] = sorted(set(tried_before.get(r[0], [])) | {prof_str(c) for c in profiles_for(*fx)})
+                cache_out.write(json.dumps(line) + chr(10))
                 cache_out.flush()
                 done += 1
                 if done % 100 == 99:
@@ -1472,6 +1567,12 @@ def main():
         (WORK / "near").mkdir()
         for n, s, a, src in near:
             (WORK / "near" / f"{n}.c").write_text(src, encoding="utf-8")
+        # size misses too (2026-11-16): another profile often fixes the size (-O4,s, inline on); prototypes/nearsweep.py --src
+        shutil.rmtree(WORK / "size", ignore_errors=True)
+        (WORK / "size").mkdir()
+        for n, s, a, st, src in results:
+            if st == "size" and src:
+                (WORK / "size" / f"{n}.c").write_text(src, encoding="utf-8")
         (WORK / "status.json").write_text(json.dumps([r[:4] for r in results]))
         print(f"{len(near)} near misses kept in {(WORK / 'near').relative_to(ROOT)}")
     if near and not args.dry_run:  # the near misses go to the miss database too (replayed on the other functions)
