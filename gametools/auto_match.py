@@ -65,6 +65,14 @@ BASE_COMPILERS = list(COMPILERS)  # what every run tried before the game prior (
 # 1.2/sp3 -O2,p 13, -O1,p 6). The grouped first pass compiles all drafts in one call per profile: cheap.
 GLOBAL_PROFILES = [("1.2/sp3", ""), ("2.0/sp1p5", "-O4,s"), ("1.2/sp2p3", "-O4,s"), ("2.0/sp1p5", "-O2,p"),
                    ("2.0/sp1p5", "-flag no-opt_rebuildconditionals"), ("1.2/sp3", "-O2,p"), ("2.0/sp1p5", "-O1,p")]
+_PROMOTED = Path(__file__).resolve().parent / "prototypes" / "promoted_profiles.txt"  # flagsweep.py promote
+if _PROMOTED.exists():
+    for _line in _PROMOTED.read_text(encoding="utf-8").splitlines():
+        _p = _line.split("#", 1)[0].strip()
+        if _p:
+            _c = (_p.partition(" ")[0], " ".join(_p.partition(" ")[2].split()))
+            if _c not in GLOBAL_PROFILES:
+                GLOBAL_PROFILES.append(_c)
 if not os.environ.get("AUTO_NO_PRIOR"):
     COMPILERS += [c for c in GLOBAL_PROFILES if c not in COMPILERS and (MWCC_ROOT / c[0] / "mwccarm.exe").exists()]
 
