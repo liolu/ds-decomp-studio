@@ -1,0 +1,3886 @@
+{
+ "code-lyoko": {
+  "closer": 37,
+  "deltas": {
+   "-O0": {
+    "changed": 220,
+    "closer": 6,
+    "match": 0,
+    "tried": 222
+   },
+   "-O1,p": {
+    "changed": 199,
+    "closer": 6,
+    "match": 0,
+    "tried": 222
+   },
+   "-O1,s": {
+    "changed": 201,
+    "closer": 8,
+    "match": 0,
+    "tried": 222
+   },
+   "-O2,p": {
+    "changed": 14,
+    "closer": 3,
+    "match": 0,
+    "tried": 222
+   },
+   "-O2,s": {
+    "changed": 77,
+    "closer": 5,
+    "match": 0,
+    "tried": 222
+   },
+   "-O3,p": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 222
+   },
+   "-O3,s": {
+    "changed": 76,
+    "closer": 4,
+    "match": 0,
+    "tried": 222
+   },
+   "-O4,s": {
+    "changed": 76,
+    "closer": 4,
+    "match": 0,
+    "tried": 222
+   },
+   "-flag no-global_optimizer": {
+    "changed": 4,
+    "closer": 0,
+    "match": 0,
+    "tried": 219
+   },
+   "-flag no-opt_addtogetherconstantpartsoftreeexpressions": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 221
+   },
+   "-flag no-opt_arithtransformation": {
+    "changed": 4,
+    "closer": 0,
+    "match": 0,
+    "tried": 221
+   },
+   "-flag no-opt_collapselogicalselectionintobittest": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 221
+   },
+   "-flag no-opt_common_subs": {
+    "changed": 21,
+    "closer": 2,
+    "match": 1,
+    "tried": 221
+   },
+   "-flag no-opt_dead_assignments": {
+    "changed": 4,
+    "closer": 0,
+    "match": 0,
+    "tried": 220
+   },
+   "-flag no-opt_dead_code": {
+    "changed": 5,
+    "closer": 1,
+    "match": 0,
+    "tried": 220
+   },
+   "-flag no-opt_foldconstants": {
+    "changed": 28,
+    "closer": 1,
+    "match": 0,
+    "tried": 220
+   },
+   "-flag no-opt_loop_invariants": {
+    "changed": 3,
+    "closer": 1,
+    "match": 0,
+    "tried": 220
+   },
+   "-flag no-opt_propagation": {
+    "changed": 6,
+    "closer": 0,
+    "match": 0,
+    "tried": 220
+   },
+   "-flag no-opt_rebuildconditionals": {
+    "changed": 1,
+    "closer": 1,
+    "match": 1,
+    "tried": 220
+   },
+   "-flag no-opt_rebuildlogicals": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 219
+   },
+   "-flag no-opt_strength_reduction": {
+    "changed": 8,
+    "closer": 2,
+    "match": 0,
+    "tried": 219
+   },
+   "-flag no-opt_strength_reduction_strict": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 219
+   },
+   "-flag no-opt_treetransformation": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 219
+   },
+   "-flag opt_repositioncode": {
+    "changed": 68,
+    "closer": 4,
+    "match": 0,
+    "tried": 219
+   },
+   "-flag opt_returnloopdepthinstatementvalue": {
+    "changed": 6,
+    "closer": 1,
+    "match": 0,
+    "tried": 219
+   },
+   "-flag opt_unpromotetypes": {
+    "changed": 5,
+    "closer": 0,
+    "match": 0,
+    "tried": 219
+   },
+   "-flag opt_unroll_loops": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 219
+   },
+   "-flag optimize_for_size": {
+    "changed": 76,
+    "closer": 4,
+    "match": 0,
+    "tried": 219
+   },
+   "-msext on": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 221
+   },
+   "-nointerworking": {
+    "changed": 60,
+    "closer": 5,
+    "match": 0,
+    "tried": 222
+   },
+   "-pic": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 221
+   },
+   "-pid": {
+    "changed": 109,
+    "closer": 6,
+    "match": 0,
+    "tried": 221
+   },
+   "-proc arm7tdmi": {
+    "changed": 183,
+    "closer": 15,
+    "match": 1,
+    "tried": 222
+   },
+   "-proc arm9tdmi": {
+    "changed": 163,
+    "closer": 10,
+    "match": 0,
+    "tried": 221
+   },
+   "-proc generic": {
+    "changed": 199,
+    "closer": 14,
+    "match": 0,
+    "tried": 221
+   },
+   "-proc v4t": {
+    "changed": 182,
+    "closer": 14,
+    "match": 0,
+    "tried": 221
+   },
+   "-proc v5t": {
+    "changed": 156,
+    "closer": 17,
+    "match": 0,
+    "tried": 221
+   },
+   "-proc v5te": {
+    "changed": 17,
+    "closer": 3,
+    "match": 0,
+    "tried": 221
+   },
+   "-profile": {
+    "changed": 220,
+    "closer": 4,
+    "match": 0,
+    "tried": 221
+   }
+  },
+  "drafts": 222,
+  "matches": 3,
+  "won_profiles": {
+   "1.2/sp2p3 -flag no-opt_rebuildconditionals": 1,
+   "2.0/sp1p5 -flag no-opt_common_subs": 1,
+   "2.0/sp1p5 -proc arm7tdmi": 1
+  }
+ },
+ "crafting-mama": {
+  "closer": 100,
+  "deltas": {
+   "-O0": {
+    "changed": 422,
+    "closer": 4,
+    "match": 0,
+    "tried": 428
+   },
+   "-O1,p": {
+    "changed": 335,
+    "closer": 41,
+    "match": 0,
+    "tried": 428
+   },
+   "-O1,s": {
+    "changed": 334,
+    "closer": 40,
+    "match": 0,
+    "tried": 428
+   },
+   "-O2,p": {
+    "changed": 66,
+    "closer": 37,
+    "match": 0,
+    "tried": 428
+   },
+   "-O2,s": {
+    "changed": 107,
+    "closer": 37,
+    "match": 0,
+    "tried": 428
+   },
+   "-O3,p": {
+    "changed": 7,
+    "closer": 3,
+    "match": 0,
+    "tried": 428
+   },
+   "-O3,s": {
+    "changed": 102,
+    "closer": 34,
+    "match": 0,
+    "tried": 428
+   },
+   "-O4,s": {
+    "changed": 97,
+    "closer": 31,
+    "match": 0,
+    "tried": 428
+   },
+   "-flag no-global_optimizer": {
+    "changed": 14,
+    "closer": 0,
+    "match": 0,
+    "tried": 427
+   },
+   "-flag no-opt_arithtransformation": {
+    "changed": 31,
+    "closer": 0,
+    "match": 0,
+    "tried": 428
+   },
+   "-flag no-opt_common_subs": {
+    "changed": 23,
+    "closer": 4,
+    "match": 0,
+    "tried": 428
+   },
+   "-flag no-opt_dead_assignments": {
+    "changed": 7,
+    "closer": 4,
+    "match": 0,
+    "tried": 428
+   },
+   "-flag no-opt_dead_code": {
+    "changed": 12,
+    "closer": 1,
+    "match": 0,
+    "tried": 428
+   },
+   "-flag no-opt_foldconstants": {
+    "changed": 32,
+    "closer": 1,
+    "match": 0,
+    "tried": 428
+   },
+   "-flag no-opt_loop_invariants": {
+    "changed": 9,
+    "closer": 4,
+    "match": 0,
+    "tried": 428
+   },
+   "-flag no-opt_optimizecontrolflow": {
+    "changed": 6,
+    "closer": 1,
+    "match": 0,
+    "tried": 428
+   },
+   "-flag no-opt_propagation": {
+    "changed": 59,
+    "closer": 5,
+    "match": 0,
+    "tried": 428
+   },
+   "-flag no-opt_rebuildconditionals": {
+    "changed": 3,
+    "closer": 1,
+    "match": 0,
+    "tried": 428
+   },
+   "-flag no-opt_strength_reduction": {
+    "changed": 54,
+    "closer": 31,
+    "match": 0,
+    "tried": 427
+   },
+   "-flag no-opt_treetransformation": {
+    "changed": 6,
+    "closer": 0,
+    "match": 0,
+    "tried": 427
+   },
+   "-flag opt_repositioncode": {
+    "changed": 138,
+    "closer": 3,
+    "match": 1,
+    "tried": 428
+   },
+   "-flag opt_returnloopdepthinstatementvalue": {
+    "changed": 6,
+    "closer": 1,
+    "match": 0,
+    "tried": 427
+   },
+   "-flag opt_unpromotetypes": {
+    "changed": 25,
+    "closer": 2,
+    "match": 0,
+    "tried": 427
+   },
+   "-flag opt_unroll_loops": {
+    "changed": 5,
+    "closer": 0,
+    "match": 0,
+    "tried": 427
+   },
+   "-flag opt_useexpressioncostswhenlinearizingassignments": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 427
+   },
+   "-flag optimize_for_size": {
+    "changed": 97,
+    "closer": 31,
+    "match": 0,
+    "tried": 427
+   },
+   "-inline auto,deferred": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 428
+   },
+   "-inline deferred": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 428
+   },
+   "-ipa file": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 422
+   },
+   "-msext on": {
+    "changed": 4,
+    "closer": 2,
+    "match": 0,
+    "tried": 428
+   },
+   "-nointerworking": {
+    "changed": 110,
+    "closer": 0,
+    "match": 0,
+    "tried": 428
+   },
+   "-pic": {
+    "changed": 44,
+    "closer": 0,
+    "match": 0,
+    "tried": 428
+   },
+   "-pid": {
+    "changed": 241,
+    "closer": 2,
+    "match": 0,
+    "tried": 428
+   },
+   "-proc arm7tdmi": {
+    "changed": 324,
+    "closer": 8,
+    "match": 0,
+    "tried": 428
+   },
+   "-proc arm926ej": {
+    "changed": 6,
+    "closer": 6,
+    "match": 0,
+    "tried": 428
+   },
+   "-proc arm9tdmi": {
+    "changed": 323,
+    "closer": 10,
+    "match": 0,
+    "tried": 428
+   },
+   "-proc generic": {
+    "changed": 364,
+    "closer": 19,
+    "match": 0,
+    "tried": 428
+   },
+   "-proc v4t": {
+    "changed": 324,
+    "closer": 8,
+    "match": 0,
+    "tried": 428
+   },
+   "-proc v5t": {
+    "changed": 267,
+    "closer": 46,
+    "match": 0,
+    "tried": 428
+   },
+   "-profile": {
+    "changed": 426,
+    "closer": 1,
+    "match": 0,
+    "tried": 428
+   }
+  },
+  "drafts": 428,
+  "matches": 1
+ },
+ "dragon-ball-origins": {
+  "closer": 49,
+  "deltas": {
+   "-O0": {
+    "changed": 361,
+    "closer": 5,
+    "match": 0,
+    "tried": 365
+   },
+   "-O1,p": {
+    "changed": 328,
+    "closer": 23,
+    "match": 0,
+    "tried": 365
+   },
+   "-O1,s": {
+    "changed": 327,
+    "closer": 22,
+    "match": 0,
+    "tried": 365
+   },
+   "-O2,p": {
+    "changed": 28,
+    "closer": 11,
+    "match": 0,
+    "tried": 365
+   },
+   "-O2,s": {
+    "changed": 80,
+    "closer": 10,
+    "match": 0,
+    "tried": 365
+   },
+   "-O3,p": {
+    "changed": 7,
+    "closer": 2,
+    "match": 0,
+    "tried": 365
+   },
+   "-O3,s": {
+    "changed": 71,
+    "closer": 5,
+    "match": 0,
+    "tried": 365
+   },
+   "-O4,s": {
+    "changed": 70,
+    "closer": 5,
+    "match": 0,
+    "tried": 365
+   },
+   "-flag auto_inline": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 362
+   },
+   "-flag no-global_optimizer": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 362
+   },
+   "-flag no-opt_arithtransformation": {
+    "changed": 16,
+    "closer": 0,
+    "match": 0,
+    "tried": 365
+   },
+   "-flag no-opt_common_subs": {
+    "changed": 22,
+    "closer": 2,
+    "match": 0,
+    "tried": 365
+   },
+   "-flag no-opt_dead_assignments": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 365
+   },
+   "-flag no-opt_dead_code": {
+    "changed": 11,
+    "closer": 0,
+    "match": 0,
+    "tried": 365
+   },
+   "-flag no-opt_foldconstants": {
+    "changed": 6,
+    "closer": 1,
+    "match": 0,
+    "tried": 365
+   },
+   "-flag no-opt_loop_invariants": {
+    "changed": 13,
+    "closer": 6,
+    "match": 0,
+    "tried": 365
+   },
+   "-flag no-opt_optimizecontrolflow": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 365
+   },
+   "-flag no-opt_propagation": {
+    "changed": 20,
+    "closer": 1,
+    "match": 0,
+    "tried": 365
+   },
+   "-flag no-opt_rebuildconditionals": {
+    "changed": 6,
+    "closer": 2,
+    "match": 0,
+    "tried": 365
+   },
+   "-flag no-opt_rebuildlogicals": {
+    "changed": 5,
+    "closer": 5,
+    "match": 3,
+    "tried": 365
+   },
+   "-flag no-opt_strength_reduction": {
+    "changed": 13,
+    "closer": 5,
+    "match": 0,
+    "tried": 362
+   },
+   "-flag no-opt_treetransformation": {
+    "changed": 7,
+    "closer": 0,
+    "match": 0,
+    "tried": 362
+   },
+   "-flag no-optimize_for_size": {
+    "changed": 1,
+    "closer": 1,
+    "match": 0,
+    "tried": 362
+   },
+   "-flag opt_generateconditionalassignments": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 365
+   },
+   "-flag opt_removetailrecursions": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 362
+   },
+   "-flag opt_repositioncode": {
+    "changed": 145,
+    "closer": 1,
+    "match": 0,
+    "tried": 362
+   },
+   "-flag opt_returnloopdepthinstatementvalue": {
+    "changed": 8,
+    "closer": 0,
+    "match": 0,
+    "tried": 362
+   },
+   "-flag opt_unpromotetypes": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 362
+   },
+   "-flag opt_unroll_loops": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 362
+   },
+   "-flag optimize_for_size": {
+    "changed": 69,
+    "closer": 5,
+    "match": 0,
+    "tried": 362
+   },
+   "-inline all": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 365
+   },
+   "-inline auto": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 365
+   },
+   "-inline auto,deferred": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 365
+   },
+   "-msext on": {
+    "changed": 2,
+    "closer": 1,
+    "match": 0,
+    "tried": 365
+   },
+   "-nointerworking": {
+    "changed": 49,
+    "closer": 0,
+    "match": 0,
+    "tried": 365
+   },
+   "-pic": {
+    "changed": 13,
+    "closer": 0,
+    "match": 0,
+    "tried": 365
+   },
+   "-pid": {
+    "changed": 233,
+    "closer": 6,
+    "match": 0,
+    "tried": 365
+   },
+   "-proc arm7tdmi": {
+    "changed": 316,
+    "closer": 0,
+    "match": 0,
+    "tried": 365
+   },
+   "-proc arm9tdmi": {
+    "changed": 314,
+    "closer": 0,
+    "match": 0,
+    "tried": 365
+   },
+   "-proc generic": {
+    "changed": 340,
+    "closer": 7,
+    "match": 0,
+    "tried": 365
+   },
+   "-proc v4t": {
+    "changed": 316,
+    "closer": 0,
+    "match": 0,
+    "tried": 365
+   },
+   "-proc v5t": {
+    "changed": 263,
+    "closer": 27,
+    "match": 0,
+    "tried": 365
+   },
+   "-profile": {
+    "changed": 365,
+    "closer": 0,
+    "match": 0,
+    "tried": 365
+   }
+  },
+  "drafts": 365,
+  "matches": 3,
+  "won_profiles": {
+   "2.0/sp1p5 -flag no-opt_rebuildlogicals": 3
+  }
+ },
+ "fairy-tail-kardia": {
+  "closer": 61,
+  "deltas": {
+   "-O0": {
+    "changed": 308,
+    "closer": 2,
+    "match": 1,
+    "tried": 311
+   },
+   "-O1,p": {
+    "changed": 246,
+    "closer": 31,
+    "match": 0,
+    "tried": 310
+   },
+   "-O1,s": {
+    "changed": 246,
+    "closer": 30,
+    "match": 0,
+    "tried": 310
+   },
+   "-O2,p": {
+    "changed": 41,
+    "closer": 23,
+    "match": 0,
+    "tried": 310
+   },
+   "-O2,s": {
+    "changed": 67,
+    "closer": 20,
+    "match": 0,
+    "tried": 310
+   },
+   "-O3,p": {
+    "changed": 13,
+    "closer": 4,
+    "match": 0,
+    "tried": 310
+   },
+   "-O3,s": {
+    "changed": 65,
+    "closer": 18,
+    "match": 0,
+    "tried": 310
+   },
+   "-O4,s": {
+    "changed": 54,
+    "closer": 14,
+    "match": 0,
+    "tried": 310
+   },
+   "-flag no-global_optimizer": {
+    "changed": 7,
+    "closer": 1,
+    "match": 0,
+    "tried": 302
+   },
+   "-flag no-opt_arithtransformation": {
+    "changed": 24,
+    "closer": 3,
+    "match": 0,
+    "tried": 310
+   },
+   "-flag no-opt_common_subs": {
+    "changed": 22,
+    "closer": 2,
+    "match": 1,
+    "tried": 310
+   },
+   "-flag no-opt_dead_assignments": {
+    "changed": 7,
+    "closer": 4,
+    "match": 0,
+    "tried": 309
+   },
+   "-flag no-opt_dead_code": {
+    "changed": 7,
+    "closer": 1,
+    "match": 0,
+    "tried": 309
+   },
+   "-flag no-opt_foldconstants": {
+    "changed": 13,
+    "closer": 0,
+    "match": 0,
+    "tried": 309
+   },
+   "-flag no-opt_loop_invariants": {
+    "changed": 8,
+    "closer": 5,
+    "match": 0,
+    "tried": 309
+   },
+   "-flag no-opt_optimizecontrolflow": {
+    "changed": 6,
+    "closer": 4,
+    "match": 0,
+    "tried": 309
+   },
+   "-flag no-opt_propagation": {
+    "changed": 39,
+    "closer": 4,
+    "match": 0,
+    "tried": 309
+   },
+   "-flag no-opt_strength_reduction": {
+    "changed": 26,
+    "closer": 17,
+    "match": 0,
+    "tried": 302
+   },
+   "-flag no-opt_strength_reduction_strict": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 302
+   },
+   "-flag no-opt_treetransformation": {
+    "changed": 7,
+    "closer": 0,
+    "match": 0,
+    "tried": 302
+   },
+   "-flag opt_generateconditionalassignments": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 309
+   },
+   "-flag opt_rearrangemultiplesubscripts": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 309
+   },
+   "-flag opt_repositioncode": {
+    "changed": 97,
+    "closer": 12,
+    "match": 7,
+    "tried": 309
+   },
+   "-flag opt_returnloopdepthinstatementvalue": {
+    "changed": 6,
+    "closer": 0,
+    "match": 0,
+    "tried": 302
+   },
+   "-flag opt_reverseloops": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 302
+   },
+   "-flag opt_unpromotetypes": {
+    "changed": 12,
+    "closer": 1,
+    "match": 0,
+    "tried": 302
+   },
+   "-flag opt_unroll_loops": {
+    "changed": 5,
+    "closer": 0,
+    "match": 0,
+    "tried": 302
+   },
+   "-flag optimize_for_size": {
+    "changed": 54,
+    "closer": 14,
+    "match": 0,
+    "tried": 302
+   },
+   "-inline auto,deferred": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 310
+   },
+   "-inline deferred": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 310
+   },
+   "-ipa file": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 304
+   },
+   "-msext on": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 310
+   },
+   "-nointerworking": {
+    "changed": 104,
+    "closer": 0,
+    "match": 0,
+    "tried": 310
+   },
+   "-pic": {
+    "changed": 29,
+    "closer": 0,
+    "match": 0,
+    "tried": 310
+   },
+   "-pid": {
+    "changed": 192,
+    "closer": 0,
+    "match": 0,
+    "tried": 310
+   },
+   "-proc arm7tdmi": {
+    "changed": 205,
+    "closer": 3,
+    "match": 0,
+    "tried": 310
+   },
+   "-proc arm926ej": {
+    "changed": 6,
+    "closer": 6,
+    "match": 0,
+    "tried": 310
+   },
+   "-proc arm9tdmi": {
+    "changed": 206,
+    "closer": 7,
+    "match": 0,
+    "tried": 310
+   },
+   "-proc generic": {
+    "changed": 252,
+    "closer": 8,
+    "match": 0,
+    "tried": 310
+   },
+   "-proc v4t": {
+    "changed": 205,
+    "closer": 3,
+    "match": 0,
+    "tried": 310
+   },
+   "-proc v5t": {
+    "changed": 195,
+    "closer": 19,
+    "match": 0,
+    "tried": 310
+   },
+   "-profile": {
+    "changed": 309,
+    "closer": 0,
+    "match": 0,
+    "tried": 310
+   }
+  },
+  "drafts": 311,
+  "matches": 9,
+  "won_profiles": {
+   "2.0/sp1p5 -O0": 1,
+   "2.0/sp1p5 -flag no-opt_common_subs": 1,
+   "2.0/sp1p5 -flag opt_repositioncode": 7
+  }
+ },
+ "fairy-tail-madoushi": {
+  "closer": 64,
+  "deltas": {
+   "-O0": {
+    "changed": 286,
+    "closer": 3,
+    "match": 1,
+    "tried": 290
+   },
+   "-O1,p": {
+    "changed": 228,
+    "closer": 31,
+    "match": 0,
+    "tried": 289
+   },
+   "-O1,s": {
+    "changed": 228,
+    "closer": 30,
+    "match": 0,
+    "tried": 289
+   },
+   "-O2,p": {
+    "changed": 46,
+    "closer": 20,
+    "match": 0,
+    "tried": 289
+   },
+   "-O2,s": {
+    "changed": 73,
+    "closer": 17,
+    "match": 0,
+    "tried": 289
+   },
+   "-O3,p": {
+    "changed": 22,
+    "closer": 6,
+    "match": 0,
+    "tried": 289
+   },
+   "-O3,s": {
+    "changed": 72,
+    "closer": 17,
+    "match": 0,
+    "tried": 289
+   },
+   "-O4,s": {
+    "changed": 54,
+    "closer": 12,
+    "match": 0,
+    "tried": 289
+   },
+   "-flag no-global_optimizer": {
+    "changed": 7,
+    "closer": 1,
+    "match": 0,
+    "tried": 288
+   },
+   "-flag no-opt_arithtransformation": {
+    "changed": 17,
+    "closer": 1,
+    "match": 0,
+    "tried": 289
+   },
+   "-flag no-opt_common_subs": {
+    "changed": 30,
+    "closer": 3,
+    "match": 0,
+    "tried": 289
+   },
+   "-flag no-opt_dead_assignments": {
+    "changed": 15,
+    "closer": 4,
+    "match": 0,
+    "tried": 289
+   },
+   "-flag no-opt_dead_code": {
+    "changed": 8,
+    "closer": 1,
+    "match": 0,
+    "tried": 289
+   },
+   "-flag no-opt_foldconstants": {
+    "changed": 12,
+    "closer": 0,
+    "match": 0,
+    "tried": 289
+   },
+   "-flag no-opt_loop_invariants": {
+    "changed": 6,
+    "closer": 4,
+    "match": 0,
+    "tried": 289
+   },
+   "-flag no-opt_optimizecontrolflow": {
+    "changed": 9,
+    "closer": 6,
+    "match": 0,
+    "tried": 289
+   },
+   "-flag no-opt_propagation": {
+    "changed": 46,
+    "closer": 7,
+    "match": 0,
+    "tried": 289
+   },
+   "-flag no-opt_rebuildconditionals": {
+    "changed": 1,
+    "closer": 1,
+    "match": 0,
+    "tried": 289
+   },
+   "-flag no-opt_strength_reduction": {
+    "changed": 25,
+    "closer": 15,
+    "match": 0,
+    "tried": 288
+   },
+   "-flag no-opt_strength_reduction_strict": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 288
+   },
+   "-flag no-opt_treetransformation": {
+    "changed": 6,
+    "closer": 0,
+    "match": 0,
+    "tried": 288
+   },
+   "-flag opt_generateconditionalassignments": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 289
+   },
+   "-flag opt_rearrangemultiplesubscripts": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 289
+   },
+   "-flag opt_repositioncode": {
+    "changed": 89,
+    "closer": 6,
+    "match": 1,
+    "tried": 289
+   },
+   "-flag opt_returnloopdepthinstatementvalue": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 288
+   },
+   "-flag opt_unpromotetypes": {
+    "changed": 9,
+    "closer": 0,
+    "match": 0,
+    "tried": 288
+   },
+   "-flag opt_unroll_loops": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 288
+   },
+   "-flag optimize_for_size": {
+    "changed": 54,
+    "closer": 12,
+    "match": 0,
+    "tried": 288
+   },
+   "-inline auto,deferred": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 289
+   },
+   "-inline deferred": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 289
+   },
+   "-ipa file": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 283
+   },
+   "-msext on": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 289
+   },
+   "-nointerworking": {
+    "changed": 92,
+    "closer": 0,
+    "match": 0,
+    "tried": 289
+   },
+   "-pic": {
+    "changed": 29,
+    "closer": 0,
+    "match": 0,
+    "tried": 289
+   },
+   "-pid": {
+    "changed": 181,
+    "closer": 2,
+    "match": 0,
+    "tried": 289
+   },
+   "-proc arm7tdmi": {
+    "changed": 195,
+    "closer": 1,
+    "match": 0,
+    "tried": 289
+   },
+   "-proc arm926ej": {
+    "changed": 6,
+    "closer": 6,
+    "match": 0,
+    "tried": 289
+   },
+   "-proc arm9tdmi": {
+    "changed": 196,
+    "closer": 6,
+    "match": 0,
+    "tried": 289
+   },
+   "-proc generic": {
+    "changed": 233,
+    "closer": 7,
+    "match": 0,
+    "tried": 289
+   },
+   "-proc v4t": {
+    "changed": 195,
+    "closer": 1,
+    "match": 0,
+    "tried": 289
+   },
+   "-proc v5t": {
+    "changed": 183,
+    "closer": 24,
+    "match": 0,
+    "tried": 289
+   },
+   "-profile": {
+    "changed": 289,
+    "closer": 0,
+    "match": 0,
+    "tried": 289
+   }
+  },
+  "drafts": 290,
+  "matches": 2,
+  "won_profiles": {
+   "2.0/sp1p5 -O0": 1,
+   "2.0/sp1p5 -flag opt_repositioncode": 1
+  }
+ },
+ "harvest-moon-ds": {
+  "closer": 79,
+  "deltas": {
+   "-O0": {
+    "changed": 589,
+    "closer": 8,
+    "match": 0,
+    "tried": 606
+   },
+   "-O1,p": {
+    "changed": 454,
+    "closer": 32,
+    "match": 0,
+    "tried": 606
+   },
+   "-O1,s": {
+    "changed": 459,
+    "closer": 34,
+    "match": 0,
+    "tried": 606
+   },
+   "-O2,p": {
+    "changed": 42,
+    "closer": 13,
+    "match": 0,
+    "tried": 606
+   },
+   "-O2,s": {
+    "changed": 109,
+    "closer": 11,
+    "match": 0,
+    "tried": 606
+   },
+   "-O3,p": {
+    "changed": 17,
+    "closer": 2,
+    "match": 0,
+    "tried": 606
+   },
+   "-O3,s": {
+    "changed": 96,
+    "closer": 6,
+    "match": 0,
+    "tried": 606
+   },
+   "-O4,s": {
+    "changed": 92,
+    "closer": 4,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag dont_inline": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 595
+   },
+   "-flag no-global_optimizer": {
+    "changed": 4,
+    "closer": 0,
+    "match": 0,
+    "tried": 595
+   },
+   "-flag no-opt_arithtransformation": {
+    "changed": 18,
+    "closer": 1,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag no-opt_common_subs": {
+    "changed": 42,
+    "closer": 11,
+    "match": 2,
+    "tried": 606
+   },
+   "-flag no-opt_dead_assignments": {
+    "changed": 19,
+    "closer": 2,
+    "match": 0,
+    "tried": 604
+   },
+   "-flag no-opt_dead_code": {
+    "changed": 9,
+    "closer": 1,
+    "match": 0,
+    "tried": 604
+   },
+   "-flag no-opt_foldconstants": {
+    "changed": 7,
+    "closer": 0,
+    "match": 0,
+    "tried": 604
+   },
+   "-flag no-opt_loop_invariants": {
+    "changed": 22,
+    "closer": 11,
+    "match": 0,
+    "tried": 604
+   },
+   "-flag no-opt_optimizecontrolflow": {
+    "changed": 9,
+    "closer": 2,
+    "match": 0,
+    "tried": 604
+   },
+   "-flag no-opt_propagation": {
+    "changed": 25,
+    "closer": 2,
+    "match": 0,
+    "tried": 604
+   },
+   "-flag no-opt_rebuildconditionals": {
+    "changed": 5,
+    "closer": 1,
+    "match": 0,
+    "tried": 604
+   },
+   "-flag no-opt_rebuildlogicals": {
+    "changed": 10,
+    "closer": 9,
+    "match": 9,
+    "tried": 604
+   },
+   "-flag no-opt_strength_reduction": {
+    "changed": 11,
+    "closer": 3,
+    "match": 0,
+    "tried": 595
+   },
+   "-flag no-opt_strength_reduction_strict": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 595
+   },
+   "-flag opt_branchlessexpensivethandiv": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag opt_removetailrecursions": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 585
+   },
+   "-flag opt_repositioncode": {
+    "changed": 130,
+    "closer": 6,
+    "match": 0,
+    "tried": 595
+   },
+   "-flag opt_returnloopdepthinstatementvalue": {
+    "changed": 20,
+    "closer": 1,
+    "match": 0,
+    "tried": 595
+   },
+   "-flag opt_unpromotetypes": {
+    "changed": 39,
+    "closer": 0,
+    "match": 0,
+    "tried": 595
+   },
+   "-flag optimize_for_size": {
+    "changed": 92,
+    "closer": 4,
+    "match": 0,
+    "tried": 595
+   },
+   "-inline auto,deferred": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-inline deferred": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-inline off": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-ipa file": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 596
+   },
+   "-msext on": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-nointerworking": {
+    "changed": 192,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-pic": {
+    "changed": 64,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-pid": {
+    "changed": 246,
+    "closer": 9,
+    "match": 0,
+    "tried": 606
+   },
+   "-proc arm7tdmi": {
+    "changed": 446,
+    "closer": 13,
+    "match": 0,
+    "tried": 606
+   },
+   "-proc arm9tdmi": {
+    "changed": 412,
+    "closer": 12,
+    "match": 0,
+    "tried": 606
+   },
+   "-proc generic": {
+    "changed": 546,
+    "closer": 20,
+    "match": 0,
+    "tried": 606
+   },
+   "-proc v4t": {
+    "changed": 446,
+    "closer": 13,
+    "match": 0,
+    "tried": 606
+   },
+   "-proc v5t": {
+    "changed": 405,
+    "closer": 36,
+    "match": 0,
+    "tried": 606
+   },
+   "-proc v5te": {
+    "changed": 8,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-profile": {
+    "changed": 602,
+    "closer": 3,
+    "match": 0,
+    "tried": 606
+   }
+  },
+  "drafts": 606,
+  "matches": 11,
+  "won_profiles": {
+   "2.0/sp1p5 -flag no-opt_common_subs": 2,
+   "2.0/sp1p5 -flag no-opt_rebuildlogicals": 9
+  }
+ },
+ "luminous-arc-2": {
+  "closer": 63,
+  "deltas": {
+   "-O0": {
+    "changed": 386,
+    "closer": 0,
+    "match": 0,
+    "tried": 392
+   },
+   "-O1,p": {
+    "changed": 345,
+    "closer": 17,
+    "match": 0,
+    "tried": 392
+   },
+   "-O1,s": {
+    "changed": 347,
+    "closer": 16,
+    "match": 0,
+    "tried": 392
+   },
+   "-O2,p": {
+    "changed": 50,
+    "closer": 17,
+    "match": 0,
+    "tried": 392
+   },
+   "-O2,s": {
+    "changed": 134,
+    "closer": 10,
+    "match": 0,
+    "tried": 392
+   },
+   "-O3,p": {
+    "changed": 7,
+    "closer": 1,
+    "match": 0,
+    "tried": 392
+   },
+   "-O3,s": {
+    "changed": 124,
+    "closer": 8,
+    "match": 0,
+    "tried": 392
+   },
+   "-O4,s": {
+    "changed": 123,
+    "closer": 8,
+    "match": 0,
+    "tried": 392
+   },
+   "-flag dont_inline": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 387
+   },
+   "-flag no-global_optimizer": {
+    "changed": 10,
+    "closer": 0,
+    "match": 0,
+    "tried": 387
+   },
+   "-flag no-opt_arithtransformation": {
+    "changed": 27,
+    "closer": 2,
+    "match": 0,
+    "tried": 391
+   },
+   "-flag no-opt_common_subs": {
+    "changed": 26,
+    "closer": 12,
+    "match": 3,
+    "tried": 391
+   },
+   "-flag no-opt_dead_assignments": {
+    "changed": 9,
+    "closer": 0,
+    "match": 0,
+    "tried": 388
+   },
+   "-flag no-opt_dead_code": {
+    "changed": 6,
+    "closer": 2,
+    "match": 0,
+    "tried": 388
+   },
+   "-flag no-opt_foldconstants": {
+    "changed": 12,
+    "closer": 1,
+    "match": 0,
+    "tried": 388
+   },
+   "-flag no-opt_loop_invariants": {
+    "changed": 13,
+    "closer": 3,
+    "match": 0,
+    "tried": 388
+   },
+   "-flag no-opt_optimizecontrolflow": {
+    "changed": 5,
+    "closer": 0,
+    "match": 0,
+    "tried": 388
+   },
+   "-flag no-opt_propagation": {
+    "changed": 37,
+    "closer": 1,
+    "match": 0,
+    "tried": 388
+   },
+   "-flag no-opt_rebuildconditionals": {
+    "changed": 3,
+    "closer": 2,
+    "match": 0,
+    "tried": 388
+   },
+   "-flag no-opt_strength_reduction": {
+    "changed": 33,
+    "closer": 13,
+    "match": 1,
+    "tried": 388
+   },
+   "-flag no-opt_strength_reduction_strict": {
+    "changed": 7,
+    "closer": 0,
+    "match": 0,
+    "tried": 387
+   },
+   "-flag no-opt_treetransformation": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 387
+   },
+   "-flag opt_pulloutconstants": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 388
+   },
+   "-flag opt_repositioncode": {
+    "changed": 166,
+    "closer": 2,
+    "match": 0,
+    "tried": 388
+   },
+   "-flag opt_returnloopdepthinstatementvalue": {
+    "changed": 18,
+    "closer": 0,
+    "match": 0,
+    "tried": 388
+   },
+   "-flag opt_unpromotetypes": {
+    "changed": 30,
+    "closer": 0,
+    "match": 0,
+    "tried": 387
+   },
+   "-flag opt_unroll_loops": {
+    "changed": 9,
+    "closer": 0,
+    "match": 0,
+    "tried": 387
+   },
+   "-flag optimize_for_size": {
+    "changed": 121,
+    "closer": 8,
+    "match": 0,
+    "tried": 387
+   },
+   "-inline off": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 392
+   },
+   "-ipa file": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 392
+   },
+   "-msext on": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 392
+   },
+   "-nointerworking": {
+    "changed": 64,
+    "closer": 0,
+    "match": 0,
+    "tried": 392
+   },
+   "-pic": {
+    "changed": 7,
+    "closer": 0,
+    "match": 0,
+    "tried": 392
+   },
+   "-pid": {
+    "changed": 301,
+    "closer": 6,
+    "match": 1,
+    "tried": 392
+   },
+   "-proc arm7tdmi": {
+    "changed": 332,
+    "closer": 2,
+    "match": 0,
+    "tried": 392
+   },
+   "-proc arm9tdmi": {
+    "changed": 327,
+    "closer": 2,
+    "match": 0,
+    "tried": 392
+   },
+   "-proc generic": {
+    "changed": 362,
+    "closer": 9,
+    "match": 0,
+    "tried": 392
+   },
+   "-proc v4t": {
+    "changed": 332,
+    "closer": 2,
+    "match": 0,
+    "tried": 392
+   },
+   "-proc v5t": {
+    "changed": 297,
+    "closer": 33,
+    "match": 0,
+    "tried": 392
+   },
+   "-profile": {
+    "changed": 391,
+    "closer": 0,
+    "match": 0,
+    "tried": 392
+   }
+  },
+  "drafts": 392,
+  "matches": 5,
+  "won_profiles": {
+   "2.0/sp1p5 -flag no-opt_common_subs": 3,
+   "2.0/sp1p5 -flag no-opt_strength_reduction": 1,
+   "2.0/sp1p5 -pid": 1
+  }
+ },
+ "madagascar": {
+  "closer": 86,
+  "deltas": {
+   "-O0": {
+    "changed": 281,
+    "closer": 31,
+    "match": 0,
+    "tried": 287
+   },
+   "-O1,p": {
+    "changed": 208,
+    "closer": 36,
+    "match": 0,
+    "tried": 287
+   },
+   "-O1,s": {
+    "changed": 231,
+    "closer": 30,
+    "match": 0,
+    "tried": 287
+   },
+   "-O2,p": {
+    "changed": 25,
+    "closer": 8,
+    "match": 0,
+    "tried": 287
+   },
+   "-O2,s": {
+    "changed": 108,
+    "closer": 7,
+    "match": 0,
+    "tried": 287
+   },
+   "-O3,p": {
+    "changed": 1,
+    "closer": 1,
+    "match": 0,
+    "tried": 287
+   },
+   "-O3,s": {
+    "changed": 106,
+    "closer": 5,
+    "match": 0,
+    "tried": 287
+   },
+   "-O4,s": {
+    "changed": 105,
+    "closer": 4,
+    "match": 0,
+    "tried": 287
+   },
+   "-flag dont_inline": {
+    "changed": 1,
+    "closer": 1,
+    "match": 0,
+    "tried": 286
+   },
+   "-flag no-global_optimizer": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 286
+   },
+   "-flag no-opt_arithtransformation": {
+    "changed": 13,
+    "closer": 2,
+    "match": 0,
+    "tried": 287
+   },
+   "-flag no-opt_common_subs": {
+    "changed": 19,
+    "closer": 10,
+    "match": 1,
+    "tried": 287
+   },
+   "-flag no-opt_dead_assignments": {
+    "changed": 1,
+    "closer": 1,
+    "match": 0,
+    "tried": 286
+   },
+   "-flag no-opt_dead_code": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 286
+   },
+   "-flag no-opt_foldconstants": {
+    "changed": 5,
+    "closer": 1,
+    "match": 0,
+    "tried": 286
+   },
+   "-flag no-opt_loop_invariants": {
+    "changed": 4,
+    "closer": 2,
+    "match": 0,
+    "tried": 286
+   },
+   "-flag no-opt_propagation": {
+    "changed": 16,
+    "closer": 3,
+    "match": 0,
+    "tried": 286
+   },
+   "-flag no-opt_rebuildconditionals": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 286
+   },
+   "-flag no-opt_strength_reduction": {
+    "changed": 20,
+    "closer": 5,
+    "match": 0,
+    "tried": 286
+   },
+   "-flag no-opt_strength_reduction_strict": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 286
+   },
+   "-flag no-opt_treetransformation": {
+    "changed": 7,
+    "closer": 0,
+    "match": 0,
+    "tried": 286
+   },
+   "-flag opt_generateconditionalassignments": {
+    "changed": 2,
+    "closer": 1,
+    "match": 0,
+    "tried": 286
+   },
+   "-flag opt_pulloutconstants": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 286
+   },
+   "-flag opt_repositioncode": {
+    "changed": 19,
+    "closer": 16,
+    "match": 0,
+    "tried": 286
+   },
+   "-flag opt_returnloopdepthinstatementvalue": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 286
+   },
+   "-flag opt_unpromotetypes": {
+    "changed": 13,
+    "closer": 1,
+    "match": 0,
+    "tried": 286
+   },
+   "-flag opt_unroll_loops": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 286
+   },
+   "-flag optimize_for_size": {
+    "changed": 105,
+    "closer": 4,
+    "match": 0,
+    "tried": 286
+   },
+   "-inline off": {
+    "changed": 1,
+    "closer": 1,
+    "match": 0,
+    "tried": 287
+   },
+   "-ipa file": {
+    "changed": 1,
+    "closer": 1,
+    "match": 0,
+    "tried": 67
+   },
+   "-msext on": {
+    "changed": 8,
+    "closer": 4,
+    "match": 0,
+    "tried": 287
+   },
+   "-nointerworking": {
+    "changed": 226,
+    "closer": 0,
+    "match": 0,
+    "tried": 287
+   },
+   "-pic": {
+    "changed": 4,
+    "closer": 3,
+    "match": 0,
+    "tried": 287
+   },
+   "-pid": {
+    "changed": 129,
+    "closer": 17,
+    "match": 0,
+    "tried": 287
+   },
+   "-proc arm7tdmi": {
+    "changed": 231,
+    "closer": 57,
+    "match": 0,
+    "tried": 287
+   },
+   "-proc arm9tdmi": {
+    "changed": 123,
+    "closer": 52,
+    "match": 0,
+    "tried": 287
+   },
+   "-proc generic": {
+    "changed": 235,
+    "closer": 57,
+    "match": 0,
+    "tried": 287
+   },
+   "-proc v4t": {
+    "changed": 231,
+    "closer": 57,
+    "match": 0,
+    "tried": 287
+   },
+   "-proc v5t": {
+    "changed": 158,
+    "closer": 17,
+    "match": 0,
+    "tried": 287
+   },
+   "-proc v5te": {
+    "changed": 148,
+    "closer": 14,
+    "match": 0,
+    "tried": 287
+   },
+   "-profile": {
+    "changed": 276,
+    "closer": 18,
+    "match": 0,
+    "tried": 287
+   }
+  },
+  "drafts": 287,
+  "matches": 1,
+  "won_profiles": {
+   "1.2/sp2p3 -flag no-opt_common_subs": 1
+  }
+ },
+ "mysims": {
+  "closer": 66,
+  "deltas": {
+   "-O0": {
+    "changed": 381,
+    "closer": 4,
+    "match": 0,
+    "tried": 394
+   },
+   "-O1,p": {
+    "changed": 346,
+    "closer": 31,
+    "match": 0,
+    "tried": 394
+   },
+   "-O1,s": {
+    "changed": 346,
+    "closer": 31,
+    "match": 0,
+    "tried": 394
+   },
+   "-O2,p": {
+    "changed": 58,
+    "closer": 20,
+    "match": 0,
+    "tried": 394
+   },
+   "-O2,s": {
+    "changed": 114,
+    "closer": 18,
+    "match": 0,
+    "tried": 394
+   },
+   "-O3,p": {
+    "changed": 13,
+    "closer": 1,
+    "match": 0,
+    "tried": 394
+   },
+   "-O3,s": {
+    "changed": 105,
+    "closer": 14,
+    "match": 0,
+    "tried": 394
+   },
+   "-O4,s": {
+    "changed": 98,
+    "closer": 15,
+    "match": 0,
+    "tried": 394
+   },
+   "-flag no-global_optimizer": {
+    "changed": 10,
+    "closer": 0,
+    "match": 0,
+    "tried": 384
+   },
+   "-flag no-opt_arithtransformation": {
+    "changed": 34,
+    "closer": 3,
+    "match": 2,
+    "tried": 394
+   },
+   "-flag no-opt_common_subs": {
+    "changed": 34,
+    "closer": 6,
+    "match": 3,
+    "tried": 392
+   },
+   "-flag no-opt_dead_assignments": {
+    "changed": 8,
+    "closer": 1,
+    "match": 0,
+    "tried": 389
+   },
+   "-flag no-opt_dead_code": {
+    "changed": 4,
+    "closer": 2,
+    "match": 0,
+    "tried": 389
+   },
+   "-flag no-opt_foldconstants": {
+    "changed": 14,
+    "closer": 0,
+    "match": 0,
+    "tried": 389
+   },
+   "-flag no-opt_loop_invariants": {
+    "changed": 16,
+    "closer": 7,
+    "match": 0,
+    "tried": 389
+   },
+   "-flag no-opt_optimizecontrolflow": {
+    "changed": 5,
+    "closer": 0,
+    "match": 0,
+    "tried": 389
+   },
+   "-flag no-opt_propagation": {
+    "changed": 48,
+    "closer": 2,
+    "match": 0,
+    "tried": 389
+   },
+   "-flag no-opt_rebuildconditionals": {
+    "changed": 6,
+    "closer": 1,
+    "match": 0,
+    "tried": 389
+   },
+   "-flag no-opt_rebuildlogicals": {
+    "changed": 6,
+    "closer": 3,
+    "match": 3,
+    "tried": 389
+   },
+   "-flag no-opt_strength_reduction": {
+    "changed": 38,
+    "closer": 17,
+    "match": 1,
+    "tried": 385
+   },
+   "-flag no-opt_treetransformation": {
+    "changed": 16,
+    "closer": 0,
+    "match": 0,
+    "tried": 384
+   },
+   "-flag opt_pulloutconstants": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 389
+   },
+   "-flag opt_repositioncode": {
+    "changed": 127,
+    "closer": 4,
+    "match": 1,
+    "tried": 386
+   },
+   "-flag opt_returnloopdepthinstatementvalue": {
+    "changed": 11,
+    "closer": 2,
+    "match": 0,
+    "tried": 385
+   },
+   "-flag opt_unpromotetypes": {
+    "changed": 13,
+    "closer": 2,
+    "match": 0,
+    "tried": 384
+   },
+   "-flag opt_unroll_loops": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 384
+   },
+   "-flag optimize_for_size": {
+    "changed": 97,
+    "closer": 15,
+    "match": 0,
+    "tried": 384
+   },
+   "-inline auto,deferred": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 394
+   },
+   "-inline deferred": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 394
+   },
+   "-ipa file": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 394
+   },
+   "-msext on": {
+    "changed": 3,
+    "closer": 1,
+    "match": 0,
+    "tried": 394
+   },
+   "-nointerworking": {
+    "changed": 56,
+    "closer": 0,
+    "match": 0,
+    "tried": 394
+   },
+   "-pic": {
+    "changed": 6,
+    "closer": 0,
+    "match": 0,
+    "tried": 394
+   },
+   "-pid": {
+    "changed": 256,
+    "closer": 7,
+    "match": 0,
+    "tried": 394
+   },
+   "-proc arm7tdmi": {
+    "changed": 339,
+    "closer": 4,
+    "match": 0,
+    "tried": 394
+   },
+   "-proc arm9tdmi": {
+    "changed": 334,
+    "closer": 4,
+    "match": 0,
+    "tried": 394
+   },
+   "-proc generic": {
+    "changed": 358,
+    "closer": 4,
+    "match": 0,
+    "tried": 394
+   },
+   "-proc v4t": {
+    "changed": 339,
+    "closer": 4,
+    "match": 0,
+    "tried": 394
+   },
+   "-proc v5t": {
+    "changed": 300,
+    "closer": 30,
+    "match": 0,
+    "tried": 394
+   },
+   "-profile": {
+    "changed": 394,
+    "closer": 0,
+    "match": 0,
+    "tried": 394
+   }
+  },
+  "drafts": 394,
+  "matches": 10,
+  "won_profiles": {
+   "2.0/sp1p5 -flag no-opt_arithtransformation": 2,
+   "2.0/sp1p5 -flag no-opt_common_subs": 3,
+   "2.0/sp1p5 -flag no-opt_rebuildlogicals": 3,
+   "2.0/sp1p5 -flag no-opt_strength_reduction": 1,
+   "2.0/sp1p5 -flag opt_repositioncode": 1
+  }
+ },
+ "penguins-of-madagascar-the": {
+  "closer": 59,
+  "deltas": {
+   "-O0": {
+    "changed": 2720,
+    "closer": 23,
+    "match": 0,
+    "tried": 3849
+   },
+   "-O1,p": {
+    "changed": 686,
+    "closer": 9,
+    "match": 0,
+    "tried": 3849
+   },
+   "-O1,s": {
+    "changed": 705,
+    "closer": 12,
+    "match": 0,
+    "tried": 3849
+   },
+   "-O2,p": {
+    "changed": 36,
+    "closer": 2,
+    "match": 0,
+    "tried": 3849
+   },
+   "-O2,s": {
+    "changed": 136,
+    "closer": 6,
+    "match": 0,
+    "tried": 3849
+   },
+   "-O3,p": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-O3,s": {
+    "changed": 128,
+    "closer": 6,
+    "match": 0,
+    "tried": 3849
+   },
+   "-O4,s": {
+    "changed": 128,
+    "closer": 6,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag auto_inline": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag dont_inline": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag no-global_optimizer": {
+    "changed": 6,
+    "closer": 1,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag no-opt_arithtransformation": {
+    "changed": 28,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag no-opt_common_subs": {
+    "changed": 52,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag no-opt_dead_code": {
+    "changed": 8,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag no-opt_foldconstants": {
+    "changed": 52,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag no-opt_loop_invariants": {
+    "changed": 5,
+    "closer": 1,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag no-opt_optimizecontrolflow": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag no-opt_propagation": {
+    "changed": 33,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag no-opt_rebuildconditionals": {
+    "changed": 8,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag no-opt_rebuildlogicals": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag no-opt_removeemptyloops": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag no-opt_strength_reduction": {
+    "changed": 24,
+    "closer": 1,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag no-opt_treetransformation": {
+    "changed": 7,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag opt_removetailrecursions": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag opt_repositioncode": {
+    "changed": 362,
+    "closer": 3,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag opt_returnloopdepthinstatementvalue": {
+    "changed": 9,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag opt_unpromotetypes": {
+    "changed": 28,
+    "closer": 1,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag opt_unroll_loops": {
+    "changed": 8,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-flag optimize_for_size": {
+    "changed": 128,
+    "closer": 6,
+    "match": 0,
+    "tried": 3849
+   },
+   "-inline all": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-inline auto": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-inline auto,deferred": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-inline off": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-ipa file": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-msext on": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-nointerworking": {
+    "changed": 557,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-pic": {
+    "changed": 544,
+    "closer": 0,
+    "match": 0,
+    "tried": 3849
+   },
+   "-pid": {
+    "changed": 687,
+    "closer": 7,
+    "match": 0,
+    "tried": 3849
+   },
+   "-proc arm7tdmi": {
+    "changed": 1814,
+    "closer": 18,
+    "match": 0,
+    "tried": 3849
+   },
+   "-proc arm9tdmi": {
+    "changed": 1816,
+    "closer": 18,
+    "match": 0,
+    "tried": 3849
+   },
+   "-proc generic": {
+    "changed": 1828,
+    "closer": 18,
+    "match": 0,
+    "tried": 3849
+   },
+   "-proc v4t": {
+    "changed": 1814,
+    "closer": 18,
+    "match": 0,
+    "tried": 3849
+   },
+   "-proc v5t": {
+    "changed": 79,
+    "closer": 13,
+    "match": 0,
+    "tried": 3849
+   },
+   "-profile": {
+    "changed": 3840,
+    "closer": 5,
+    "match": 0,
+    "tried": 3849
+   }
+  },
+  "drafts": 3849,
+  "matches": 0
+ },
+ "simcity-creator": {
+  "closer": 86,
+  "deltas": {
+   "-O0": {
+    "changed": 462,
+    "closer": 4,
+    "match": 0,
+    "tried": 470
+   },
+   "-O1,p": {
+    "changed": 366,
+    "closer": 40,
+    "match": 0,
+    "tried": 470
+   },
+   "-O1,s": {
+    "changed": 366,
+    "closer": 39,
+    "match": 0,
+    "tried": 470
+   },
+   "-O2,p": {
+    "changed": 45,
+    "closer": 16,
+    "match": 0,
+    "tried": 470
+   },
+   "-O2,s": {
+    "changed": 82,
+    "closer": 12,
+    "match": 0,
+    "tried": 470
+   },
+   "-O3,p": {
+    "changed": 13,
+    "closer": 4,
+    "match": 0,
+    "tried": 470
+   },
+   "-O3,s": {
+    "changed": 83,
+    "closer": 14,
+    "match": 0,
+    "tried": 470
+   },
+   "-O4,s": {
+    "changed": 74,
+    "closer": 11,
+    "match": 0,
+    "tried": 470
+   },
+   "-flag dont_inline": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 466
+   },
+   "-flag no-global_optimizer": {
+    "changed": 5,
+    "closer": 0,
+    "match": 0,
+    "tried": 466
+   },
+   "-flag no-interworking": {
+    "changed": 90,
+    "closer": 0,
+    "match": 0,
+    "tried": 466
+   },
+   "-flag no-opt_addtogetherconstantpartsoftreeexpressions": {
+    "changed": 1,
+    "closer": 1,
+    "match": 0,
+    "tried": 469
+   },
+   "-flag no-opt_arithtransformation": {
+    "changed": 20,
+    "closer": 0,
+    "match": 0,
+    "tried": 469
+   },
+   "-flag no-opt_common_subs": {
+    "changed": 36,
+    "closer": 8,
+    "match": 1,
+    "tried": 469
+   },
+   "-flag no-opt_dead_assignments": {
+    "changed": 6,
+    "closer": 1,
+    "match": 0,
+    "tried": 468
+   },
+   "-flag no-opt_dead_code": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 468
+   },
+   "-flag no-opt_foldconstants": {
+    "changed": 4,
+    "closer": 0,
+    "match": 0,
+    "tried": 468
+   },
+   "-flag no-opt_loop_invariants": {
+    "changed": 4,
+    "closer": 4,
+    "match": 0,
+    "tried": 468
+   },
+   "-flag no-opt_optimizecontrolflow": {
+    "changed": 4,
+    "closer": 1,
+    "match": 0,
+    "tried": 468
+   },
+   "-flag no-opt_optimizenonregaccess": {
+    "changed": 1,
+    "closer": 1,
+    "match": 0,
+    "tried": 468
+   },
+   "-flag no-opt_propagation": {
+    "changed": 33,
+    "closer": 6,
+    "match": 1,
+    "tried": 468
+   },
+   "-flag no-opt_rebuildconditionals": {
+    "changed": 15,
+    "closer": 6,
+    "match": 0,
+    "tried": 467
+   },
+   "-flag no-opt_rebuildlogicals": {
+    "changed": 1,
+    "closer": 1,
+    "match": 1,
+    "tried": 467
+   },
+   "-flag no-opt_strength_reduction": {
+    "changed": 31,
+    "closer": 10,
+    "match": 0,
+    "tried": 466
+   },
+   "-flag no-opt_strength_reduction_strict": {
+    "changed": 6,
+    "closer": 0,
+    "match": 0,
+    "tried": 466
+   },
+   "-flag no-opt_treetransformation": {
+    "changed": 4,
+    "closer": 2,
+    "match": 0,
+    "tried": 466
+   },
+   "-flag no-optimize_for_size": {
+    "changed": 2,
+    "closer": 1,
+    "match": 0,
+    "tried": 466
+   },
+   "-flag opt_generateconditionalassignments": {
+    "changed": 1,
+    "closer": 1,
+    "match": 0,
+    "tried": 468
+   },
+   "-flag opt_repositioncode": {
+    "changed": 146,
+    "closer": 5,
+    "match": 0,
+    "tried": 466
+   },
+   "-flag opt_returnloopdepthinstatementvalue": {
+    "changed": 6,
+    "closer": 1,
+    "match": 0,
+    "tried": 466
+   },
+   "-flag opt_unpromotetypes": {
+    "changed": 34,
+    "closer": 2,
+    "match": 0,
+    "tried": 466
+   },
+   "-flag opt_unroll_loops": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 466
+   },
+   "-flag optimize_for_size": {
+    "changed": 74,
+    "closer": 11,
+    "match": 0,
+    "tried": 466
+   },
+   "-flag profile": {
+    "changed": 464,
+    "closer": 0,
+    "match": 0,
+    "tried": 466
+   },
+   "-flag thumb": {
+    "changed": 466,
+    "closer": 0,
+    "match": 0,
+    "tried": 466
+   },
+   "-inline off": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 470
+   },
+   "-ipa file": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 470
+   },
+   "-msext on": {
+    "changed": 4,
+    "closer": 0,
+    "match": 0,
+    "tried": 470
+   },
+   "-nointerworking": {
+    "changed": 91,
+    "closer": 0,
+    "match": 0,
+    "tried": 470
+   },
+   "-pic": {
+    "changed": 5,
+    "closer": 0,
+    "match": 0,
+    "tried": 470
+   },
+   "-pid": {
+    "changed": 167,
+    "closer": 11,
+    "match": 1,
+    "tried": 470
+   },
+   "-proc arm7tdmi": {
+    "changed": 385,
+    "closer": 5,
+    "match": 0,
+    "tried": 470
+   },
+   "-proc arm9tdmi": {
+    "changed": 380,
+    "closer": 5,
+    "match": 0,
+    "tried": 470
+   },
+   "-proc generic": {
+    "changed": 420,
+    "closer": 9,
+    "match": 0,
+    "tried": 470
+   },
+   "-proc v4t": {
+    "changed": 385,
+    "closer": 5,
+    "match": 0,
+    "tried": 470
+   },
+   "-proc v5t": {
+    "changed": 306,
+    "closer": 32,
+    "match": 0,
+    "tried": 470
+   },
+   "-profile": {
+    "changed": 468,
+    "closer": 0,
+    "match": 0,
+    "tried": 470
+   }
+  },
+  "drafts": 470,
+  "matches": 4
+ },
+ "simpsons-game": {
+  "closer": 56,
+  "deltas": {
+   "-O0": {
+    "changed": 596,
+    "closer": 5,
+    "match": 0,
+    "tried": 607
+   },
+   "-O1,p": {
+    "changed": 493,
+    "closer": 34,
+    "match": 0,
+    "tried": 607
+   },
+   "-O1,s": {
+    "changed": 495,
+    "closer": 34,
+    "match": 0,
+    "tried": 607
+   },
+   "-O2,p": {
+    "changed": 36,
+    "closer": 15,
+    "match": 0,
+    "tried": 607
+   },
+   "-O2,s": {
+    "changed": 91,
+    "closer": 15,
+    "match": 0,
+    "tried": 607
+   },
+   "-O3,p": {
+    "changed": 4,
+    "closer": 0,
+    "match": 0,
+    "tried": 607
+   },
+   "-O3,s": {
+    "changed": 86,
+    "closer": 11,
+    "match": 0,
+    "tried": 607
+   },
+   "-O4,s": {
+    "changed": 86,
+    "closer": 11,
+    "match": 0,
+    "tried": 607
+   },
+   "-flag auto_inline": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag dont_inline": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag no-global_optimizer": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag no-opt_arithtransformation": {
+    "changed": 15,
+    "closer": 0,
+    "match": 0,
+    "tried": 607
+   },
+   "-flag no-opt_common_subs": {
+    "changed": 30,
+    "closer": 7,
+    "match": 1,
+    "tried": 607
+   },
+   "-flag no-opt_dead_assignments": {
+    "changed": 4,
+    "closer": 1,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag no-opt_dead_code": {
+    "changed": 4,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag no-opt_foldconstants": {
+    "changed": 22,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag no-opt_loop_invariants": {
+    "changed": 12,
+    "closer": 6,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag no-opt_optimizecontrolflow": {
+    "changed": 4,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag no-opt_propagation": {
+    "changed": 15,
+    "closer": 1,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag no-opt_rebuildconditionals": {
+    "changed": 4,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag no-opt_strength_reduction": {
+    "changed": 24,
+    "closer": 10,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag no-opt_strength_reduction_strict": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag no-opt_treetransformation": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag opt_generateconditionalassignments": {
+    "changed": 1,
+    "closer": 1,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag opt_removetailrecursions": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 599
+   },
+   "-flag opt_repositioncode": {
+    "changed": 117,
+    "closer": 1,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag opt_returnloopdepthinstatementvalue": {
+    "changed": 5,
+    "closer": 1,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag opt_unpromotetypes": {
+    "changed": 5,
+    "closer": 0,
+    "match": 0,
+    "tried": 606
+   },
+   "-flag optimize_for_size": {
+    "changed": 86,
+    "closer": 11,
+    "match": 0,
+    "tried": 606
+   },
+   "-inline all": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 607
+   },
+   "-inline auto": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 607
+   },
+   "-inline auto,deferred": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 607
+   },
+   "-inline deferred": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 607
+   },
+   "-inline off": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 607
+   },
+   "-ipa file": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 600
+   },
+   "-msext on": {
+    "changed": 5,
+    "closer": 0,
+    "match": 0,
+    "tried": 607
+   },
+   "-nointerworking": {
+    "changed": 273,
+    "closer": 1,
+    "match": 0,
+    "tried": 607
+   },
+   "-pic": {
+    "changed": 190,
+    "closer": 0,
+    "match": 0,
+    "tried": 607
+   },
+   "-pid": {
+    "changed": 190,
+    "closer": 3,
+    "match": 0,
+    "tried": 607
+   },
+   "-proc arm7tdmi": {
+    "changed": 320,
+    "closer": 0,
+    "match": 0,
+    "tried": 607
+   },
+   "-proc arm9tdmi": {
+    "changed": 317,
+    "closer": 0,
+    "match": 0,
+    "tried": 607
+   },
+   "-proc generic": {
+    "changed": 530,
+    "closer": 13,
+    "match": 0,
+    "tried": 607
+   },
+   "-proc v4t": {
+    "changed": 320,
+    "closer": 0,
+    "match": 0,
+    "tried": 607
+   },
+   "-proc v5t": {
+    "changed": 412,
+    "closer": 22,
+    "match": 0,
+    "tried": 607
+   },
+   "-profile": {
+    "changed": 607,
+    "closer": 0,
+    "match": 0,
+    "tried": 607
+   }
+  },
+  "drafts": 607,
+  "matches": 1,
+  "won_profiles": {
+   "2.0/sp1p5 -flag no-opt_common_subs": 1
+  }
+ },
+ "spider-man-web-of-shadows": {
+  "closer": 25,
+  "deltas": {
+   "-O0": {
+    "changed": 389,
+    "closer": 1,
+    "match": 1,
+    "tried": 393
+   },
+   "-O1,p": {
+    "changed": 267,
+    "closer": 8,
+    "match": 0,
+    "tried": 392
+   },
+   "-O1,s": {
+    "changed": 267,
+    "closer": 9,
+    "match": 0,
+    "tried": 392
+   },
+   "-O2,p": {
+    "changed": 9,
+    "closer": 3,
+    "match": 0,
+    "tried": 392
+   },
+   "-O2,s": {
+    "changed": 44,
+    "closer": 1,
+    "match": 0,
+    "tried": 392
+   },
+   "-O3,p": {
+    "changed": 4,
+    "closer": 1,
+    "match": 0,
+    "tried": 392
+   },
+   "-O3,s": {
+    "changed": 45,
+    "closer": 2,
+    "match": 0,
+    "tried": 392
+   },
+   "-O4,s": {
+    "changed": 44,
+    "closer": 1,
+    "match": 0,
+    "tried": 392
+   },
+   "-flag auto_inline": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 388
+   },
+   "-flag no-global_optimizer": {
+    "changed": 5,
+    "closer": 1,
+    "match": 1,
+    "tried": 389
+   },
+   "-flag no-opt_arithtransformation": {
+    "changed": 6,
+    "closer": 1,
+    "match": 1,
+    "tried": 391
+   },
+   "-flag no-opt_common_subs": {
+    "changed": 23,
+    "closer": 1,
+    "match": 0,
+    "tried": 390
+   },
+   "-flag no-opt_dead_assignments": {
+    "changed": 4,
+    "closer": 1,
+    "match": 0,
+    "tried": 390
+   },
+   "-flag no-opt_dead_code": {
+    "changed": 4,
+    "closer": 0,
+    "match": 0,
+    "tried": 390
+   },
+   "-flag no-opt_foldconstants": {
+    "changed": 11,
+    "closer": 0,
+    "match": 0,
+    "tried": 390
+   },
+   "-flag no-opt_loop_invariants": {
+    "changed": 5,
+    "closer": 3,
+    "match": 0,
+    "tried": 390
+   },
+   "-flag no-opt_optimizecontrolflow": {
+    "changed": 4,
+    "closer": 1,
+    "match": 0,
+    "tried": 390
+   },
+   "-flag no-opt_propagation": {
+    "changed": 9,
+    "closer": 2,
+    "match": 0,
+    "tried": 390
+   },
+   "-flag no-opt_rebuildconditionals": {
+    "changed": 3,
+    "closer": 2,
+    "match": 0,
+    "tried": 390
+   },
+   "-flag no-opt_rebuildlogicals": {
+    "changed": 3,
+    "closer": 1,
+    "match": 1,
+    "tried": 390
+   },
+   "-flag no-opt_strength_reduction": {
+    "changed": 4,
+    "closer": 2,
+    "match": 0,
+    "tried": 389
+   },
+   "-flag no-opt_treetransformation": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 389
+   },
+   "-flag opt_branchlessexpensivethandiv": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 390
+   },
+   "-flag opt_repositioncode": {
+    "changed": 89,
+    "closer": 1,
+    "match": 0,
+    "tried": 389
+   },
+   "-flag opt_returnloopdepthinstatementvalue": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 389
+   },
+   "-flag opt_unpromotetypes": {
+    "changed": 6,
+    "closer": 1,
+    "match": 0,
+    "tried": 389
+   },
+   "-flag optimize_for_size": {
+    "changed": 44,
+    "closer": 1,
+    "match": 0,
+    "tried": 388
+   },
+   "-inline all": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 392
+   },
+   "-inline auto": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 392
+   },
+   "-inline auto,deferred": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 392
+   },
+   "-msext on": {
+    "changed": 4,
+    "closer": 1,
+    "match": 0,
+    "tried": 392
+   },
+   "-nointerworking": {
+    "changed": 105,
+    "closer": 0,
+    "match": 0,
+    "tried": 392
+   },
+   "-pic": {
+    "changed": 37,
+    "closer": 0,
+    "match": 0,
+    "tried": 392
+   },
+   "-pid": {
+    "changed": 200,
+    "closer": 4,
+    "match": 1,
+    "tried": 392
+   },
+   "-proc arm7tdmi": {
+    "changed": 294,
+    "closer": 1,
+    "match": 0,
+    "tried": 392
+   },
+   "-proc arm9tdmi": {
+    "changed": 285,
+    "closer": 0,
+    "match": 0,
+    "tried": 392
+   },
+   "-proc generic": {
+    "changed": 338,
+    "closer": 1,
+    "match": 0,
+    "tried": 392
+   },
+   "-proc v4t": {
+    "changed": 294,
+    "closer": 1,
+    "match": 0,
+    "tried": 392
+   },
+   "-proc v5t": {
+    "changed": 211,
+    "closer": 13,
+    "match": 0,
+    "tried": 392
+   },
+   "-profile": {
+    "changed": 392,
+    "closer": 0,
+    "match": 0,
+    "tried": 392
+   }
+  },
+  "drafts": 393,
+  "matches": 5,
+  "won_profiles": {
+   "2.0/sp1p5 -O0": 1,
+   "2.0/sp1p5 -flag no-global_optimizer": 1,
+   "2.0/sp1p5 -flag no-opt_arithtransformation": 1,
+   "2.0/sp1p5 -flag no-opt_rebuildlogicals": 1,
+   "2.0/sp1p5 -pid": 1
+  }
+ },
+ "spyro-shadow-legacy": {
+  "closer": 142,
+  "deltas": {
+   "-O0": {
+    "changed": 411,
+    "closer": 56,
+    "match": 0,
+    "tried": 438
+   },
+   "-O1,p": {
+    "changed": 324,
+    "closer": 43,
+    "match": 0,
+    "tried": 438
+   },
+   "-O1,s": {
+    "changed": 330,
+    "closer": 42,
+    "match": 0,
+    "tried": 438
+   },
+   "-O2,p": {
+    "changed": 20,
+    "closer": 6,
+    "match": 0,
+    "tried": 438
+   },
+   "-O2,s": {
+    "changed": 77,
+    "closer": 8,
+    "match": 0,
+    "tried": 438
+   },
+   "-O3,p": {
+    "changed": 5,
+    "closer": 2,
+    "match": 0,
+    "tried": 438
+   },
+   "-O3,s": {
+    "changed": 71,
+    "closer": 5,
+    "match": 0,
+    "tried": 438
+   },
+   "-O4,s": {
+    "changed": 69,
+    "closer": 4,
+    "match": 0,
+    "tried": 438
+   },
+   "-flag no-global_optimizer": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 435
+   },
+   "-flag no-opt_arithtransformation": {
+    "changed": 22,
+    "closer": 3,
+    "match": 1,
+    "tried": 436
+   },
+   "-flag no-opt_common_subs": {
+    "changed": 16,
+    "closer": 4,
+    "match": 0,
+    "tried": 435
+   },
+   "-flag no-opt_dead_assignments": {
+    "changed": 7,
+    "closer": 1,
+    "match": 0,
+    "tried": 435
+   },
+   "-flag no-opt_dead_code": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 435
+   },
+   "-flag no-opt_foldconstants": {
+    "changed": 4,
+    "closer": 1,
+    "match": 0,
+    "tried": 435
+   },
+   "-flag no-opt_loop_invariants": {
+    "changed": 7,
+    "closer": 4,
+    "match": 0,
+    "tried": 435
+   },
+   "-flag no-opt_optimizecontrolflow": {
+    "changed": 1,
+    "closer": 1,
+    "match": 0,
+    "tried": 435
+   },
+   "-flag no-opt_propagation": {
+    "changed": 14,
+    "closer": 4,
+    "match": 0,
+    "tried": 435
+   },
+   "-flag no-opt_rebuildconditionals": {
+    "changed": 19,
+    "closer": 3,
+    "match": 0,
+    "tried": 435
+   },
+   "-flag no-opt_strength_reduction": {
+    "changed": 8,
+    "closer": 1,
+    "match": 0,
+    "tried": 435
+   },
+   "-flag no-opt_strength_reduction_strict": {
+    "changed": 2,
+    "closer": 1,
+    "match": 0,
+    "tried": 435
+   },
+   "-flag no-opt_treetransformation": {
+    "changed": 2,
+    "closer": 1,
+    "match": 0,
+    "tried": 435
+   },
+   "-flag opt_rearrangemultiplesubscripts": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 435
+   },
+   "-flag opt_repositioncode": {
+    "changed": 33,
+    "closer": 23,
+    "match": 0,
+    "tried": 435
+   },
+   "-flag opt_returnloopdepthinstatementvalue": {
+    "changed": 3,
+    "closer": 2,
+    "match": 0,
+    "tried": 435
+   },
+   "-flag opt_unpromotetypes": {
+    "changed": 20,
+    "closer": 4,
+    "match": 0,
+    "tried": 435
+   },
+   "-flag opt_unroll_loops": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 435
+   },
+   "-flag optimize_for_size": {
+    "changed": 67,
+    "closer": 4,
+    "match": 0,
+    "tried": 435
+   },
+   "-msext on": {
+    "changed": 9,
+    "closer": 7,
+    "match": 2,
+    "tried": 438
+   },
+   "-nointerworking": {
+    "changed": 317,
+    "closer": 0,
+    "match": 0,
+    "tried": 438
+   },
+   "-pic": {
+    "changed": 81,
+    "closer": 2,
+    "match": 0,
+    "tried": 436
+   },
+   "-pid": {
+    "changed": 239,
+    "closer": 51,
+    "match": 0,
+    "tried": 436
+   },
+   "-proc arm7tdmi": {
+    "changed": 363,
+    "closer": 117,
+    "match": 0,
+    "tried": 438
+   },
+   "-proc arm9tdmi": {
+    "changed": 140,
+    "closer": 114,
+    "match": 0,
+    "tried": 438
+   },
+   "-proc generic": {
+    "changed": 390,
+    "closer": 119,
+    "match": 0,
+    "tried": 438
+   },
+   "-proc v4t": {
+    "changed": 363,
+    "closer": 117,
+    "match": 0,
+    "tried": 438
+   },
+   "-proc v5t": {
+    "changed": 283,
+    "closer": 21,
+    "match": 0,
+    "tried": 438
+   },
+   "-proc v5te": {
+    "changed": 240,
+    "closer": 6,
+    "match": 0,
+    "tried": 438
+   },
+   "-profile": {
+    "changed": 422,
+    "closer": 34,
+    "match": 0,
+    "tried": 438
+   }
+  },
+  "drafts": 438,
+  "matches": 3,
+  "won_profiles": {
+   "1.2/sp2p3 -flag no-opt_arithtransformation": 1,
+   "1.2/sp2p3 -msext on": 2
+  }
+ },
+ "ultimate-spider-man": {
+  "closer": 164,
+  "deltas": {
+   "-O0": {
+    "changed": 334,
+    "closer": 68,
+    "match": 0,
+    "tried": 384
+   },
+   "-O1,p": {
+    "changed": 222,
+    "closer": 59,
+    "match": 0,
+    "tried": 384
+   },
+   "-O1,s": {
+    "changed": 259,
+    "closer": 52,
+    "match": 0,
+    "tried": 384
+   },
+   "-O2,p": {
+    "changed": 12,
+    "closer": 2,
+    "match": 0,
+    "tried": 384
+   },
+   "-O2,s": {
+    "changed": 125,
+    "closer": 2,
+    "match": 0,
+    "tried": 384
+   },
+   "-O3,p": {
+    "changed": 2,
+    "closer": 2,
+    "match": 0,
+    "tried": 384
+   },
+   "-O3,s": {
+    "changed": 125,
+    "closer": 2,
+    "match": 0,
+    "tried": 384
+   },
+   "-O4,s": {
+    "changed": 124,
+    "closer": 1,
+    "match": 0,
+    "tried": 384
+   },
+   "-flag no-global_optimizer": {
+    "changed": 3,
+    "closer": 0,
+    "match": 0,
+    "tried": 381
+   },
+   "-flag no-opt_arithtransformation": {
+    "changed": 5,
+    "closer": 2,
+    "match": 0,
+    "tried": 381
+   },
+   "-flag no-opt_common_subs": {
+    "changed": 17,
+    "closer": 11,
+    "match": 0,
+    "tried": 381
+   },
+   "-flag no-opt_dead_assignments": {
+    "changed": 6,
+    "closer": 3,
+    "match": 0,
+    "tried": 381
+   },
+   "-flag no-opt_dead_code": {
+    "changed": 1,
+    "closer": 1,
+    "match": 0,
+    "tried": 381
+   },
+   "-flag no-opt_foldconstants": {
+    "changed": 19,
+    "closer": 11,
+    "match": 0,
+    "tried": 381
+   },
+   "-flag no-opt_loop_invariants": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 381
+   },
+   "-flag no-opt_optimizecontrolflow": {
+    "changed": 2,
+    "closer": 1,
+    "match": 0,
+    "tried": 381
+   },
+   "-flag no-opt_propagation": {
+    "changed": 12,
+    "closer": 6,
+    "match": 0,
+    "tried": 381
+   },
+   "-flag no-opt_rebuildconditionals": {
+    "changed": 1,
+    "closer": 0,
+    "match": 0,
+    "tried": 381
+   },
+   "-flag no-opt_rebuildlogicals": {
+    "changed": 2,
+    "closer": 0,
+    "match": 0,
+    "tried": 381
+   },
+   "-flag no-opt_strength_reduction": {
+    "changed": 9,
+    "closer": 0,
+    "match": 0,
+    "tried": 381
+   },
+   "-flag no-opt_treetransformation": {
+    "changed": 1,
+    "closer": 1,
+    "match": 0,
+    "tried": 381
+   },
+   "-flag opt_pulloutconstants": {
+    "changed": 2,
+    "closer": 1,
+    "match": 0,
+    "tried": 381
+   },
+   "-flag opt_repositioncode": {
+    "changed": 47,
+    "closer": 37,
+    "match": 0,
+    "tried": 381
+   },
+   "-flag opt_returnloopdepthinstatementvalue": {
+    "changed": 5,
+    "closer": 3,
+    "match": 0,
+    "tried": 381
+   },
+   "-flag opt_unpromotetypes": {
+    "changed": 9,
+    "closer": 0,
+    "match": 0,
+    "tried": 381
+   },
+   "-flag optimize_for_size": {
+    "changed": 124,
+    "closer": 1,
+    "match": 0,
+    "tried": 381
+   },
+   "-msext on": {
+    "changed": 6,
+    "closer": 4,
+    "match": 0,
+    "tried": 381
+   },
+   "-nointerworking": {
+    "changed": 228,
+    "closer": 0,
+    "match": 0,
+    "tried": 384
+   },
+   "-pic": {
+    "changed": 11,
+    "closer": 3,
+    "match": 0,
+    "tried": 381
+   },
+   "-pid": {
+    "changed": 145,
+    "closer": 51,
+    "match": 0,
+    "tried": 381
+   },
+   "-proc arm7tdmi": {
+    "changed": 303,
+    "closer": 140,
+    "match": 3,
+    "tried": 384
+   },
+   "-proc arm9tdmi": {
+    "changed": 213,
+    "closer": 136,
+    "match": 0,
+    "tried": 381
+   },
+   "-proc generic": {
+    "changed": 311,
+    "closer": 138,
+    "match": 0,
+    "tried": 381
+   },
+   "-proc v4t": {
+    "changed": 300,
+    "closer": 137,
+    "match": 0,
+    "tried": 381
+   },
+   "-proc v5t": {
+    "changed": 146,
+    "closer": 16,
+    "match": 0,
+    "tried": 381
+   },
+   "-proc v5te": {
+    "changed": 128,
+    "closer": 13,
+    "match": 0,
+    "tried": 381
+   },
+   "-profile": {
+    "changed": 349,
+    "closer": 29,
+    "match": 0,
+    "tried": 381
+   }
+  },
+  "drafts": 384,
+  "matches": 3,
+  "won_profiles": {
+   "2.0/sp1p5 -proc arm7tdmi": 3
+  }
+ }
+}

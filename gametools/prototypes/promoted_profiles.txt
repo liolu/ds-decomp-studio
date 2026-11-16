@@ -1,0 +1,10 @@
+# written by prototypes/flagsweep.py (promote): profile, then games and matches. auto_match adds these to
+# GLOBAL_PROFILES. Edit PROMOTE_GAMES/PROMOTE_MATCHES there, not this file.
+2.0/sp1p5 -flag no-opt_rebuildlogicals  # 5 games, 17 matches
+2.0/sp1p5 -flag no-opt_common_subs  # 7 games, 12 matches
+2.0/sp1p5 -flag opt_repositioncode  # 4 games, 10 matches
+2.0/sp1p5 -proc arm7tdmi  # 2 games, 4 matches
+2.0/sp1p5 -O0  # 3 games, 3 matches
+2.0/sp1p5 -flag no-opt_arithtransformation  # 2 games, 3 matches
+2.0/sp1p5 -pid  # 3 games, 3 matches
+2.0/sp1p5 -flag no-opt_strength_reduction  # 2 games, 2 matches
