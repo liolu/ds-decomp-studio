@@ -17,6 +17,8 @@ ap.add_argument('--min', type=int, default=4); ap.add_argument('--max', type=int
 ap.add_argument('--fresh', action='store_true', help='ignore results.json / cache')
 ap.add_argument('--submit', action='store_true'); ap.add_argument('names', nargs='*')
 a = ap.parse_args()
+# `@FILE` = names read from FILE (Windows command line limit: ~1800 names, WinError 206)
+a.names = [m for n in a.names for m in (open(n[1:], encoding='utf-8').read().split() if n.startswith('@') else [n])]
 OUT = os.path.abspath(a.out); os.makedirs(OUT, exist_ok=True)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 RANK = {'match': 0, 'near': 1, 'size': 2, 'compile': 3}
@@ -33,10 +35,10 @@ def judge_one(name):
     ov = wbm.overlay_index().get(name)
     mod = 'main' if ov is None else ('itcm' if ov < 0 else f'ov{ov:03d}')
     if mod != cur:  # select_module drops the symbol/reloc caches: only call it when the module changes
-        if mod == 'main':
-            if cur is not None: importlib.reload(wbm)
-        else:
-            wbm.select_module(name)
+        # back to main: select_module restores the saved main state. importlib.reload(wbm) did not: it re-captured
+        # project.SYMBOLS still pointing at ITCM -> "no such function in the main module" for every main func that a
+        # worker met after an ITCM one (Cooking Mama 2026-11-16: 1445/1473 errors)
+        wbm.select_module(name)
         cur = mod
     f = wbm.function(name)
     if wbm.covered(f['addr']): return name, None
@@ -69,7 +71,8 @@ def judge_one(name):
 
 def safe(n):
     try: return judge_one(n)
-    except Exception as e: return n, {'status': 'error', 'match': False, 'k': [1, 9999], 'err': str(e)[:200], 'mt': 0}
+    except (Exception, SystemExit) as e:  # workbench exits on an unknown name: a dead worker hangs the Pool for good
+        return n, {'status': 'error', 'match': False, 'k': [1, 9999], 'err': str(e)[:200], 'mt': 0}
 
 
 if __name__ == '__main__':
