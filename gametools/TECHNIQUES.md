@@ -55,6 +55,24 @@ Three levels:
 - **sched-scan** `schedscan.py` - exact instruction window across thousands of variants (scheduling puzzles)
 - **proto:regcause** / **reg-cause** `regcause.py` - diagnosis: delete/duplicate each statement, count wrong target instructions fixed/broken (registers kept) = which statement drives the allocator there (TnJ 0200c138: the earlier calls, not the block)
 - **proto:regfocus** / **reg-focus** `regfocus.py` - targeted mutations of the lines regcause names, greedy rounds (TnJ 0203bd24/01ff8188/0200c138: no gain, 2026-11-10)
+- **block-map** `blockmap.py scan|reclass|show|list|export|run` - one game, every function: how it was matched (git
+  commit kind + compilers.txt profile) or WHICH PARAMETER blocks it (diff classified: reg, sched, imm, cond, ldst, swap,
+  frame, calls, loop, short/long, err:<compiler error family>). `export CLASSES DIR` feeds any tool (nearsweep --src),
+  `run CLASS` runs the class tool. Spyro 2026-11-16: 750 of 1900 unmatched never compiled, 26 already matched
+- **err-fix** `errfix.py` - greedy compile repair driven by the first mwcc error (line + family): undeclared stack slots,
+  pointer casts (`*(T *)`, `**(T **)`), implicit conversions, old-style prototypes, calls through integers, void
+  arithmetic, redefinitions, `.L_` labels -> `lbl_`. Spyro: 752 -> 666 compile, 16 matches directly
+- **sinit-init** `auto_match.integrate` + `workbench submit-many` - a `__sinit_` that matches as plain C is written in
+  `.init` with its `.ctor` pointer (pragma placed above the function: line 1 stays the compiler marker; dsd's
+  `.p__sinit_X` renamed `__sinit_X_ctor`). Spyro: 25 matches that submit-many used to refuse ("not in .text")
+- **label-global** `auto_match.globalize_called_labels` - a call to a second entry point inside a library routine
+  (`.L_ADDR`, dsd cannot split it) is written `lbl_ADDR`; the label becomes global in symbols.txt on integrate
+- **asm-sig** `asmsig.py` (auto_match.profiles_for hook, AUTO_NO_ASMSIG=1 off) - compiler fingerprints read in the
+  target: `add rX, rY, #off` + `ldr/str [rX]` = 1.2/b56 only (481 unmatched Spyro functions, 0 matched non-b56 ones)
+- **return-arg** `retarg.py` - void draft whose target keeps r0 to the end: `return arg0;` (constructor returning
+  `this`). Spyro class `reg` (2 diffs: constant put in r2, not r0): permrand 0/36, this matched at once
+- **ldst-fix** `ldstfix.py` - width/sign-only diffs (`ldr` vs `ldrsb`): swap the draft's pointer type for the one the
+  target instruction needs, occurrence by occurrence, climbing
 - **proto:pragsweep** / **pragma-profile** `pragsweep.py` - every pragma name read out of mwccarm.exe (77 for 2.0/sp1p5) on/off x -O levels, keeps those that change the code, then pairs. A source `#pragma` of the original = a `-pragma` profile in compilers.txt (TnJ: `opt_propagation off` solved 6 functions, `opt_dead_assignments off`+`opt_propagation off` kept an empty loop, CTRDGi -O2+propagation off)
 
 ## Manual techniques (no script yet - turn into a prototype when reused)

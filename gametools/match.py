@@ -213,13 +213,15 @@ def cmd_verify(args):
         ok = False
     else:
         print(f"OK  : ROM is byte-identical ({project.ROM_NAME}: OK)")
+    rom_ok = ok  # the .ctor exemption below depends on the ROM only, not on another unit failing first
     report = build_report()
     profnames = load_profnames()
     for u in source_units(report):
         if u["metadata"].get("complete"):
             for s in u.get("sections", []):
                 # objdiff does not diff .ctor (no fuzzy_match_percent at all): the byte-identical ROM is the proof
-                if s["name"] == ".ctor" and "fuzzy_match_percent" not in s and ok:
+                # (rom_ok, not ok: one bad file used to fail every __sinit_ .ctor after it, Spyro 2026-11-16)
+                if s["name"] == ".ctor" and "fuzzy_match_percent" not in s and rom_ok:
                     continue
                 if float(s.get("fuzzy_match_percent", 0)) < 100.0 and not profile_padding(u, s, profnames):
                     print(f"FAIL: {u['metadata'].get('source_path')} is marked complete but {s['name']} is "

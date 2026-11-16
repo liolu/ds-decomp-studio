@@ -542,7 +542,10 @@ def cmd_submit_many(a) -> None:
         f = function(n)
         if covered(f["addr"]):
             continue
-        if not am.MAIN_TEXT[0] <= f["addr"] < am.MAIN_TEXT[1]:  # .init / other code sections: not a .text file
+        # .init / other code sections: not a .text file; except C++ static initializers, which integrate() writes
+        # into .init with their .ctor pointer
+        if not am.MAIN_TEXT[0] <= f["addr"] < am.MAIN_TEXT[1] and not (
+                n.startswith("__sinit_") and am.code_section(f["addr"]) == ".init"):
             res[n]["submit"] = "not in .text"
             continue
         src = (d / f"{n}.c").read_text(encoding="utf-8", errors="replace")
@@ -554,7 +557,8 @@ def cmd_submit_many(a) -> None:
     import find_culprits
     done = []
     state = {"build": ""}
-    files = [project.ARM9 / "delinks.txt", project.ARM9 / "itcm" / "delinks.txt", *sorted(OVL_DIR.glob("ov*/delinks.txt")), am.COMPILERS_TXT]
+    files = [project.ARM9 / "delinks.txt", project.ARM9 / "itcm" / "delinks.txt", *sorted(OVL_DIR.glob("ov*/delinks.txt")), am.COMPILERS_TXT,
+             project.SYMBOLS]  # integrate() may globalize a called label (lbl_ADDR)
 
     def attempt(group):
         """Integrates `group` and builds once (modules only, no ROM): kept if every module is byte-identical,
@@ -588,7 +592,11 @@ def cmd_submit_many(a) -> None:
         state["bad"] = [g for g, p in zip(group, created) if p.relative_to(ROOT).as_posix() in blamed]
         print(f"submit-many: {len(state['bad'])} of the group blamed; culprits: {sorted(blamed)[:8]}",
               file=sys.stderr, flush=True)
-        (WORK / "last_failed_build.txt").write_text(build[-200000:], encoding="utf-8")
+        try:  # diagnosis only: never let it stop the undo below (build/workbench did not exist: Spyro 2026-11-16)
+            WORK.mkdir(parents=True, exist_ok=True)
+            (WORK / "last_failed_build.txt").write_text(build[-200000:], encoding="utf-8")
+        except OSError:
+            pass
         for p, b in saved.items():
             if b is None:
                 p.unlink(missing_ok=True)

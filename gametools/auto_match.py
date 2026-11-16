@@ -415,6 +415,18 @@ def profiles_for(name: str, size: int, addr: int, prior: bool = True) -> list[tu
             near = []
         near = [c for c in near if ok(c) and (c in out or (MWCC_ROOT / c[0] / "mwccarm.exe").exists())]
         out = near + [c for c in out if c not in near]
+    if prior and not os.environ.get("AUTO_NO_ASMSIG"):
+        # compiler fingerprints in the target code (prototypes/asmsig.py): e.g. `add rX, rY, #off` + `ldr [rX]` is
+        # only emitted by 1.2/b56, a profile Spyro never used, so neither the census nor the neighbours proposed it
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parent / "prototypes"))
+            import asmsig
+            sig = [_prof_split(p) for p in asmsig.profiles_from_asm((function_asm(name) or "").splitlines())]
+        except Exception:  # noqa: BLE001
+            sig = []
+        sig = [c for c in sig if (MWCC_ROOT / c[0] / "mwccarm.exe").exists()]
+        if sig:
+            out = out[:1] + [c for c in sig if c not in out[:1]] + [c for c in out[1:] if c not in sig]
     return out
 
 
@@ -1253,6 +1265,48 @@ def code_section(addr: int) -> str:
     return ".text"
 
 
+def module_section(name: str) -> tuple[int, int] | None:
+    """(start, end) of a section of the module header of delinks.txt (e.g. ".ctor"), None when absent."""
+    for line in DELINKS.read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith((" ", "\t")):
+            break
+        m = re.match(rf"\s+{re.escape(name)}\s+start:0x([0-9a-fA-F]+)\s+end:0x([0-9a-fA-F]+)", line)
+        if m:
+            return int(m.group(1), 16), int(m.group(2), 16)
+    return None
+
+
+def ctor_slot(addr: int) -> int | None:
+    """Address of the .ctor word that points to the static initializer at addr (the C++ compiler emits it in the
+    same file as the __sinit_ function), None when the module has no such word."""
+    sec = module_section(".ctor")
+    if not sec:
+        return None
+    raw = pc.target_bytes(sec[0], sec[1] - sec[0])
+    for i in range(0, len(raw) - 3, 4):
+        if int.from_bytes(raw[i:i + 4], "little") == addr:
+            return sec[0] + i
+    return None
+
+
+SINIT_HEAD = '#pragma define_section INIT ".init" ".init"\n'
+SINIT_CTOR = '\n#pragma define_section CTOR ".ctor" ".ctor"\n\n__declspec(CTOR) void (*{n}_ctor)(void) = {n};\n'
+
+
+def sinit_source(source: str, name: str, with_ctor: bool) -> str:
+    """A __sinit_ function matched as plain C, written the way the compiler places it: the function in .init
+    (__declspec(INIT)) and, when the module has one, its pointer in .ctor (Tom and Jerry's hand matches, 2026-11;
+    blockmap found 25 such drafts already matching in Spyro). fakematch allows exactly these lines for __sinit_."""
+    if "define_section INIT" in source:
+        return source
+    # the pragma goes right above the function: the first line must stay the compiler marker (compilers.txt)
+    s = re.sub(rf"^((?:static\s+)?void\s+{re.escape(name)}\s*\()", SINIT_HEAD.replace("\\", "\\\\") + r"\n__declspec(INIT) \1",
+               source, count=1, flags=re.M)
+    if s == source:
+        return source
+    return s + (SINIT_CTOR.format(n=name) if with_ctor else "")
+
+
 _COMMENTS = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
 
 
@@ -1262,13 +1316,35 @@ def is_cpp_source(source: str) -> bool:
     return bool(re.search(r'\bextern\s*"C"', _COMMENTS.sub(" ", source)))
 
 
+def globalize_called_labels(source: str) -> int:
+    """`lbl_ADDR` used by a source while symbols.txt still has the dsd local label `.L_ADDR` (a second entry point
+    in the middle of a library routine, which dsd cannot split): make it global, same bytes (like
+    find_culprits.globalize_labels). errfix.py writes such calls (Spyro: 39 drafts call lbl_020a4390)."""
+    addrs = set(re.findall(r"\blbl_([0-9a-f]{8})\b", source))
+    if not addrs:
+        return 0
+    t = SYMBOLS.read_text(encoding="utf-8")
+    new = t
+    for a in addrs:
+        new = re.sub(rf"^\.L_{a} (kind:label\(\w+\) addr:0x{a})(?: local)?[ \t]*$", rf"lbl_{a} \1", new, flags=re.M)
+    if new != t:
+        SYMBOLS.write_text(new, encoding="utf-8", newline="\n")
+    return int(new != t)
+
+
 def integrate(found: list[tuple[str, int, int, str]]) -> list[Path]:
     AUTO_SRC.mkdir(parents=True, exist_ok=True)
     created = []
     entries = []
     protos = load_protos()
     for name, size, addr, source in sorted(found, key=lambda x: x[2]):
+        sec = code_section(addr)
+        ctor = None
+        if sec == ".init" and name.startswith("__sinit_"):
+            ctor = ctor_slot(addr)
+            source = sinit_source(source, name, ctor is not None)
         path = AUTO_SRC / f"{name}{'.cpp' if is_cpp_source(source) else '.c'}"
+        globalize_called_labels(source)
         path.write_text(freeze(source, name, protos), encoding="utf-8", newline="\n")
         created.append(path)
         extra = ""
@@ -1277,7 +1353,13 @@ def integrate(found: list[tuple[str, int, int, str]]) -> list[Path]:
             import profrec  # while the function was unmatched its record may have had a data file of its own
             profrec.release(rec[0])
             extra = "    .data       start:0x%08x end:0x%08x\n" % rec
-        sec = code_section(addr)
+        if ctor is not None:
+            extra += "    .ctor       start:0x%08x end:0x%08x\n" % (ctor, ctor + 4)
+            # dsd names the .ctor word `.p__sinit_X`, not a C name: take the name the source gives it
+            t = SYMBOLS.read_text(encoding="utf-8")
+            new = re.sub(rf"^\.p{re.escape(name)} (kind:data)", rf"{name}_ctor \1", t, flags=re.M)
+            if new != t:
+                SYMBOLS.write_text(new, encoding="utf-8", newline="\n")
         entries.append(f"\nsrc/auto/{path.name}:\n    complete\n    {sec:<12}start:0x{addr:08x} end:0x{addr + size:08x}\n" + extra)
     with DELINKS.open("a", newline="\n") as f:
         f.writelines(entries)

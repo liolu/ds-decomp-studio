@@ -32,3 +32,8 @@ Current prototypes (details in each docstring and in `../TECHNIQUES.md`):
 | regfocus.py | no | after regcause: mutations of the named lines only (move, swap, reuse/inline, split, cast, temp), climbs |
 | pragsweep.py | no | every pragma hidden in mwccarm.exe on/off x -O levels, then pairs of those that change the code |
 | schedscan.py | no | parallel judge of many variants, compare an exact instruction window (scheduling puzzles) |
+| blockmap.py | no (whole game) | every function: matched how / blocked by which parameter (diff class); export + run per class |
+| errfix.py | no (whole game) | greedy repair of drafts that do not compile, one rule per mwcc error family |
+| asmsig.py | auto_match hook | compiler fingerprints in the target asm -> profile to try first (1.2/b56) |
+| retarg.py | no (whole game) | void drafts whose target keeps r0: `return arg0;` (constructors returning this) |
+| ldstfix.py | no (whole game) | width/sign-only load/store diffs: pointer type swapped to what the target needs |
