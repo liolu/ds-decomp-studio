@@ -6,6 +6,7 @@
     python studio.py blocks <game> [--level N] [--free]
     python studio.py claim <game> [<block>|next] [--level N] --who NAME [--kind human|claude|qwen|auto]
     python studio.py brief <game> <block>     work sheet for a person or an AI (markdown)
+    python studio.py rules <game> [--pending] functions matched under the code rules (CODE-RULES.md), MATCH-PENDING ones
     python studio.py touch <game> <block> [--note TEXT]   still working on it
     python studio.py done <game> <block>      finished (moved to .studio/finished/)
     python studio.py release <game> <block>   give it back to the queue
@@ -45,6 +46,8 @@ def main():
     s.add_argument("--level", type=int); s.add_argument("--who"); s.add_argument("--kind", default="human", choices=list(blocks.KINDS))
     s.add_argument("--note", default="")
     s = sub.add_parser("brief"); s.add_argument("game"); s.add_argument("block")
+    s = sub.add_parser("rules", help="code rules of one game: matched under the rules, MATCH-PENDING (gametools/coderules.py)")
+    s.add_argument("game"); s.add_argument("--pending", action="store_true"); s.add_argument("--advisory", action="store_true")
     s = sub.add_parser("touch"); s.add_argument("game"); s.add_argument("block"); s.add_argument("--note")
     s = sub.add_parser("done"); s.add_argument("game"); s.add_argument("block"); s.add_argument("--who")
     s = sub.add_parser("release"); s.add_argument("game"); s.add_argument("block"); s.add_argument("--who")
@@ -84,6 +87,13 @@ def main():
         out(blocks.claim(games.get(a.game), a.block, a.who, a.kind, a.level, a.note))
     elif a.cmd == "brief":
         print(brief.brief(games.get(a.game), a.block))
+    elif a.cmd == "rules":
+        import os
+        import subprocess
+        g = games.get(a.game)
+        flags = [f for f, on in (("--pending", a.pending), ("--advisory", a.advisory)) if on]
+        sys.exit(subprocess.run([sys.executable, str(config.game_tool(g.path, "coderules.py")), *flags], cwd=g.path,
+                                env={**os.environ, "DSD_PROJECT": str(g.path)}).returncode)
     elif a.cmd == "touch":
         out(blocks.touch(games.get(a.game), a.block, note=a.note))
     elif a.cmd == "done":
