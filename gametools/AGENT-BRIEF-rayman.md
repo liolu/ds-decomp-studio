@@ -41,5 +41,12 @@ RULES (violations make the match rejected):
 - Write only in your own dir `aK/`, in the journals of YOUR functions (through techlog.py) and NEW scripts in
   `G/prototypes/` (docstring + `proto_run(ctx)` when possible). Helper scripts never in /tmp.
 - Never use leaked SDK source.
+- Identical bytes alone are not a match (`../../studio/CODE-RULES.md`). `judge` adds `rules` to every MATCH: when
+  `rules.status` is `MATCH-PENDING`, `rules.blocking` lists what is not source yet. Several tricks above are clues,
+  not source (`G/TECHNIQUES.md`, section "Code rules"): a parameter declared `volatile` (look for varargs or a struct
+  passed by value), a dead variable reused as loop counter (two locals), `(char *)data + off` (a struct member).
+  Once the bytes match, spend one more judge on the real form; if it still needs the trick, keep the file and
+  report it as PENDING.
 
-Final answer (short): `NAME: MATCH <profile>` lines, then `no: NAME (N diffs)` for the near misses, plus new technique ids.
+Final answer (short): `NAME: MATCH <profile>` lines, `NAME: MATCH <profile> PENDING <rules> (hides: your guess)` for the
+byte matches the rules hold, then `no: NAME (N diffs)` for the near misses, plus new technique ids.

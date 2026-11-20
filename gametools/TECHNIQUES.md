@@ -150,6 +150,34 @@ Section / build
 - **text-data** `#pragma define_section TEXTDATA ".text" ".text"` + `__declspec(TEXTDATA)` on NON-const data, BuildInfo only (crt0 module params + SDK version string; one file per object)
 - **link-time-const** relocs `kind:link_time_const(X)` -> `extern T X[];`
 
+## Code rules: which techniques are source, and which are clues
+
+Identical bytes alone are not a match ([CODE-RULES.md](../CODE-RULES.md)). A technique that finds the original's
+source is a match. A technique that only steers the compiler is a **clue**: log it (`techlog.py add ... ok`), keep
+the file, and report the function as `MATCH-PENDING` with what the trick probably hides. `coderules.py` holds such
+functions out of the count until the real source is written.
+
+| technique ids | under the rules | what to look for instead |
+|---|---|---|
+| typed-struct, callee-type, callee-types, callee-sig, hidden-arg, hidden-return, return-arg, varargs, symbol-names, runtime-names, link-time-const | source | - |
+| loop-form, if-invert, switch-form, decl-order, stmt-order, chain-order, accumulate, block-init, bitfield, int-vs-long, u32-local, local-static, static-anchor, whole-file-ipa, cpp-vcall, embedded-object, sret-virtual | source: what a programmer writes | - |
+| sdk-inline, inline-helper, donor-shape, donor | source when the helper has evidence (a public decompilation, the same shape in several functions): R16 | - |
+| hw-volatile, `volatile` on a 0x04xxxxxx register | source: hardware registers are volatile | - |
+| profile-sweep, profile-prior, nointerworking, pragma-profile, exceptix, init-section, text-data, ld-align, literal-owner | build facts, not source: no rule applies | - |
+| param-volatile, volatile-stack, volatile-field, `volatile` on ordinary data | clue (R17) | varargs, a struct passed by value, a wrong type, an aliasing pointer, a missing call |
+| pad-param (`hunt_pad`) | clue (R17) | the real first argument: a method's `this`, a callback cookie |
+| call-temp (`hunt_t`), cmp-hoist (`hunt_v`), temp-split | clue (R17) unless the temporary has a meaning and a name | a named intermediate, or an inlined accessor |
+| reuse-var, use-count, swap-temps | clue (R30): one variable, several meanings | separate locals; `param-reuse` is source only when the code really reassigns the parameter |
+| byteptr, u8-ptr, ptr-u8, extern-u8, extern-type, extern-split, global-as-array, dup-pool-prev-array | clue (R4, R2) when a struct or one global exists | the struct and its member, the containing object |
+| goto-loop | clue (R14) | a `for`/`do`/`while` shape, a `continue`, another condition |
+| nested-assign, neg-mul, inline-subexpr, enum-local, double-order | check case by case: source when it reads as something a programmer wrote, a clue when it is a contortion | the plain expression with the right types |
+| vcall, vcall-this2 through `*(u8 **)obj + K` | clue (R4, R13) | cpp-vcall: the class and its virtuals |
+| asm-only, asm-function, asm-rewrite to `asm` | `MATCH-PENDING` (R18) | `ORIGINAL-ASM` needs `config/asm_allowed.txt` or an `// ASM:` citation (runtime-asm-split, cross-branch have one) |
+| stmt-perm, rand-perm, near-perm, permuter, declperm, declclimb, cmutate, regfocus, varmerge | searches: their result is a diagnosis, never source to copy as is | read what changed, then write it the way a programmer would |
+
+The search tools mark what they add (`hunt_pad`, `hunt_t`, `hunt_v`), so the checker finds it. Do not rename a probe
+to hide it: replace it.
+
 ## Known dead ends (do not retry without a new idea)
 - (SOLVED 2026-11-10: profile `-pragma "opt_propagation off"` + first arg in a block local) 5th stack-argument register order for calls to func_0203d498 (TnJ func_02016a94, 020116d8, 0200d854, 02028714)
 - "param kept in r0 + copy" (TnJ func_02013198, func_02031cf0): copies/u32/const/inline all coalesce
