@@ -95,7 +95,8 @@ source, run the checker, fix [free] findings first in their own commit, then eac
 - **Names.** Library code (NitroSDK, NitroSystem, MSL...) keeps the recorded names that `names.py` finds in public
   decompilations, verbatim: `OS_CreateThread`, `NNS_FndAllocFromExpHeap`, `OSThread`, files like
   `src/nitro/os/os_thread.c` (`regroup.py`). Game code: the original studio's style where the binary shows it
-  (assert strings, file names, RTTI), recorded in the game's `AGENTS.md`; with no evidence, `Prefix_VerbNoun`
+  (assert strings, file names, RTTI), recorded in the game's `AGENTS.md`; with no evidence, the default tables of
+  [style-defaults.md](style-defaults.md), copied into the game's `AGENTS.md`: `Prefix_VerbNoun`
   functions, `lowerCamel_t` struct types and `UPPER_SNAKE` constants for C, `PascalCase` methods and `lowerCamel`
   members for C++. Placeholders (open naming work, never a failed match): `func_XXXXXXXX`, `func_ovNNN_XXXXXXXX`,
   `data_XXXXXXXX`, `lbl_XXXXXXXX`, `arg0`, `temp_r4`, `var_r5`, `sp10`, `phi_`, `unk_XX`, `M2C_UNK`.
