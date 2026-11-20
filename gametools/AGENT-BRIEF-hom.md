@@ -61,6 +61,13 @@ RULES (violations make the match rejected):
   `build/hunt/agents/*.c` (or your round dir), the journals `build/hunt/techlog/NAME.md` of YOUR functions (through
   techlog.py / protorun.py only) and NEW files in `studio/gametools/prototypes/`: parallel writes corrupt shared state.
 - Before a match counts, run `python ../../studio/gametools/relcheck.py NAME FILE.c PROFILE` (judge masks the literal pool).
+- Identical bytes alone are not a match (`../../studio/CODE-RULES.md`). `judge` adds `rules` to every MATCH: when
+  `rules.status` is `MATCH-PENDING`, `rules.blocking` lists what is not source yet (`M2C_FIELD` and offset casts,
+  `extern` data in the .c file, a `volatile` off hardware registers, an unused leading param, a dummy or unused
+  local, `x = x`, `+ 0`, an `asm` body). Several "known fixes" above are such clues, not source (`TECHNIQUES.md`,
+  section "Code rules"): once the bytes match, spend one or two more judges on the real form (the struct and
+  `p->member`, varargs or a struct by value instead of `volatile`, the missing argument instead of a pad). If it
+  still needs the trick, keep the file and answer `NAME: MATCH <profile> PENDING <rules> (hides: your guess)`.
 - Never use leaked SDK source.
 
 Near-miss fixes found in r27: re-judge 1.2/sp3, 1.2/sp2p3 AND 2.0/sp1p5 first (the header profile was wrong for 3 of 6
@@ -74,6 +81,7 @@ Struct by value (r28, ov004 fixed-point family): `push {r0,r1,r2,r3}` + `add sp,
 from the stack (`ldr r2,[sp,#4]`) = a one-word struct passed by value, not varargs: `typedef struct { int v; } Fx;
 void f(O *o, Fx v) { o->f = v.v; }`. A call `add r0,sp,#N; bl g` then `ldr [sp+N]` = out pointer `void g(Fx *ret, Fx a)`.
 
-Final answer (short): for each function `NAME: MATCH <profile>` (file written) or `NAME: no (best N diffs, what blocks)`,
+Final answer (short): for each function `NAME: MATCH <profile>` (file written), `NAME: MATCH <profile> PENDING <rules>
+(hides: ...)` or `NAME: no (best N diffs, what blocks)`,
 plus the new technique ids / prototypes you created (the orchestrator adds them to TECHNIQUES.md).
 ---

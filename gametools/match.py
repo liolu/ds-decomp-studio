@@ -8,6 +8,9 @@
     python tools/match.py progress            # rewrite the progress table in README.md (no build needed)
 
 `verify` exits with a non-zero code on any failure. Automated sessions must not commit unless it passes.
+`verify` and `progress` also give the second number of the code rules (tools/coderules.py, CODE-RULES.md of DS
+Decomp Studio): the functions matched under the rules. Byte-identical functions that break a [match] rule are
+MATCH-PENDING: reported, never a verify failure (the bytes win), and not counted in that number.
 """
 
 import argparse
@@ -234,6 +237,9 @@ def cmd_verify(args):
     m = report["measures"]
     print(f"INFO: {m.get('matched_functions', 0)}/{m['total_functions']} functions, "
           f"{pct(m, 'matched_code_percent'):.2f}% code")
+    rules = rules_report()
+    if rules:
+        print("INFO: " + rules["summary"] + " (python tools/coderules.py --pending)")
     print("VERIFY PASSED" if ok else "VERIFY FAILED")
     sys.exit(0 if ok else 1)
 
@@ -250,6 +256,20 @@ PARTS = [  # (path prefix, label) of the progress table, first match wins
     ("src/auto/", "Auto-matched (raw m2c output, to clean up)"),
 ]
 STUDIO_URL = "https://github.com/liolu/ds-decomp-studio"
+
+
+def rules_report() -> dict | None:
+    """coderules.project_report of this game, written to build/coderules/report.json; None when tools/coderules.py
+    is not in the game yet (`studio.py sync-tools`) or cannot read the sources."""
+    try:
+        import coderules
+        rep = coderules.project_report(project.ROOT, project.CONFIG)
+        coderules.write_report(project.ROOT, rep)
+        rep["summary"] = coderules.summary(rep)
+        return rep
+    except Exception as e:  # the second number never breaks verify or progress
+        print(f"INFO: code rules not checked ({type(e).__name__}: {e})")
+        return None
 
 
 def bar(percent: float, width: int = 20) -> str:
@@ -334,16 +354,28 @@ def cmd_progress(args):
     lines = ["<!-- progress:start -->",
              f"{bar(code)} **{code:.2f}%** of the code matched · data {data:.2f}% · "
              f"{m.get('matched_functions', 0)}/{m['total_functions']} functions",
-             "",
-             "| Part of the code | Files | Functions | Share of all code |",
-             "|---|---|---|---|"]
+             ""]
+    rules = rules_report()
+    if rules:
+        t = rules["totals"]
+        counted = t["functions"] - t["original_asm"]
+        by_rule = ", ".join(f"{r}: {n}" for r, n in rules["by_rule"].items())
+        lines += [f"**{t['rules_matched']}/{counted}** functions matched under the "
+                  f"[code rules]({STUDIO_URL}/blob/main/CODE-RULES.md) · {t['pending']} MATCH-PENDING "
+                  f"(byte-identical, source not finished{': ' + by_rule if by_rule else ''}) · "
+                  f"{t['original_asm']} ORIGINAL-ASM (listed apart, counted neither way) · "
+                  f"{t['placeholders']} matched functions still use placeholder names",
+                  ""]
+    lines += ["| Part of the code | Files | Functions | Share of all code |",
+              "|---|---|---|---|"]
     for label, (files, done, total, matched) in sorted(parts.items(), key=lambda kv: -kv[1][3]):
         share = 100 * matched / total_code if total_code else 0
         lines.append(f"| {label} | {files} | {done}/{total} | {share:.2f}% |")
     lines += ["",
               f"*Updated {datetime.date.today().isoformat()} by `python tools/match.py progress` "
               f"([DS Decomp Studio]({STUDIO_URL})). A function counts only when it compiles to the exact same bytes "
-              f"and the ROM still rebuilds byte for byte.*",
+              f"and the ROM still rebuilds byte for byte; it counts under the code rules only when its source also "
+              f"passes every [match] rule (`python tools/coderules.py --pending`).*",
               "<!-- progress:end -->"]
     block = "\n".join(lines)
     text = README.read_text(encoding="utf-8")
