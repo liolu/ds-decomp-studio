@@ -74,6 +74,12 @@ python ../../studio/gametools/ghidra_draft.py --names a,b            # Ghidra dr
 The project profile [CODE-RULES.md](CODE-RULES.md) asks for. A game's own `AGENTS.md` overrides it (its original
 studio's naming style, its dialect, a rule it tightens or relaxes, each with the reason).
 
+In short: a function counts as matched only when its bytes match and its source passes every [match] rule (R1, R2,
+R4, R13, R17, R18). Byte-identical but failing is `MATCH-PENDING`: kept in the game, reported, not counted. A
+function the original wrote in assembly is `ORIGINAL-ASM`: listed apart, counted neither way. To clean up existing
+source, run the checker, fix [free] findings first in their own commit, then each [checked] or [evidence] fix with
+`judge` and `verify`; a fix that breaks a match is reverted, and a rule the bytes defeat gets a `RULE-EXCEPTION`.
+
 - **Compiler and dialect.** Metrowerks `mwccarm` (CodeWarrior for NDS 1.2 and 2.0 builds), `-O4,p`, base flags
   `-enum int -char signed -gccext,on -inline noauto -lang=c -interworking` (`probe_compiler.BASE_FLAGS`). Each file's
   real profile is its first line `/* compiler: <version> <flags> */` and `config/<version>/compilers.txt`. C is
@@ -103,6 +109,21 @@ studio's naming style, its dialect, a rule it tightens or relaxes, each with the
 - **Commands.** Per-function check: `workbench.py judge NAME FILE.c`. Byte gate: `python tools/match.py verify`.
   Rule checker: `python tools/coderules.py [--pending] [--advisory]` (`studio.py rules <game>`); `verify` and
   `progress` print both numbers.
+- **Checker coverage.** `coderules.py` implements the [match] rows of the table at the end of CODE-RULES.md, with
+  these differences:
+  - R1: the two-bodies row and the `class`/`struct` mismatch are checked; the "layout view" row (a struct that
+    copies another struct's leading fields and is read through a cast) is not.
+  - R4: `M2C_FIELD` is this studio's offset macro, and a virtual call through `*(u8 **)obj + K` counts as an
+    offset cast.
+  - R13: only virtuals named `pad`/`dummy`; the studio has no vtable data to compare slot counts with yet.
+  - R17: "statements marked as probes" are the names the search tools write (`hunt_pad`, `hunt_t`, `hunt_v`,
+    `arg_pad`); a line that names a `0x04xxxxxx` register passes the `volatile` row; a padding member passes with a
+    `// reserved: <SDK or format name>` note; a statement the original really had passes with `// R36: <what the
+    bytes show>` on its line.
+  - R18: there is no list of original inline-asm helpers yet, so any `asm` in a function holds it unless the
+    function is `ORIGINAL-ASM`.
+  - Advisory: R7, R14, R25, R33, R35 (assignments in conditions, `!!x`), R37, and byte-pointer arithmetic that is
+    not dereferenced.
 - **Rule changes.**
   - R23: the line limit is 127 columns and the layout is clang-format's, because the games' CI already enforces
     that file.
