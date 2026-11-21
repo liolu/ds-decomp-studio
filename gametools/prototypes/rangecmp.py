@@ -17,7 +17,7 @@ args = [a for a in args if a != '-q']
 src, start = args[0], int(args[1], 16)
 extra = args[2:]
 cc = './sjiswrap.exe'
-mw = './../../tools/mwccarm/2.0/sp1p5/mwccarm.exe'
+mw = str((__import__('pathlib').Path(__file__).resolve().parents[3] / 'tools' / 'mwccarm') / '2.0' / 'sp1p5' / 'mwccarm.exe')
 flags = ('-O4,p -enum int -char signed -str noreuse -proc arm946e -gccext,on -fp soft -inline noauto -Cpp_exceptions off '
          '-RTTI off -interworking -w off -sym on -gccinc -nolink -msgstyle gcc -i include -lang=c').split()
 obj = 'build/hunt/rangecmp_rc.o'

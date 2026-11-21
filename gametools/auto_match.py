@@ -1416,7 +1416,7 @@ def commit_found(found: list[tuple[str, int, int, str]], format_sources: bool = 
     """Adds the matches to src/auto/, verifies the ROM (dropping the files that break it); on failure everything is
     rolled back. Returns the number of functions added (0 = nothing kept). format_sources=False: leave pre-commit to
     the last verify of the run, it goes over every uncommitted file each time."""
-    verify_cmd = [sys.executable, "tools/match.py", "verify"] + ([] if format_sources else ["--no-format"])
+    verify_cmd = [sys.executable, project.build_tool("match.py"), "verify"] + ([] if format_sources else ["--no-format"])
     backup = DELINKS.read_bytes()
     compilers_backup = COMPILERS_TXT.read_bytes() if COMPILERS_TXT.exists() else b""
     # Killed before the end (job cancelled): the next run puts these files back and deletes the new sources
@@ -1424,7 +1424,7 @@ def commit_found(found: list[tuple[str, int, int, str]], format_sources: bool = 
     created = integrate(found)
     journal_created(created)
     print(f"Added {len(created)} functions to src/auto/, verifying...")
-    subprocess.run([sys.executable, "tools/configure.py", project.VERSION], cwd=ROOT, check=True, capture_output=True)
+    subprocess.run([sys.executable, project.build_tool("configure.py"), project.VERSION], cwd=ROOT, check=True, capture_output=True)
     verify = subprocess.run(verify_cmd, cwd=ROOT, capture_output=True, text=True)
     for _ in range(8):
         # Only this run's files: an older file failing is a baseline problem, and the rollback below would not
@@ -1447,7 +1447,7 @@ def commit_found(found: list[tuple[str, int, int, str]], format_sources: bool = 
             keep = [l for l in COMPILERS_TXT.read_text().splitlines(True) if l.split(" ")[0] not in bad]
             COMPILERS_TXT.write_text("".join(keep), newline="\n")
         created = [c for c in created if c.relative_to(ROOT).as_posix() not in bad]
-        subprocess.run([sys.executable, "tools/configure.py", project.VERSION], cwd=ROOT, check=True, capture_output=True)
+        subprocess.run([sys.executable, project.build_tool("configure.py"), project.VERSION], cwd=ROOT, check=True, capture_output=True)
         verify = subprocess.run(verify_cmd, cwd=ROOT, capture_output=True, text=True)
     if verify.returncode != 0:
         # Before throwing the whole run away, find the few files that break the ROM (one build, byte comparison)
@@ -1473,7 +1473,7 @@ def commit_found(found: list[tuple[str, int, int, str]], format_sources: bool = 
         COMPILERS_TXT.write_bytes(compilers_backup)
         for p in created:
             p.unlink()
-        subprocess.run([sys.executable, "tools/configure.py", project.VERSION], cwd=ROOT, capture_output=True)
+        subprocess.run([sys.executable, project.build_tool("configure.py"), project.VERSION], cwd=ROOT, capture_output=True)
         journal_end()
         return 0
     journal_end()
@@ -1677,7 +1677,7 @@ def main():
             print(f"OK: {batch_added} new matching functions (batches).")
             if not args.dry_run:
                 # The verifies of the batches did not format: what gets committed still has to pass the game's CI
-                verify = subprocess.run([sys.executable, "tools/match.py", "verify"], cwd=ROOT, capture_output=True, text=True)
+                verify = subprocess.run([sys.executable, project.build_tool("match.py"), "verify"], cwd=ROOT, capture_output=True, text=True)
                 print(verify.stdout.strip().splitlines()[-1] if verify.stdout else "")
                 if verify.returncode != 0:
                     print(verify.stdout[-3000:])

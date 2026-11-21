@@ -25,9 +25,20 @@ import subprocess
 import sys
 from pathlib import Path
 
+
+def _game_root() -> Path:
+    """The game: $DSD_PROJECT, else <game>/ above tools/, else the current folder (the shared tools/ of
+    All-nds-decomp-games run with cwd = games/<LETTER>/<game>/)."""
+    import os
+    if os.environ.get("DSD_PROJECT"):
+        return Path(os.environ["DSD_PROJECT"]).resolve()
+    up = Path(__file__).resolve().parent.parent
+    return up if (up / "config").is_dir() else Path.cwd().resolve()
+
+
 from ndspy import _common
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = _game_root()
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import banner_fix  # noqa: E402
 

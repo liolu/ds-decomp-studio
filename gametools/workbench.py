@@ -485,8 +485,9 @@ def save_pending(p: list[dict]) -> None:
 
 def clang_format(paths: list[Path]) -> None:
     pcm = shutil.which("pre-commit")
-    if pcm and paths:
-        run([pcm, "run", "clang-format", "--files", *[p.relative_to(ROOT).as_posix() for p in paths]])
+    rel = [p.relative_to(ROOT).as_posix() for p in paths]
+    for i in range(0, len(rel) if pcm else 0, 150):  # chunks: Windows command line limit (WinError 206 at ~1500 files)
+        run([pcm, "run", "clang-format", "--files", *rel[i:i + 150]])
 
 
 def cmd_submit(a) -> None:
@@ -517,7 +518,7 @@ def cmd_submit(a) -> None:
                     p.write_bytes(b)
             for p in created:
                 p.unlink(missing_ok=True)
-            run([sys.executable, "tools/configure.py", project.VERSION])
+            run([sys.executable, project.build_tool("configure.py"), project.VERSION])
             journal_end()
             return out({"ok": False, "error": "the ROM is no longer byte-identical with this file (undone)",
                         "build": build[-60000:]})
@@ -604,7 +605,7 @@ def cmd_submit_many(a) -> None:
                 p.write_bytes(b)
         for p in created:
             p.unlink(missing_ok=True)
-        run([sys.executable, "tools/configure.py", project.VERSION])
+        run([sys.executable, project.build_tool("configure.py"), project.VERSION])
         journal_end()
         return None
 
@@ -677,8 +678,8 @@ def cmd_commit(a) -> None:
     dropped = []
     with pipeline_lock("workbench"):
         for attempt in range(2):
-            run([sys.executable, "tools/configure.py", project.VERSION])
-            v = run([sys.executable, "tools/match.py", "verify"])
+            run([sys.executable, project.build_tool("configure.py"), project.VERSION])
+            v = run([sys.executable, project.build_tool("match.py"), "verify"])
             if "VERIFY PASSED" in v.stdout:
                 break
             failing = set(re.findall(r"^FAIL: (\S+) is marked complete", v.stdout, re.M))
@@ -695,18 +696,16 @@ def cmd_commit(a) -> None:
         names = [p["name"] for p in pend]
         if names:
             who = ", ".join(sorted({p.get("who") or "workbench" for p in pend}))
-            for i in range(0, len(paths), 100):  # the command line is limited (Windows): add in chunks
-                run(["git", "add", "--", *paths[i:i + 100]])
             msg = f"Match {len(names)} function(s) ({who})\n\n" + "\n".join(names) + "\n"
-            WORK.mkdir(parents=True, exist_ok=True)
-            (WORK / "commit_msg.txt").write_text(msg, encoding="utf-8", newline="\n")
-            c = run(["git", "commit", "-q", "-F", str(WORK / "commit_msg.txt")])
-            if c.returncode:
-                return out({"ok": False, "error": "git commit failed", "git": (c.stdout + c.stderr)[-1500:]})
+            import gitcommit  # only these paths: in All-nds-decomp-games other games share the index
+            ok, err = gitcommit.commit_paths(ROOT, paths, msg)
+            if err:
+                return out({"ok": False, "error": "git commit failed", "git": err[-1500:]})
     save_pending([])
     pushed = None
     if a.push and names and run(["git", "remote"]).stdout.strip():
-        pushed = run(["git", "push", "-q", "origin", "HEAD"]).returncode == 0
+        import gitcommit
+        pushed = gitcommit.push(ROOT)[0]
     out({"ok": True, "committed": names, "dropped": dropped, "pushed": pushed})
 
 

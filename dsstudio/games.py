@@ -4,6 +4,7 @@ import json
 import pickle
 import re
 import sqlite3
+import threading
 import time
 from pathlib import Path
 
@@ -75,6 +76,24 @@ STUDIOS = {  # who made the game: games of one studio often share an engine
     "thrillville-off-the-rails": "Frontier Developments",
     "toy-story-3-eu": "n-Space",
     "viva-pinata-pocket-paradise": "Rare",
+    "castlevania-dawn-of-sorrow": "Konami", "castlevania-portrait-of-ruin": "Konami",
+    "dash-native": "Ambrella", "lsw2-native": "Amaze Entertainment", "rr-native": "Ubisoft Casablanca",
+    "dawn-of-heroes": "Wicked Studios",
+    "dr-kawashima-s-brain-training-how-old-is": "Nintendo SPD",
+    "need-for-speed-underground-2": "Pocketeers",
+    "pokemon-black-version": "Game Freak", "pokemon-black-version-2": "Game Freak",
+    "pokemon-version-argent-soulsilver": "Game Freak", "pokemon-version-platine": "Game Freak",
+    "pokemon-mystery-dungeon-blue-rescue-team": "Chunsoft",
+    "pokemon-plus-nobunaga-no-yabou": "Koei Tecmo",
+    "rayman-ds": "Ubisoft DC Studios",
+    "sims-2-the-pets": "Full Fat",
+    "sudokumaniacs": "Frontline Studios",
+    "super-mario-64-ds": "Nintendo EAD", "super-princess-peach": "TOSE",
+    "the-settlers": "Blue Byte",
+    "urbz-the-sims-in-the-city": "Griptonite Games",
+    "wheel-of-fortune": "Griptonite Games",
+    "z085-pokemon-card-game-asobikata-ds": "Creatures",
+    "zoo-keeper": "Success", "zoo-tycoon-ds": "Altron",
 }
 # ROM rebuild state seen during onboarding; `verify` jobs update data/health.json, which wins
 KNOWN_BROKEN = {}  # all fixed 2026-10-15: gametools rom_build.py (banner icon, DSProtect, empty files), delink_fix.py
@@ -135,10 +154,16 @@ def health() -> dict:
         return {}
 
 
+_health_lock = threading.Lock()
+
+
 def set_health(game: str, ok: bool, note: str = ""):
-    h = health()
-    h[game] = {"ok": ok, "note": note, "t": time.time()}
-    HEALTH.write_text(json.dumps(h, indent=1), encoding="utf-8")
+    with _health_lock:  # two verify jobs at once: neither result lost, never a half-written file
+        h = health()
+        h[game] = {"ok": ok, "note": note, "t": time.time()}
+        tmp = HEALTH.with_suffix(".tmp")
+        tmp.write_text(json.dumps(h, indent=1), encoding="utf-8")
+        tmp.replace(HEALTH)
 
 
 class Game:
@@ -148,7 +173,10 @@ class Game:
         vers = sorted(p.name for p in (path / "config").iterdir() if (p / "arm9" / "symbols.txt").exists()) \
             if (path / "config").exists() else []
         self.version = vers[0] if vers else None
-        self.ready = self.version is not None and (path / ".git").exists()
+        # a game of the single repository (All-nds-decomp-games/games/<L>/<game>) has no .git of its own
+        self.mono = config.in_monorepo(path)
+        self.repo = config.MONOREPO if self.mono else path  # the git repository that holds the game
+        self.ready = self.version is not None and (self.mono or (path / ".git").exists())
 
     # ---- metadata ----
     @property
@@ -176,17 +204,26 @@ class Game:
         return "AR5E" if self.id == "rayman-rr" else ""
 
     def remote(self) -> str:
-        cfg = self.path / ".git" / "config"
+        cfg = self.repo / ".git" / "config"
         if not cfg.exists():
             return ""
         m = re.search(r'\[remote "origin"\][^\[]*?url = (\S+)', cfg.read_text(encoding="utf-8", errors="replace"))
         return m.group(1) if m else ""
 
+    def web_url(self) -> str:
+        """The game's page on GitHub: its repository, or its folder in All-nds-decomp-games ('' if not published)."""
+        m = re.search(r"github\.com[:/]([^/]+/[^/]+?)(?:\.git)?$", self.remote() or "")
+        if not m:
+            return ""
+        base = f"https://github.com/{m.group(1)}"
+        return f"{base}/tree/main/{self.path.resolve().relative_to(self.repo).as_posix()}" if self.mono else base
+
     def rom_state(self) -> dict:
         if not self.ready:
             rom = next((self.path / "extract").glob("baserom*.nds"), None)
             try:
-                dsi = rom is not None and rom.open("rb").read(0x13)[0x12] & 0x02
+                hdr = rom.read_bytes()[:0x13] if rom is not None else b""
+                dsi = len(hdr) > 0x12 and hdr[0x12] & 0x02
             except OSError:
                 dsi = False
             if dsi:
@@ -245,7 +282,7 @@ class Game:
         if not p.exists():
             return {}
         try:
-            return _cached(("st", str(p)), p, lambda: {r[0]: r[3] for r in json.loads(p.read_text())})
+            return _cached(("st", str(p)), p, lambda: {r[0]: r[3] for r in json.loads(p.read_text(encoding="utf-8"))})
         except Exception:
             return {}
 
@@ -308,24 +345,28 @@ class Game:
 
     def info(self) -> dict:
         return {"id": self.id, "title": self.title, "version": self.version, "code": self.code, "ready": self.ready,
-                "studio": STUDIOS.get(self.id, ""), "remote": self.remote(), "rom": self.rom_state(),
+                "studio": STUDIOS.get(self.id, ""), "remote": self.remote(), "web": self.web_url(), "mono": self.mono,
+                "bytematch": _bytematch_repo(self),
+                "rom": self.rom_state(),
                 "auto_done": (self.path / ".auto_done").exists(), "reuse": self.reuse(), **self.summary()}
+
+
+def _bytematch_repo(g: Game) -> str:
+    from . import bytematch  # late import: bytematch does not import games, but keep games light to load
+    return bytematch.repo_of(g)
 
 
 def all_games(include_broken=True) -> list[Game]:
     out = []
-    if not config.PROJETS.exists():
-        return out
-    for d in sorted(config.PROJETS.iterdir()):
-        if d.is_dir() and not d.name.startswith(("_", ".")) and (d / "config").exists():
-            g = Game(d)
-            if include_broken or g.ready:
-                out.append(g)
+    for d in config.game_dirs():  # projets/<game> and All-nds-decomp-games/games/<L>/<game>
+        g = Game(d)
+        if include_broken or g.ready:
+            out.append(g)
     return out
 
 
 def get(game_id: str) -> Game:
-    d = config.PROJETS / game_id
+    d = config.game_path(game_id)
     if not game_id or "/" in game_id or "\\" in game_id or ".." in game_id or not d.is_dir():
         raise KeyError(f"jeu inconnu : {game_id}")
     return Game(d)

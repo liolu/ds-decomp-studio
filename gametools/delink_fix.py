@@ -36,7 +36,7 @@ def relocs_file(module: str) -> Path:
 
 def main():
     for rnd in range(20):
-        subprocess.run([sys.executable, "tools/configure.py", project.VERSION], cwd=ROOT, capture_output=True)
+        subprocess.run([sys.executable, project.build_tool("configure.py"), project.VERSION], cwd=ROOT, capture_output=True)
         r = subprocess.run(["ninja"], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
         out = re.sub(r"\x1b\[[0-9;]*m", "", r.stdout + r.stderr)
         fixes = ERR.findall(out)

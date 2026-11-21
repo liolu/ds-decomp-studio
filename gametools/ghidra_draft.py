@@ -160,7 +160,8 @@ def ghidra_home() -> Path | None:
     for d in [os.environ.get("GHIDRA_HOME", "")] + os.environ.get("PATH", "").split(os.pathsep):
         if d and (Path(d) / "support" / "analyzeHeadless.bat").exists():
             return Path(d)
-    tools = ROOT.parent.parent / "tools"
+    import workspace
+    tools = workspace.WORKSPACE / "tools"
     for d in sorted(tools.glob("ghidra_*"), reverse=True):
         if (d / "support" / "analyzeHeadless.bat").exists():
             return d

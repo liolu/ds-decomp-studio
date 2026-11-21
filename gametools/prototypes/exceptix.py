@@ -31,7 +31,7 @@ def build(f, exc):
     v, x = comp.get(f, ('2.0/sp1p5', ''))
     o = f'build/hunt/s36/exo/{os.path.basename(f)}.{exc}.o'
     os.makedirs('build/hunt/s36/exo', exist_ok=True)
-    r = subprocess.run(['./sjiswrap.exe', f'../../tools/mwccarm/{v}/mwccarm.exe'] + BASE + ['-Cpp_exceptions', exc] + x.split()
+    r = subprocess.run(['./sjiswrap.exe', str((__import__('pathlib').Path(__file__).resolve().parents[3] / 'tools' / 'mwccarm') / v / 'mwccarm.exe')] + BASE + ['-Cpp_exceptions', exc] + x.split()
                        + ['-c', f, '-o', o], capture_output=True, text=True)
     if r.returncode: return None
     subprocess.run(['arm-none-eabi-ld', '-r', '-o', o + '.m', o], check=True)

@@ -526,8 +526,9 @@ def check_thumb(img: Image, target: bytes, code: bytes, relocs: dict, local: set
 
 def other_images() -> list[Image]:
     out = []
-    for d in sorted(ROOT.parent.iterdir()):
-        if d == ROOT or d.name.startswith(("_", ".")) or not (d / "config").is_dir():
+    import workspace  # every game: projets/<game> and All-nds-decomp-games/games/<L>/<game> (not only the siblings)
+    for d in workspace.game_dirs():
+        if d.resolve() == ROOT.resolve() or not (d / "config").is_dir():
             continue
         try:
             img = Image(d)
@@ -689,8 +690,8 @@ def integrate_verified(found: list[tuple[str, int, int, str]], log=print) -> lis
         rels = [str(p.relative_to(ROOT)) for p in created]
         for k in range(0, len(rels), 100):
             run([pc_exe, "run", "clang-format", "--files", *rels[k:k + 100]])
-    run([sys.executable, "tools/configure.py", project.VERSION])
-    verify = run([sys.executable, "tools/match.py", "verify"])
+    run([sys.executable, project.build_tool("configure.py"), project.VERSION])
+    verify = run([sys.executable, project.build_tool("match.py"), "verify"])
     for _ in range(5):
         # A link error names the object that needs a missing symbol: drop those files and build again
         # Files the report does not see at 100 % although the ROM is identical (a relocation objdiff reads
@@ -704,8 +705,8 @@ def integrate_verified(found: list[tuple[str, int, int, str]], log=print) -> lis
         log(f"dropping {len(bad_paths)} file(s) the build or the report rejects: {', '.join(p.stem for p in bad_paths)}")
         drop(bad_paths)
         created = [c for c in created if c not in bad_paths]
-        run([sys.executable, "tools/configure.py", project.VERSION])
-        verify = run([sys.executable, "tools/match.py", "verify"])
+        run([sys.executable, project.build_tool("configure.py"), project.VERSION])
+        verify = run([sys.executable, project.build_tool("match.py"), "verify"])
     if verify.returncode != 0:
         import find_culprits
         log("verify failed: looking for the files that break the ROM...")
@@ -715,7 +716,7 @@ def integrate_verified(found: list[tuple[str, int, int, str]], log=print) -> lis
             log(f"dropped {len(dropped)} file(s) that break the ROM")
             created = [c for c in created if c.relative_to(ROOT).as_posix() not in dropped]
         if ok:
-            verify = run([sys.executable, "tools/match.py", "verify"])
+            verify = run([sys.executable, project.build_tool("match.py"), "verify"])
     if verify.returncode != 0 or "VERIFY PASSED" not in verify.stdout:
         log(verify.stdout[-2000:])
         log("verify failed: rolling back")
@@ -723,7 +724,7 @@ def integrate_verified(found: list[tuple[str, int, int, str]], log=print) -> lis
         am.COMPILERS_TXT.write_bytes(compilers_backup)
         for p in created:
             p.unlink(missing_ok=True)
-        run([sys.executable, "tools/configure.py", project.VERSION])
+        run([sys.executable, project.build_tool("configure.py"), project.VERSION])
         journal_end()
         return []
     journal_end()
@@ -735,22 +736,18 @@ def commit(names: list[str], push: bool, msg: str | None = None) -> None:
     """Commits exactly what this run added (sources, delinks.txt, compilers.txt), never anything else."""
     files = [f"src/auto/{n}{e}" for n in names for e in (".c", ".cpp") if (ROOT / "src" / "auto" / f"{n}{e}").exists()]
     cfg = [p.relative_to(ROOT).as_posix() for p in (am.DELINKS, am.COMPILERS_TXT) if p.exists()]
-    if run(["git", "diff", "--cached", "--quiet"]).returncode:
-        print("commit skipped: other changes are already staged in this repository")
-        return
+    import gitcommit  # only these paths: other changes and other games of the same repository are left alone
     paths = files + cfg
-    for k in range(0, len(paths), 100):  # in chunks: Windows limits the length of a command line
-        run(["git", "add", "--", *paths[k:k + 100]])
     msg = msg or (f"clone_match: {len(names)} matching functions\n\nFunctions with the same code as functions already "
            "matched in this game or in another of our DS projects (tools/clone_match.py). VERIFY PASSED.\n")
-    r = run(["git", "commit", "-q", "-m", msg])  # the index holds only these files (checked above)
-    if r.returncode:
-        print(f"commit failed: {(r.stdout + r.stderr).strip()[-300:]}")
+    ok, err = gitcommit.commit_paths(ROOT, paths, msg)
+    if not ok:
+        print(f"commit failed: {err}" if err else "nothing to commit")
         return
     print("committed")
-    if push and run(["git", "remote"]).stdout.strip():
-        r = run(["git", "push", "-q", "origin", "HEAD"])
-        print("pushed" if r.returncode == 0 else f"push failed: {(r.stdout + r.stderr).strip()[-300:]}")
+    if push:
+        pushed, err = gitcommit.push(ROOT)
+        print("pushed" if pushed else f"push failed: {err}")
 
 
 def main():

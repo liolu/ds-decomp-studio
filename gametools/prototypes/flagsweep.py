@@ -131,7 +131,8 @@ def promote(stats: dict) -> list[str]:
     for name, g in stats.items():
         if 'won_profiles' not in g:  # runs started before won_profiles existed: the match files' marker lines
             c = collections.Counter()
-            for f in (GT.parents[1] / 'projets' / name / 'build/hunt/flagsweep/match').glob('*.c'):
+            import workspace
+            for f in ((workspace.find_game(name) or GT.parents[1] / 'projets' / name) / 'build/hunt/flagsweep/match').glob('*.c'):
                 first = f.read_text(encoding='utf-8', errors='replace').split('\n', 1)[0]
                 if first.startswith(am.MARKER):
                     c[' '.join(first[len(am.MARKER):].replace('*/', '').split())] += 1

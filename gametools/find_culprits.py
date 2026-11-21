@@ -255,7 +255,7 @@ def build(fast: bool = False) -> str:
     targets = ["-k", "0", (OUT / "rom_config.yaml").relative_to(ROOT).as_posix(), "check_modules",
                "check_symbols"] if fast else []
     for _ in range(5):
-        run([sys.executable, "tools/configure.py", project.VERSION])
+        run([sys.executable, project.build_tool("configure.py"), project.VERSION])
         r = run(["ninja", *targets])
         LAST_RC[0] = r.returncode
         out = (r.stdout or "") + (r.stderr or "")
@@ -407,7 +407,7 @@ def committed_files() -> set[str]:
     out = set()
     for p in project.CONFIG.rglob("delinks.txt"):
         rel = p.relative_to(ROOT).as_posix()
-        r = run(["git", "show", f"HEAD:{rel}"])
+        r = run(["git", "show", f"HEAD:./{rel}"])  # ./ = from the game (also inside All-nds-decomp-games)
         if r.returncode == 0:
             out |= {m.group(1) for m in BLOCK_RE.finditer(r.stdout)}
     return out

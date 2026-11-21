@@ -33,6 +33,18 @@ def _load_donorlib():
 
 donorlib = _load_donorlib()  # only C splitting (top_level_items, function_name)
 
+
+def _load_workspace():
+    """gametools/workspace.py (where the games are: projets/ and All-nds-decomp-games/games/<L>/), by its path."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("studio_workspace", STUDIO / "gametools" / "workspace.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+workspace = _load_workspace()
+
 WORKSPACE = STUDIO.parent
 DB = WORKSPACE / "examples.sqlite"
 PROJETS = WORKSPACE / "projets"
@@ -196,15 +208,15 @@ def main():
     if a.action == "build":
         con = connect()
         total = 0
-        for d in sorted(PROJETS.iterdir()):
-            if d.is_dir() and not d.name.startswith(("_", ".")) and (d / "config").is_dir():
+        for d in workspace.game_dirs():
+            if (d / "config").is_dir():
                 try:
                     total += index_game(con, d)
                 except Exception as e:  # one broken project must not stop the others
                     print(f"{d.name}: skipped ({e})")
         print(f"{total} examples -> {DB}")
         return
-    root = PROJETS / a.game
+    root = workspace.find_game(a.game) or PROJETS / a.game
     v = sorted(p.name for p in (root / "config").iterdir() if (p / "arm9" / "symbols.txt").exists())[0]
     m = re.search(rf"^{re.escape(a.function)} kind:function\(arm,size=0x([0-9a-f]+)\).*?addr:0x([0-9a-f]+)",
                   (root / "config" / v / "arm9" / "symbols.txt").read_text(encoding="utf-8"), re.M)

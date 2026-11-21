@@ -41,6 +41,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 WORKSPACE = HERE.parents[1]  # decomp ds/
 PROJETS = WORKSPACE / "projets"
+import sys as _sys  # noqa: E402
+_sys.path.insert(0, str(HERE))
+import workspace  # noqa: E402  (projets/ and All-nds-decomp-games/games/<L>/)
 DB = Path(os.environ.get("TECHTAGS") or WORKSPACE / "techtags.sqlite")
 TECHFILE = HERE / "TECHNIQUES.md"
 SKEL_MIN = 8  # skeleton families only for functions with at least this many collapsed steps (tiny ones all look alike)
@@ -345,7 +348,7 @@ def techlog_tags(root: Path) -> dict[str, set[str]]:
 # ---------------------------------------------------------------- one game (in a worker process)
 
 def index_game(game: str) -> tuple[str, list, str]:
-    root = PROJETS / game
+    root = workspace.find_game(game) or PROJETS / game
     os.environ["DSD_PROJECT"] = str(root)
     sys.path.insert(0, str(HERE))
     import clone_match as cm  # noqa: E402  (needs DSD_PROJECT set first)
@@ -426,8 +429,8 @@ def index_game(game: str) -> tuple[str, list, str]:
 def games_list(only: str | None) -> list[str]:
     want = set(only.split(",")) if only else None
     out = []
-    for d in sorted(PROJETS.iterdir()):
-        if d.name.startswith(("_", ".")) or not (d / "config").is_dir() or (want and d.name not in want):
+    for d in workspace.game_dirs():
+        if not (d / "config").is_dir() or (want and d.name not in want):
             continue
         if any((p / "arm9" / "symbols.txt").exists() for p in (d / "config").iterdir() if p.is_dir()):
             out.append(d.name)

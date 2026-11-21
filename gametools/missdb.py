@@ -38,6 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from project import ROOT  # noqa: E402  (the game: DSD_PROJECT or the current folder)
+import project  # noqa: E402  (project.build_tool: <game>/tools/ or the shared tools/)
 
 WORKSPACE = Path(__file__).resolve().parents[2]  # decomp ds/
 DB = Path(os.environ.get("MISSDB") or WORKSPACE / "missdb.sqlite")
@@ -565,22 +566,18 @@ def commit_data(names: list[str], files: list[str], push: bool) -> None:
     """After VERIFY PASSED: commits the data files of this run and the delinks.txt they changed, nothing else."""
     import subprocess
     run = lambda *c: subprocess.run(list(c), cwd=ROOT, capture_output=True, text=True)  # noqa: E731
-    v = run(sys.executable, "tools/match.py", "verify")
+    v = run(sys.executable, project.build_tool("match.py"), "verify")
     if "VERIFY PASSED" not in v.stdout:
         print("data not committed: verify failed\n" + v.stdout[-1500:])
         return
-    if run("git", "diff", "--cached", "--quiet").returncode:
-        print("data commit skipped: other changes are already staged in this repository")
-        return
-    for k in range(0, len(files), 100):
-        run("git", "add", "--", *files[k:k + 100])
-    r = run("git", "commit", "-q", "-m", f"missdb: {len(names)} matching data\n\nC definitions of data (a data miss, "
-            "or the same data matched in another of our DS projects) that compile to exactly these bytes and "
-            "pointers (missdb.py replay). VERIFY PASSED.\n")
-    print("data committed" if r.returncode == 0 else f"data commit failed: {(r.stdout + r.stderr)[-300:]}")
-    if r.returncode == 0 and push and run("git", "remote").stdout.strip():
-        r = run("git", "push", "-q", "origin", "HEAD")
-        print("pushed" if r.returncode == 0 else f"push failed: {(r.stdout + r.stderr)[-300:]}")
+    import gitcommit  # only these files: other games of the same repository share the index
+    ok, err = gitcommit.commit_paths(ROOT, files, f"missdb: {len(names)} matching data\n\nC definitions of data (a data "
+                                     "miss, or the same data matched in another of our DS projects) that compile to "
+                                     "exactly these bytes and pointers (missdb.py replay). VERIFY PASSED.\n")
+    print("data committed" if ok else f"data commit failed: {err}")
+    if ok and push:
+        pushed, err = gitcommit.push(ROOT)
+        print("pushed" if pushed else f"push failed: {err}")
 
 
 def cmd_replay(a) -> None:

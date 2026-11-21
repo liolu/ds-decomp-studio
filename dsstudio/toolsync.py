@@ -22,13 +22,19 @@ BUILD_TOOLS = {"configure.py", "project.py", "get_platform.py", "ninja_syntax.py
                "match.py", "pipeline_lock.py", "probe_compiler.py", "macos_compiler.py", "ld_align.py"}
 
 
+def base(g):
+    """The folder whose tools/ holds the game's build tools: the game itself, or All-nds-decomp-games/ (one tools/
+    shared by every game of the single repository). git runs there, so `tools/<name>` is a path from its top."""
+    return config.MONOREPO if getattr(g, "mono", False) else g.path
+
+
 def tool_names() -> list[str]:
     return sorted(p.name for p in SOURCE.glob("*.py") if p.name in BUILD_TOOLS and p.name not in PER_GAME)
 
 
 def studio_only(g) -> list[str]:
     """Copies of studio-only tools still in the game's tools/ (they run from gametools/ now)."""
-    return sorted(p.name for p in (g.path / "tools").glob("*.py")
+    return sorted(p.name for p in (base(g) / "tools").glob("*.py")
                   if p.name not in BUILD_TOOLS and (SOURCE / p.name).exists())
 
 
@@ -59,7 +65,7 @@ def status(g) -> dict:
     if not g.ready:
         return {"behind": []}
     names = tool_names()
-    key = (g.id,) + tuple(_stamp(g.path / "tools" / n) + _stamp(SOURCE / n) for n in names)
+    key = (str(base(g)),) + tuple(_stamp(base(g) / "tools" / n) + _stamp(SOURCE / n) for n in names)
     if key not in _status_cache:
         _status_cache[key] = _status(g, names)
     return _status_cache[key]
@@ -68,7 +74,7 @@ def status(g) -> dict:
 def _status(g, names) -> dict:
     behind = []
     for name in names:
-        cur = g.path / "tools" / name
+        cur = base(g) / "tools" / name
         if not cur.exists() or _norm(cur.read_bytes()) != _norm((SOURCE / name).read_bytes()):
             behind.append(name)
     return {"behind": behind}
@@ -87,10 +93,10 @@ def sync(g, commit=True, push=True, log=print, slim=False) -> dict:
     changed = status(g)["behind"]
     retired = studio_only(g) if slim else []
     if changed or retired:
-        backup = g.path / "build" / "tools_backup" / time.strftime("%Y%m%d-%H%M%S")
+        backup = base(g) / "build" / "tools_backup" / time.strftime("%Y%m%d-%H%M%S")
         backup.mkdir(parents=True, exist_ok=True)
         for name in changed + retired:
-            cur = g.path / "tools" / name
+            cur = base(g) / "tools" / name
             if cur.exists():
                 shutil.copy2(cur, backup / name)
             if name in retired:
@@ -98,30 +104,30 @@ def sync(g, commit=True, push=True, log=print, slim=False) -> dict:
             else:
                 cur.write_bytes(_norm((SOURCE / name).read_bytes()))
         if changed:
-            log(f"{g.id}: {', '.join(changed)} mis a jour (anciens fichiers dans {backup.relative_to(g.path)})")
+            log(f"{g.id}: {', '.join(changed)} mis a jour (anciens fichiers dans {backup.relative_to(base(g))})")
         if retired:
             log(f"{g.id}: {len(retired)} outil(s) retire(s), ils tournent depuis studio/gametools/ "
-                f"(copies dans {backup.relative_to(g.path)})")
+                f"(copies dans {backup.relative_to(base(g))})")
     # Commit every shared tool that differs from the last commit (also copies made earlier without a commit)
     names = tool_names() + retired
-    dirty = set(gitutil.git(g.path, "status", "--porcelain", "--", *[f"tools/{n}" for n in names])
+    dirty = set(gitutil.git(base(g), "status", "--porcelain", "--", *[f"tools/{n}" for n in names])
                 .stdout.replace("\\", "/").split())
     changed = [n for n in names if f"tools/{n}" in dirty]
     if not changed:
         return {"ok": True, "changed": []}
     if commit:
         paths = [f"tools/{n}" for n in changed]
-        gitutil.git(g.path, "add", "-A", "--", *paths)
+        gitutil.git(base(g), "add", "-A", "--", *paths)
         what = f"sync {', '.join(n for n in changed if n not in retired)}" if set(changed) - set(retired) else ""
         if retired:
             what = (what + "; " if what else "") + f"remove {len(retired)} tools that now run from studio/gametools"
-        r = gitutil.git(g.path, "commit", "-q", "-m",
+        r = gitutil.git(base(g), "commit", "-q", "-m",
                         f"tools: {what} (ds-decomp-studio/gametools {template_version()})",
                         "--", *paths)
         if r.returncode:
             return {"error": r.stderr.strip()[-300:], "changed": changed}
         if push and g.remote():
-            err = gitutil.push(g.path)
+            err = gitutil.push(g.path)  # (a game of All-nds-decomp-games pushes the single repository)
             if err:
                 return {"ok": True, "changed": changed, "warning": f"push : {err}"}
     return {"ok": True, "changed": changed}

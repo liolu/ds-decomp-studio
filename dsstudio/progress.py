@@ -30,7 +30,7 @@ def busy(g) -> str:
         if psutil.pid_exists(int(info.get("pid", 0))):
             return info.get("owner", "another tool")
     except Exception:
-        pass
+        return "verrou illisible"  # unsure = busy: never commit a README while a pipeline may be writing
     return ""
 
 
@@ -47,7 +47,11 @@ def push_head(repo) -> object:
     """git push; when GitHub has commits made elsewhere (a README edited on the site), they are taken first
     (rebase: our commits go on top) and the push is tried again."""
     r = gitutil.git(repo, "push", "-q", "origin", "HEAD", timeout=300)
-    if r.returncode and "fetch first" in r.stderr + r.stdout:
+    if r.returncode and "fetch first" in r.stderr + r.stdout and config.in_monorepo(repo):
+        # All-nds-decomp-games: merge, never rebase/autostash (other games' jobs write in the same working tree)
+        if not gitutil.pull(repo):
+            r = gitutil.git(repo, "push", "-q", "origin", "HEAD", timeout=300)
+    elif r.returncode and "fetch first" in r.stderr + r.stdout:
         branch = gitutil.git(repo, "branch", "--show-current").stdout.strip() or "main"
         if gitutil.git(repo, "pull", "-q", "--rebase", "--autostash", "origin", branch, timeout=300).returncode == 0:
             r = gitutil.git(repo, "push", "-q", "origin", "HEAD", timeout=300)
@@ -90,8 +94,9 @@ def run(game_id: str = "", push: bool = True, log=print) -> None:
         # game's CI publishes from progress/report.json.gz (bytematch.export): always rebuilt for published games
         rebuild = ["--rebuild"] if bytematch.repo_of(g) else []
         if rebuild:
-            subprocess.run([sys.executable, "tools/configure.py", g.version], cwd=g.path, capture_output=True)
-        r = subprocess.run([sys.executable, "tools/match.py", "progress", *rebuild], cwd=g.path,
+            subprocess.run([sys.executable, config.build_tool(g.path, "configure.py"), g.version], cwd=g.path,
+                           capture_output=True)
+        r = subprocess.run([sys.executable, config.build_tool(g.path, "match.py"), "progress", *rebuild], cwd=g.path,
                            capture_output=True, text=True, encoding="utf-8", errors="replace")
         if r.returncode:
             log("  echec : " + (r.stdout + r.stderr).strip().splitlines()[-1][:300] if (r.stdout + r.stderr).strip()

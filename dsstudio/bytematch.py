@@ -26,7 +26,15 @@ START, END = "<!-- bytematch:start -->", "<!-- bytematch:end -->"
 
 
 def repo_of(g) -> str:
-    """owner/repo of the game's GitHub remote ('' if none)."""
+    """owner/repo of the game's ByteMatch project ('' if none): `bytematch = "owner/repo"` in its game.toml (a game
+    moved into All-nds-decomp-games keeps the ByteMatch page of its old repository), else its GitHub remote."""
+    toml = g.path / "game.toml"
+    if toml.exists():
+        m = re.search(r'^bytematch\s*=\s*"([^"]+)"', toml.read_text(encoding="utf-8", errors="replace"), re.M)
+        if m:
+            return m.group(1)
+    if getattr(g, "mono", False):  # one repository for every game: no ByteMatch project of its own yet
+        return ""
     m = re.search(r"github\.com[:/]([^/]+/[^/]+?)(?:\.git)?$", g.remote() or "")
     return m.group(1) if m else ""
 
@@ -146,6 +154,8 @@ def export(g) -> list[str]:
     if not out.exists() or out.read_bytes() != data:
         out.write_bytes(data)
         changed.append(REPORT)
+    if getattr(g, "mono", False):  # All-nds-decomp-games: one workflow at the root publishes every game's report
+        return changed
     wf = g.path / WORKFLOW
     text = workflow_text(g)
     if not wf.exists() or wf.read_text(encoding="utf-8") != text:
@@ -205,9 +215,10 @@ def upload(g, log=print) -> bool:
     if not report.exists():
         log("  ByteMatch : pas de report.json (lancer match.py progress --rebuild)")
         return False
-    sha = gitutil.git(g.path, "rev-parse", "HEAD").stdout.strip()
-    msg = gitutil.git(g.path, "log", "-1", "--format=%s").stdout.strip()
-    when = gitutil.git(g.path, "log", "-1", "--format=%cI").stdout.strip()
+    # the last commit of THIS game (`-- .`): in All-nds-decomp-games, HEAD is often another game's commit
+    sha = gitutil.git(g.path, "log", "-1", "--format=%H", "--", ".").stdout.strip()
+    msg = gitutil.git(g.path, "log", "-1", "--format=%s", "--", ".").stdout.strip()
+    when = gitutil.git(g.path, "log", "-1", "--format=%cI", "--", ".").stdout.strip()
     query = urllib.parse.urlencode({"version": version_of(g), "commit": sha, "commit_message": msg,
                                     "commit_timestamp": when})
     req = urllib.request.Request(f"{SITE}/api/v1/projects/{repo}/reports?{query}",

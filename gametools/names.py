@@ -43,7 +43,8 @@ import donorlib  # noqa: E402
 import find_culprits as fc  # noqa: E402
 from pipeline_lock import journal_begin, journal_created, journal_end  # noqa: E402
 
-DS_ROOT = Path(os.environ.get("DS_ROOT", ROOT.parent.parent))
+import workspace  # noqa: E402
+DS_ROOT = workspace.WORKSPACE
 DB = Path(os.environ.get("DONORS_DB", DS_ROOT / "donors.sqlite"))
 WORK = ROOT / "build" / "names"
 SYM_LINE = re.compile(r"^(\S+) kind:(function|data|bss)(?:\((\w+)(?:,size=0x([0-9a-f]+))?[^)]*\))? addr:0x([0-9a-f]+)")
@@ -346,7 +347,7 @@ def current_uses(renames: dict[str, str]) -> dict[str, list[str]]:
 
 def build() -> str:
     """configure + ninja -k 0: every file that does not compile is reported at once."""
-    fc.run([sys.executable, "tools/configure.py", project.VERSION])
+    fc.run([sys.executable, project.build_tool("configure.py"), project.VERSION])
     r = fc.run(["ninja", "-k", "0"])
     return (r.stdout or "") + (r.stderr or "")
 

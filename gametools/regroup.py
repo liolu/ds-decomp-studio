@@ -32,7 +32,8 @@ import donorlib  # noqa: E402
 import find_culprits as fc  # noqa: E402
 from pipeline_lock import journal_begin, journal_created, journal_end  # noqa: E402
 
-DS_ROOT = Path(os.environ.get("DS_ROOT", ROOT.parent.parent))
+import workspace  # noqa: E402
+DS_ROOT = workspace.WORKSPACE
 DB = Path(os.environ.get("DONORS_DB", DS_ROOT / "donors.sqlite"))
 WORK = ROOT / "build" / "regroup"
 BLOCK_RE = re.compile(r"^(\S+):\n((?:[ \t]+.*\n?)*)", re.M)

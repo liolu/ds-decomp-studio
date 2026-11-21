@@ -6,7 +6,7 @@ import io
 import requests
 import stat
 
-root_path = Path(__file__).parent.parent
+root_path = Path.cwd()  # the game (ninja runs from it)
 
 
 platform = get_platform()

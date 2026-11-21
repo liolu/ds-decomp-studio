@@ -28,12 +28,33 @@ def _root() -> Path:
     for p in (cwd, *cwd.parents):
         if _is_project(p):
             return p
-    raise SystemExit(f"No DS project in {cwd} or its parents: run the tool from projets/<game>/ "
-                     "(or set DSD_PROJECT).")
+    raise SystemExit(f"No DS project in {cwd} or its parents: run the tool from the game's folder "
+                     "(games/<LETTER>/<game>/ in All-nds-decomp-games, projets/<game>/ in DS Decomp Studio) "
+                     "or set DSD_PROJECT.")
 
 
 ROOT = _root()
 TOOLS = Path(__file__).resolve().parent  # where the matching tools live (studio/gametools/, or <game>/tools/)
+
+
+def _build_tools_dir() -> Path:
+    """The game's build tools (configure.py, match.py, rom_build.py...): <game>/tools/, else the shared tools/ of
+    All-nds-decomp-games (games/<LETTER>/<game>/ -> ../../../tools/)."""
+    own = ROOT / "tools"
+    if (own / "configure.py").exists():
+        return own
+    for p in ROOT.parents:
+        if (p / "games").is_dir() and (p / "tools" / "configure.py").exists():
+            return p / "tools"
+    return own
+
+
+BUILD_TOOLS_DIR = _build_tools_dir()
+
+
+def build_tool(name: str) -> str:
+    """Path of a build tool for a command run with cwd = the game (`python <build_tool('match.py')> verify`)."""
+    return str(BUILD_TOOLS_DIR / name)
 
 
 def _version() -> str:
@@ -80,8 +101,9 @@ def configure_value(var: str, default: str = "", root: Path = ROOT) -> str:
     The assignment is evaluated alone with GAME_CFG = <root>/game.toml, so both the old hard-coded configure.py and
     the shared one (values from game.toml) give the flags ninja really uses. Works for another project's root too."""
     import ast
+    own = root / "tools" / "configure.py"  # a game with its own tools/; else the shared one (All-nds-decomp-games)
     try:
-        tree = ast.parse((root / "tools" / "configure.py").read_text(encoding="utf-8"))
+        tree = ast.parse((own if own.exists() else TOOLS / "configure.py").read_text(encoding="utf-8"))
     except (OSError, SyntaxError):
         return default
     cfg = {}

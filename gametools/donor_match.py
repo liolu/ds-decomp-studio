@@ -48,7 +48,8 @@ from pipeline_lock import journal_begin, journal_created, journal_end  # noqa: E
 
 BISECT_MINUTES = 30.0
 
-DS_ROOT = Path(os.environ.get("DS_ROOT", ROOT.parent.parent))  # decomp ds/ (projects live in decomp ds/projets/)
+import workspace  # noqa: E402  (where the games are: projets/ and All-nds-decomp-games/games/<L>/)
+DS_ROOT = workspace.WORKSPACE  # decomp ds/
 DB = Path(os.environ.get("DONORS_DB", DS_ROOT / "donors.sqlite"))
 sys.path.insert(0, str(DS_ROOT / "tools"))
 DONOR_SRC = ROOT / "src" / "donor"
@@ -500,11 +501,11 @@ _INTERNAL = None
 
 
 def internal_donors() -> list[tuple[Path, dict]]:
-    """[(project folder, index)] of the other projects of decomp ds/projets/."""
+    """[(project folder, index)] of our other projects (projets/ and All-nds-decomp-games/games/<L>/)."""
     global _INTERNAL
     if _INTERNAL is None:
         _INTERNAL = []
-        for g in sorted((DS_ROOT / "projets").iterdir()) if (DS_ROOT / "projets").exists() else []:
+        for g in workspace.game_dirs(require_config=False):
             if g.is_dir() and not g.name.startswith(("_", ".")) and g.resolve() != ROOT.resolve():
                 try:
                     idx = _project_index(g)
@@ -589,12 +590,12 @@ def try_internal(f, target, fp, syms, log, style) -> tuple[str, str] | None:
             profiles = [(version, flags)] + alt_profiles(version, flags, style)
             cpp = path.endswith(".cpp")
             status, source, version, flags = compile_profiles(pre, d_name, rename, name, size, addr, profiles, cpp)
-            log(f"  {name}: projets/{g.name}:{path}:{d_name} [{version} {flags}] -> {status}")
+            log(f"  {name}: {workspace.rel(g, DS_ROOT)}:{path}:{d_name} [{version} {flags}] -> {status}")
             if status == "match":
                 if cpp:
                     CPP_MATCHES.add(name)
                 head = (f"{am.MARKER}{version} {flags} */\n"
-                        f"/* {d_name} from projets/{g.name}/{path} (same code in another game of this workspace),"
+                        f"/* {d_name} from {g.name}/{path} (same code in another game of this workspace),"
                         f" reused by tools/donor_match.py */\n")
                 return name, head + source
     return None
@@ -694,8 +695,8 @@ def declare(entries: dict[str, tuple[str, str]], keep: list[str], sources: dict[
 
 
 def run_verify() -> subprocess.CompletedProcess:
-    subprocess.run([sys.executable, "tools/configure.py", project.VERSION], cwd=ROOT, check=True, capture_output=True)
-    return subprocess.run([sys.executable, "tools/match.py", "verify"], cwd=ROOT, capture_output=True, text=True)
+    subprocess.run([sys.executable, project.build_tool("configure.py"), project.VERSION], cwd=ROOT, check=True, capture_output=True)
+    return subprocess.run([sys.executable, project.build_tool("match.py"), "verify"], cwd=ROOT, capture_output=True, text=True)
 
 
 def _note(file: str, rels) -> None:
@@ -783,7 +784,7 @@ def verify(entries: dict[str, tuple[str, str]], delinks_backup: bytes, compilers
         (WORK / "verify_fail.log").write_text(out if v is None else v.stdout + "\n" + v.stderr, encoding="utf-8")
         print("Verification failed: rolling back (build/donor/verify_fail.log).")
         declare(entries, [], sources, delinks_backup, compilers_backup)
-        subprocess.run([sys.executable, "tools/configure.py", project.VERSION], cwd=ROOT, capture_output=True)
+        subprocess.run([sys.executable, project.build_tool("configure.py"), project.VERSION], cwd=ROOT, capture_output=True)
         return []
     return keep
 
@@ -837,7 +838,7 @@ def list_hits(con, todo, licenses):
         own = [(g, e) for g, idx in internal_donors() for e in idx["entries"].get(fp, []) if e[3] == size]
         if own:
             g, e = own[0]
-            hits[name] = ["projets/" + g.name, e[1], e[0]]
+            hits[name] = [workspace.rel(g, DS_ROOT), e[1], e[0]]
             continue
         for repo, rel, dname in con.execute("SELECT repo, file, name FROM fn WHERE fp=? AND size=?", (fp, size)):
             if repo in licenses:

@@ -31,8 +31,9 @@ def table() -> str:
              "|---|---|---|---|---|---|---|"]
     for r in rows:
         remote = r["remote"] or ""
-        url = re.sub(r"\.git$", "", remote)
-        repo = f"[{url.rsplit('/', 1)[-1]}]({url})" if url.startswith("http") else "local (pas encore de match)"
+        url = r.get("web") or re.sub(r"\.git$", "", remote)
+        name = "All-nds-decomp-games" if r.get("mono") else url.rsplit('/', 1)[-1]
+        repo = f"[{name}]({url})" if url.startswith("http") else "local (pas encore de match)"
         rom = "✅" if r["rom"]["ok"] else "❌ " + r["rom"]["note"]
         lines.append(f"| {r['title']} | {r['version']} {r['code']} | {r['studio']} | {bar(r['pct_code'])} "
                      f"{r['pct_code']:.2f}% | {r['matched']}/{r['functions']} | {rom} | {repo} |")

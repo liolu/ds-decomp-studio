@@ -20,10 +20,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
 import sys  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import project  # noqa: E402  (this game's version, ROM name, paths: tools/project.py)
+ROOT = project.ROOT
 ARM9_BIN = project.EXTRACT / "arm9" / "arm9.bin"
 SYMBOLS = project.SYMBOLS
 ARM9_BASE = 0x02000000
@@ -129,7 +129,7 @@ def main():
     ap.add_argument("--mwcc", type=Path, help="Compiler root directory")
     args = ap.parse_args()
 
-    mwcc_root = args.mwcc or Path(os.environ.get("MWCCARM", ROOT / "tools" / "mwccarm"))
+    mwcc_root = args.mwcc or Path(os.environ.get("MWCCARM", Path(__file__).resolve().parent / "mwccarm"))
     if args.size is None:
         args.size = symbol_size(args.address)
     flag_sets = args.flags or ["-O4,p", "-O4,s", "-O2", "-O3"]

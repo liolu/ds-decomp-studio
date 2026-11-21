@@ -17,9 +17,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import project  # noqa: E402  (this game's version, ROM name, paths: tools/project.py)
+ROOT = project.ROOT  # the game: <game>/ above tools/, or the current folder (shared tools/ of All-nds-decomp-games)
+TOOLS = Path(__file__).resolve().parent
 REPORT = project.REPORT
 SYMBOLS = project.SYMBOLS
 README = ROOT / "README.md"
@@ -121,7 +122,7 @@ def cmd_check(args):
         addr = symbol_address(args.function)
         if addr is None:
             raise SystemExit("address not found in symbols.txt")
-        run([sys.executable, "tools/probe_compiler.py", src, args.function, hex(addr), "--only", "2.0/sp1p5",
+        run([sys.executable, str(TOOLS / "probe_compiler.py"), src, args.function, hex(addr), "--only", "2.0/sp1p5",
              "--flags=-O4,p", "--show"], quiet=False)
     sys.exit(0 if p == 100.0 else 1)
 
@@ -167,14 +168,35 @@ def profile_padding(unit: dict, section: dict, profnames: dict) -> bool:
 
 
 def changed_files() -> list[str]:
-    """Files of the working tree that differ from the last commit (modified, added, untracked)."""
-    r = run(["git", "status", "--porcelain", "--untracked-files=all"])
+    """Files of the game that differ from the last commit (modified, added, untracked), relative to the game.
+
+    `git status --porcelain` prints paths from the top of the repository: the game's own path (games/H/<game>/ in
+    All-nds-decomp-games) is removed, and only the game's files are listed (`-- .`)."""
+    prefix = (run(["git", "rev-parse", "--show-prefix"]).stdout or "").strip()
+    r = run(["git", "-c", "core.quotepath=off", "status", "--porcelain", "--untracked-files=all", "--", "."])
     files = []
     for line in (r.stdout or "").splitlines():
         path = line[3:].split(" -> ")[-1].strip().strip('"')
+        if prefix and path.startswith(prefix):
+            path = path[len(prefix):]
         if line[:2].strip() != "D" and (ROOT / path).is_file() and not path.startswith((".studio/", "build/")):
             files.append(path)
     return files
+
+
+def _rel_tool() -> str:
+    """This tool as written from the game's folder: tools/match.py, or ../../../tools/match.py (All-nds-decomp-games)."""
+    import os
+    try:
+        return Path(os.path.relpath(Path(__file__).resolve(), ROOT)).as_posix()
+    except ValueError:  # another drive (Windows): the game runs the studio's copy
+        return "tools/match.py"
+
+
+def repo_top() -> Path:
+    """Top of the git repository: the game itself, or All-nds-decomp-games/ (its .pre-commit-config.yaml)."""
+    top = (run(["git", "rev-parse", "--show-toplevel"]).stdout or "").strip()
+    return Path(top) if top else ROOT
 
 
 def format_changed() -> None:
@@ -182,7 +204,7 @@ def format_changed() -> None:
     would change. Every tool and every contributor runs `verify` before committing, so the changed files are fixed
     here, with the same pinned hooks, BEFORE the build: what verify checks is what gets committed."""
     files = changed_files()
-    if not files or not (ROOT / ".pre-commit-config.yaml").exists():
+    if not files or not (repo_top() / ".pre-commit-config.yaml").exists():
         return
     import importlib.util
     import shutil
@@ -341,7 +363,7 @@ def cmd_progress(args):
         share = 100 * matched / total_code if total_code else 0
         lines.append(f"| {label} | {files} | {done}/{total} | {share:.2f}% |")
     lines += ["",
-              f"*Updated {datetime.date.today().isoformat()} by `python tools/match.py progress` "
+              f"*Updated {datetime.date.today().isoformat()} by `python {_rel_tool()} progress` "
               f"([DS Decomp Studio]({STUDIO_URL})). A function counts only when it compiles to the exact same bytes "
               f"and the ROM still rebuilds byte for byte.*",
               "<!-- progress:end -->"]

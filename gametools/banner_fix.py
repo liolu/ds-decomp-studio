@@ -14,7 +14,18 @@ import struct
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+
+def _game_root() -> Path:
+    """The game: $DSD_PROJECT, else <game>/ above tools/, else the current folder (the shared tools/ of
+    All-nds-decomp-games run with cwd = games/<LETTER>/<game>/)."""
+    import os
+    if os.environ.get("DSD_PROJECT"):
+        return Path(os.environ["DSD_PROJECT"]).resolve()
+    up = Path(__file__).resolve().parent.parent
+    return up if (up / "config").is_dir() else Path.cwd().resolve()
+
+
+ROOT = _game_root()
 BITMAP, PALETTE, TITLES = 0x20, 0x220, 0x240
 CRC_RANGES = {1: [(0x02, 0x20, 0x840)], 2: [(0x02, 0x20, 0x840), (0x04, 0x20, 0x940)],
               3: [(0x02, 0x20, 0x840), (0x04, 0x20, 0x940), (0x06, 0x20, 0xA40)],

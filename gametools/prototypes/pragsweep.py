@@ -58,9 +58,9 @@ def main():
     ap.add_argument("-j", type=int, default=12)
     ap.add_argument("--list", action="store_true")
     a = ap.parse_args()
-    exe = Path("../../tools/mwccarm") / a.base / "mwccarm.exe"
+    exe = (__import__('pathlib').Path(__file__).resolve().parents[3] / 'tools' / 'mwccarm') / a.base / "mwccarm.exe"
     if not exe.exists():
-        exe = Path("../../tools/mwccarm/2.0/sp1p5/mwccarm.exe")
+        exe = (__import__('pathlib').Path(__file__).resolve().parents[3] / 'tools' / 'mwccarm') / "2.0/sp1p5/mwccarm.exe"
     names = pragma_names(exe)
     if a.list:
         print(len(names), " ".join(names))

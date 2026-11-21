@@ -82,10 +82,10 @@ async function render() {
   const v = $("#view");
   try {
     if (tab === "games") { v.innerHTML = viewGames(); filterGames(); }
-    else if (tab === "game") { v.innerHTML = await viewGame(); afterGame(); }
-    else if (tab === "queue") v.innerHTML = await viewQueue();
-    else if (tab === "engine") { v.innerHTML = await viewEngine(); afterEngine(); }
-    else if (tab === "tags") { v.innerHTML = await viewTags(); afterTags(); }
+    else if (tab === "game") { const h = await viewGame(); if (tab !== "game") return; v.innerHTML = h; afterGame(); }
+    else if (tab === "queue") { const h = await viewQueue(); if (tab !== "queue") return; v.innerHTML = h; }
+    else if (tab === "engine") { const h = await viewEngine(); if (tab !== "engine") return; v.innerHTML = h; afterEngine(); }
+    else if (tab === "tags") { const h = await viewTags(); if (tab !== "tags") return; v.innerHTML = h; afterTags(); }
     else if (tab === "xref") { v.innerHTML = viewXref(); subXref(); }
     else if (tab === "progress") v.innerHTML = viewProgress();
     else if (tab === "settings") v.innerHTML = viewSettings();
@@ -98,16 +98,81 @@ function agoRun(t) {
   const d = (Date.now() / 1000 - t) / 86400;
   return d < 1 / 24 ? "a l'instant" : d < 1 ? `il y a ${Math.round(d * 24)} h` : d < 60 ? `il y a ${Math.round(d)} j` : new Date(t * 1000).toLocaleDateString("fr-FR");
 }
+const RUN_KINDS = [["auto", "Auto-match"], ["moulinette", "Moulinette"], ["misses", "Essais rates"], ["reuse", "Gains sans IA"],
+  ["reuse_scan", "Estimation sans IA"], ["clone", "Clones"], ["donors", "Donneurs"], ["qwen", "Agents Qwen"], ["verify", "Verification"],
+  ["build", "Compilation"], ["progress", "Avancement publie"], ["publish", "Publication GitHub"], ["sync_tools", "Mise a jour des outils"],
+  ["ghidra", "Ghidra"], ["names", "Noms"], ["regroup", "Regroupement"], ["cleanup", "Nettoyage"], ["culprits", "Coupables"], ["wb_commit", "Commit workbench"]];
+const RUN_ST = {done: "", failed: " &#10007;", stopped: " (arrete)", cancelled: " (arrete)", interrupted: " (interrompu)"};
+const runWhen = r => r && r.ended ? `<span title="${new Date(r.ended * 1000).toLocaleString("fr-FR")}">${agoRun(r.ended)}</span>${RUN_ST[r.state] || ""}` : "jamais";
 function lastRuns(last) {
-  const st = {done: "", failed: " &#10007;", cancelled: " (arrete)", interrupted: " (interrompu)"};
-  return [["auto", "Auto-match"], ["moulinette", "Moulinette"], ["misses", "Essais rates"]].map(([k, l]) => {
-    const r = (last || {})[k];
-    return `<div>${l} : ${r && r.ended ? `<span title="${new Date(r.ended * 1000).toLocaleString("fr-FR")}">${agoRun(r.ended)}</span>${st[r.state] || ""}` : "jamais"}</div>`;
-  }).join("");
+  return RUN_KINDS.slice(0, 3).map(([k, l]) => `<div>${l} : ${runWhen((last || {})[k])}</div>`).join("");
+}
+// Travailler tab: every kind of task with its date and time, most recent on top, then the ones never run
+function lastRunsFull(last) {
+  last = last || {};
+  const ran = RUN_KINDS.filter(([k]) => last[k] && last[k].ended).sort((a, b) => last[b[0]].ended - last[a[0]].ended);
+  const never = RUN_KINDS.filter(([k]) => !(last[k] && last[k].ended));
+  return `<table class="runs">${ran.map(([k, l]) => `<tr><td>${l}</td><td>${new Date(last[k].ended * 1000).toLocaleString("fr-FR", {dateStyle: "short", timeStyle: "short"})}</td><td class="hint">${agoRun(last[k].ended)}${RUN_ST[last[k].state] || ""}</td></tr>`).join("")}</table>
+    ${never.length ? `<div class="hint" style="margin-top:6px">Jamais lance : ${never.map(([, l]) => l).join(", ")}</div>` : ""}`;
+}
+const GF0 = {fav: false, studio: "", rom: "", gh: "", prog: "", reuse: false, tools: false, never: ""};
+let gF = (() => { try { return {...GF0, ...JSON.parse(localStorage.getItem("gFilters") || "{}")}; } catch (e) { return {...GF0}; } })();
+const favs = () => (O && O.settings.favorites) || [];
+const isFav = id => favs().includes(id);
+async function toggleFav(id) {
+  const f = isFav(id) ? favs().filter(x => x !== id) : [...favs(), id];
+  const r = await api("settings", {favorites: f});
+  if (r && !r.error) { O.settings.favorites = r.favorites || f; render(); }
+}
+function setGF(k, v) {
+  gF[k] = v;
+  try { localStorage.setItem("gFilters", JSON.stringify(gF)); } catch (e) {}
+  filterGames();
+}
+function resetGF() { gF = {...GF0}; gQuery = ""; try { localStorage.removeItem("gFilters"); } catch (e) {} render(); }
+// one game against the filters of the Jeux tab (the text search included)
+function gameShown(g) {
+  const q = gQuery.trim().toLowerCase(), p = g.pct_code || 0, last = g.last || {}, r = g.reuse || {};
+  if (q && !q.split(/\s+/).every(w => [g.title, g.id, g.studio, g.code].join(" ").toLowerCase().includes(w))) return false;
+  if (gF.fav && !isFav(g.id)) return false;
+  if (gF.studio && (g.studio || "(inconnu)") !== gF.studio) return false;
+  if (gF.rom && (gF.rom === "ok") !== !!(g.rom && g.rom.ok)) return false;
+  if (gF.gh && (gF.gh === "gh") !== !!g.remote) return false;
+  if (gF.prog === "zero" && p >= 1) return false;
+  if (gF.prog === "low" && (p < 1 || p >= 25)) return false;
+  if (gF.prog === "mid" && (p < 25 || p >= 75)) return false;
+  if (gF.prog === "high" && (p < 75 || p >= 100)) return false;
+  if (gF.prog === "full" && p < 100) return false;
+  if (gF.reuse && !(r.gain > 0 && !r.blocked)) return false;
+  if (gF.tools && !(g.tools_behind && g.tools_behind.length)) return false;
+  if (gF.never) {
+    const x = last[gF.never];
+    if (x && x.ended && Date.now() / 1000 - x.ended < 7 * 86400) return false;  // ran in the last 7 days
+  }
+  return true;
 }
 function filterGames() {
-  const q = gQuery.trim().toLowerCase();
-  document.querySelectorAll("#gtable tr[data-q]").forEach(r => r.style.display = !q || q.split(/\s+/).every(w => r.dataset.q.includes(w)) ? "" : "none");
+  let n = 0;
+  document.querySelectorAll("#gtable tr[data-id]").forEach(row => {
+    const g = O.games.find(x => x.id === row.dataset.id), on = !!g && gameShown(g);
+    row.style.display = on ? "" : "none"; n += on;
+  });
+  const c = $("#gcount"); if (c) c.textContent = `${n} / ${O.games.length} jeux`;
+}
+function gameFilters(gs) {
+  const studios = [...new Set(gs.map(g => g.studio || "(inconnu)"))].sort((a, b) => a.localeCompare(b));
+  const sel = (k, opts) => `<select onchange="setGF('${k}',this.value)">${opts.map(([v, l]) => `<option value="${esc(v)}" ${gF[k] === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
+  const chk = (k, l, t = "") => `<label class="hint" title="${esc(t)}"><input type="checkbox" ${gF[k] ? "checked" : ""} onchange="setGF('${k}',this.checked)"> ${l}</label>`;
+  return `<div class="btns" style="margin-bottom:8px"><span class="hint">Filtrer</span>
+    ${chk("fav", "&#9733; favoris")}
+    ${sel("studio", [["", "tous les studios"], ...studios.map(x => [x, x])])}
+    ${sel("prog", [["", "toute progression"], ["zero", "pas commence (< 1 %)"], ["low", "1 - 25 %"], ["mid", "25 - 75 %"], ["high", "75 - 99 %"], ["full", "100 %"]])}
+    ${sel("rom", [["", "ROM : toutes"], ["ok", "ROM OK"], ["ko", "ROM KO"]])}
+    ${sel("gh", [["", "GitHub et local"], ["gh", "sur GitHub"], ["local", "local seulement"]])}
+    ${sel("never", [["", "tous les passages"], ...RUN_KINDS.slice(0, 5).map(([k, l]) => [k, `${l} : pas depuis 7 j`])])}
+    ${chk("reuse", "gain sans IA", "jeux ou l'estimation trouve des fonctions a gagner sans IA")}
+    ${chk("tools", "outils en retard")}
+    <span id="gcount" class="tag"></span><button class="btn small sec" onclick="resetGF()">Effacer les filtres</button></div>`;
 }
 function viewGames() {
   const gs = O.games, tot = gs.reduce((a, g) => a + g.functions, 0), got = gs.reduce((a, g) => a + g.matched, 0);
@@ -120,7 +185,7 @@ function viewGames() {
       reuse: ["gain", "bytes", "eta_s"].reduce((o, k) => (o[k] = gs.reduce((a, g) => a + ((g.reuse || {})[k] || 0), 0), o), {measured: false})})}</div>`;
   const behind = gs.filter(g => g.tools_behind && g.tools_behind.length).length;
   h += `<div class="card"><h3>Mes jeux</h3><p class="hint">Clique sur un jeu pour travailler dessus. "Retirer" le range dans projets/_archive (rien n'est supprime).</p>
-  <div class="btns" style="margin-bottom:8px"><button class="btn small" title="${esc(JD('progress').desc)}" onclick="api('run',{id:'progress'}).then(r=>r.n&&toast('Publication de l'avancement lancee (onglet Queue)'))">Publier l'avancement sur GitHub</button>
+  <div class="btns" style="margin-bottom:8px"><button class="btn small" title="${esc(JD('progress').desc)}" onclick="api('run',{id:'progress'}).then(r=>r.n&&toast(&quot;Publication de l'avancement lancee (onglet Queue)&quot;))">Publier l'avancement sur GitHub</button>
     <span class="hint">README de chaque jeu publie + tableau de tous les jeux dans ds-decomp-studio</span></div>
   <div class="btns" style="margin-bottom:8px"><button class="btn small sec" title="${esc(JD('reuse_scan').desc)}" onclick="api('run',{id:'reuse_scan'}).then(r=>r.n&&toast('Estimation lancee (onglet Queue)'))">${esc(JD('reuse_scan').label)}</button>
     <button class="btn small" title="${esc(JD('reuse_apply').desc)}" onclick="api('run',{id:'reuse_apply'}).then(r=>r.n&&toast('Gains sans IA lances (onglet Queue)'))">${esc(JD('reuse_apply').label)}</button>
@@ -131,15 +196,16 @@ function viewGames() {
     <select onchange="setSort(this.value, ASC_FIRST.includes(this.value) ? 1 : -1)">${[["pct", "% de code matche"], ["gain", "gain sans IA"], ["rate", "gain sans IA par minute"], ["matched", "fonctions matchees"], ["left", "fonctions restantes"], ["functions", "taille (fonctions)"], ["title", "nom"], ["studio", "studio"], ["rom", "etat ROM"], ["github", "GitHub"]].map(([k, l]) => `<option value="${k}" ${gSort[0] === k ? "selected" : ""}>${l}</option>`).join("")}</select>
     <button class="btn small sec" onclick="setSort(gSort[0], -gSort[1])">${gSort[1] > 0 ? "croissant &#9650;" : "decroissant &#9660;"}</button>
     <input id="gsearch" placeholder="Rechercher un jeu (nom, studio, code)..." value="${esc(gQuery)}" oninput="gQuery=this.value;filterGames()" style="flex:1;min-width:200px"></div>
-  <table id="gtable"><tr>${th("title", "Jeu")}${th("studio", "Studio")}${th("rom", "Etat ROM")}${th("matched", "Fonctions", "num")}${th("pct", "Code matche")}${th("github", "GitHub")}<th>Derniers passages</th><th></th></tr>`;
+  ${gameFilters(gs)}
+  <table id="gtable"><tr><th title="favoris : en haut de la liste">&#9733;</th>${th("title", "Jeu")}${th("studio", "Studio")}${th("rom", "Etat ROM")}${th("matched", "Fonctions", "num")}${th("pct", "Code matche")}${th("github", "GitHub")}<th>Derniers passages</th><th></th></tr>`;
   const key = G_SORTS[gSort[0]] || G_SORTS.pct;
-  const order = (a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * gSort[1] || a.title.localeCompare(b.title); };
+  const order = (a, b) => { const x = key(a), y = key(b); return (isFav(b.id) - isFav(a.id)) || (x < y ? -1 : x > y ? 1 : 0) * gSort[1] || a.title.localeCompare(b.title); };
   for (const g of [...gs].sort(order)) {
-    h += `<tr class="click" data-q="${esc([g.title, g.id, g.studio, g.code].join(" ").toLowerCase())}" onclick="selectGame('${g.id}')"><td><b>${esc(g.title)}</b> ${g.id === game() ? '<span class="tag ok">actif</span>' : ""}<div class="hint">${esc(g.id)} &middot; ${esc(g.code)} ${esc(g.version || "")}</div></td>
-      <td class="hint">${esc(g.studio)}</td>
+    h += `<tr class="click" data-id="${esc(g.id)}" onclick="selectGame('${g.id}')"><td onclick="event.stopPropagation();toggleFav('${g.id}')" class="star ${isFav(g.id) ? "on" : ""}" title="${isFav(g.id) ? "retirer des favoris" : "ajouter aux favoris"}">${isFav(g.id) ? "&#9733;" : "&#9734;"}</td><td><b>${esc(g.title)}</b> ${g.id === game() ? '<span class="tag ok">actif</span>' : ""}<div class="hint">${esc(g.id)} &middot; ${esc(g.code)} ${esc(g.version || "")}</div></td>
+      <td class="hint">${esc(g.studio || "inconnu")}</td>
       <td>${g.rom.ok ? '<span class="tag ok">ROM OK</span>' : `<span class="tag ko" title="${esc(g.rom.note)}">${esc(g.rom.note || "KO")}</span>`}</td>
       <td class="num">${fmt(g.matched)} / ${fmt(g.functions)}${g.modules > 1 ? `<div class="hint">${g.modules} modules</div>` : ""}</td><td>${segBar(g)}${g.modules > 1 ? `<div class="hint">module principal : ${g.pct_main.toFixed(2)} %</div>` : ""}</td>
-      <td>${g.remote ? `<a class="tag gh" href="${esc(g.remote.replace(/\.git$/, ""))}" target="_blank" onclick="event.stopPropagation()">GitHub</a>` : '<span class="hint">local</span>'}</td>
+      <td>${g.remote ? `<a class="tag gh" href="${esc(g.web || g.remote.replace(/\.git$/, ""))}" target="_blank" onclick="event.stopPropagation()">GitHub</a>` : '<span class="hint">local</span>'}</td>
       <td class="hint" style="white-space:nowrap">${lastRuns(g.last)}</td>
       <td onclick="event.stopPropagation()"><button class="btn small sec" onclick="archiveGame('${g.id}')">Retirer</button></td></tr>`;
   }
@@ -187,18 +253,21 @@ async function viewGame() {
   if (!game()) return `<div class="card empty">Choisis d'abord un jeu dans l'onglet <a href="#games" onclick="go('games')">Jeux</a>.</div>`;
   G = await api("game?id=" + encodeURIComponent(game()));
   if (G.error) return `<div class="card">${esc(G.error)}</div>`;
-  const g = G.game, opts = O.games.map(x => `<option value="${x.id}" ${x.id === g.id ? "selected" : ""}>${esc(x.title)}</option>`).join("");
+  const g = G.game, og = O.games.find(x => x.id === g.id) || {};
+  const opts = [...O.games].sort((a, b) => (isFav(b.id) - isFav(a.id)) || a.title.localeCompare(b.title))
+    .map(x => `<option value="${x.id}" ${x.id === g.id ? "selected" : ""}>${isFav(x.id) ? "&#9733; " : ""}${esc(x.title)}</option>`).join("");
   let h = `<div class="card"><div class="btns" style="justify-content:space-between">
-    <div><h2 style="margin:0"><select style="font-size:17px;font-weight:700" onchange="selectGame(this.value)">${opts}</select></h2>
+    <div><h2 style="margin:0"><span class="star ${isFav(g.id) ? "on" : ""}" title="favori" onclick="toggleFav('${g.id}')">${isFav(g.id) ? "&#9733;" : "&#9734;"}</span> <select style="font-size:17px;font-weight:700" onchange="selectGame(this.value)">${opts}</select></h2>
     <span class="hint">${esc(g.id)} &middot; ${esc(g.code)} ${esc(g.version)} &middot; ${esc(g.studio)} &middot;
     ${g.rom.ok ? '<span class="tag ok">ROM OK</span>' : `<span class="tag ko">${esc(g.rom.note)}</span>`}
-    ${g.remote ? `<a class="tag gh" target="_blank" href="${esc(g.remote.replace(/\.git$/, ""))}">GitHub</a>
-      <a class="tag" target="_blank" title="Page ByteMatch du jeu. Pas encore listee ? Bouton ajouter : choisir le depot, le rapport est publie automatiquement par la CI (artefact ${esc(g.code || g.version)}_report, job Publier l'avancement)" href="https://bytematch.dev/${esc(g.remote.replace(/^.*github\.com[:/]/, "").replace(/\.git$/, ""))}">ByteMatch</a>
+    ${g.remote ? `<a class="tag gh" target="_blank" href="${esc(g.web || g.remote.replace(/\.git$/, ""))}">GitHub</a>
+      <a class="tag" target="_blank" title="Page ByteMatch du jeu. Pas encore listee ? Bouton ajouter : choisir le depot, le rapport est publie automatiquement par la CI (artefact ${esc(g.code || g.version)}_report, job Publier l'avancement)" href="https://bytematch.dev/${esc(g.bytematch || g.remote.replace(/^.*github\.com[:/]/, "").replace(/\.git$/, ""))}">ByteMatch</a>
       <a class="tag" target="_blank" title="Ajouter ce depot sur ByteMatch (une fois) : la CI y publie le rapport a chaque avancement" href="https://bytematch.dev/manage/new">+ ByteMatch</a>` : '<span class="tag">local</span>'}</span></div>
     <div style="min-width:260px">${segBar(g)}<div class="hint" style="text-align:right">${fmt(g.matched)} / ${fmt(g.functions)} fonctions${g.modules > 1 ? ` (${g.modules} modules, principal ${g.pct_main.toFixed(2)} %)` : ""}</div>
     ${G.data && G.data.bytes ? `<div class="hint" style="text-align:right"><a href="#game" onclick="sub='data';render();return false">donnees ${G.data.pct.toFixed(2)} %</a> : ${fmt(G.data.matched)} / ${fmt(G.data.symbols)} symboles (.data, .rodata, .bss)</div>` : ""}
     ${g.left_manual ? `<div class="hint" style="text-align:right"><a href="#game" onclick="sub='functions';fnKind='manual';render();return false">${fmt(g.left_manual)} a faire a la main</a> (Thumb, overlays, ITCM : pas d'outil auto)</div>` : ""}</div></div>
     ${G.misses && (G.misses.misses || G.misses.won_here) ? `<div class="hint" style="margin-top:8px" title="base des essais rates (missdb.sqlite) : chaque C qui compile sans matcher (Qwen, hunt, Claude, editeur, auto-match) est rejoue sur les fonctions non matchees de tous les jeux">Essais rates gardes : <b>${fmt(G.misses.misses)}</b> (${fmt(G.misses.functions)} fonctions, ${fmt(G.misses.replayable)} rejouables) &middot; matchs gagnes ici grace aux essais rates : <b>${fmt(G.misses.won_here)}</b> &middot; donnes aux autres jeux : <b>${fmt(G.misses.given)}</b></div>` : ""}
+    <details style="margin-top:12px" open><summary><b>Derniers passages sur ce jeu</b> <span class="hint">(auto-match, gains sans IA, verification...)</span></summary>${lastRunsFull(og.last)}</details>
     <h3 style="margin-top:12px">Taches machine sur ce jeu</h3><div class="btns">
     ${["moulinette", "auto", "reuse", "ghidra", "wb_commit", "names", "regroup", "cleanup", "progress", "verify", "culprits", "build", "dis", "status", "permute", "misses"].map(k => `<button class="btn small ${k === "moulinette" ? "" : "sec"}" title="${esc(JD(k).desc)}" onclick="runJob('${k}')">${esc(JD(k).label)}</button>`).join("")}
     ${g.tools_behind && g.tools_behind.length ? `<button class="btn small" style="background:#b45309" title="${esc(g.tools_behind.join(", "))}" onclick="runJob('sync_tools',{})">Mettre a jour les outils (${g.tools_behind.length} en retard)</button>` : '<span class="tag ok">outils a jour</span>'}
@@ -612,7 +681,7 @@ const RESUMABLE = ["auto", "misses", "misses_all", "clone_all", "reuse_scan", "r
 function killNow(n) { if (confirm("Couper tout de suite, meme au milieu d'un commit ou d'un build ?")) cancelJob(n); }
 async function stopAfterStep(n) { const r = await api("stop_after_step", {n}); if (r.ok) { toast("La tache s'arretera a la fin de l'etape en cours"); refreshQueue(); } else if (r.error) toast(r.error, true); }
 async function resumeJob(n) { const r = await api("resume", {n}); if (r.n) { toast(`Reprise : tache #${r.n}`); refreshQueue(); } else if (r.error) toast(r.error, true); }
-async function cancelJob(n) { await api("cancel", {n}); toast("Tache arretee"); refreshQueue(); }
+async function cancelJob(n) { const r = await api("cancel", {n}); toast(r.ok ? "Tache arretee" : "Tache deja finie", !r.ok); refreshQueue(); }
 async function showLog(n, refresh) {
   if (!refresh) { openLog = n; setHtml("jobsbox", jobsHtml()); }
   let pre = $("#logpre");
@@ -719,7 +788,7 @@ async function subXref(mod) {
   const box = $("#xrout"); if (!box || !xrGame || (!xrQuery && xrMode !== "files" && xrMode !== "archive")) return;
   box.innerHTML = "Chargement...";
   const d = await api(`xref?game=${encodeURIComponent(xrGame)}&q=${encodeURIComponent(xrQuery)}&mode=${xrMode}&module=${encodeURIComponent(mod || "")}`);
-  if (d.error) return;
+  if (d.error) { box.innerHTML = xrMode === "archive" ? "Pas d'archive numerotee pour ce jeu (aucune fonction ne nomme rom.bin)." : `<p class="hint">${esc(d.error)}</p>`; return; }
   const hx = n => "0x" + n.toString(16).padStart(8, "0");
   const who = r => `<a style="cursor:pointer" onclick="xrFollow('${esc(r.name)}','${esc(r.module)}')">${esc(r.name)}${r.off ? "+0x" + r.off.toString(16) : ""}</a>
     ${r.module !== "main" ? `<span class="hint">${esc(r.module)}</span>` : ""} ${r.matched ? '<span class="tag ok">matchee</span>' : ""}
@@ -734,7 +803,6 @@ async function subXref(mod) {
     return;
   }
   if (xrMode === "archive") {
-    if (d.error) { box.innerHTML = "Pas d'archive numerotee pour ce jeu (aucune fonction ne nomme rom.bin)."; return; }
     const fn = name => ({name, module: "main", kind: "function", off: 0, matched: d.matched[name]});
     const nums = Object.keys(d.files);
     box.innerHTML = `<p class="hint">Archive ouverte par ${who(fn(d.opener))} ; ${fmt(d.entries)} fichiers, ${fmt(d.calls)} appels de chargement dont ${fmt(d.unknown_calls)} avec un numero calcule a l'execution.
@@ -891,13 +959,15 @@ async function saveSettings() {
   // #xref/<game>/<symbol or address>[/table|siblings]: straight into the Data tab
   const xd = location.hash.match(/^#xref\/([^/]+)\/([\w.@$]+)(?:\/(table|siblings|files|archive))?$/);
   if (xd) { tab = "xref"; xrGame = xd[1]; xrQuery = xd[2]; xrMode = xd[3] || "users"; location.hash = "xref"; }
+  if (!TABS.some(([k]) => k === tab)) tab = "games";
   tabs(); await loadOverview();
   if (deep && O.settings.active_game !== deep[1]) { await api("settings", {active_game: deep[1]}); O.settings.active_game = deep[1]; }
   render(); loadXP();
   if (deep) { location.hash = "game"; openEditor(deep[2]); }
+  let qBusy = false;
   setInterval(async () => {
-    if (document.hidden || $("#modal").classList.contains("on")) return;
-    if (tab === "queue") await refreshQueue();
+    if (qBusy || document.hidden || $("#modal").classList.contains("on")) return;
+    if (tab === "queue") { qBusy = true; try { await refreshQueue(); } finally { qBusy = false; } }
   }, 4000);
   // the games list follows the jobs (matches, new projects) without reloading the page; not while typing in it
   setInterval(async () => {

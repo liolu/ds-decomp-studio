@@ -93,6 +93,8 @@ os.environ["DSD_PROJECT"] = str(ROOT)  # gametools/project.py: this game, whatev
 TOOLS = Path(__file__).resolve().parent.parent / "gametools"  # the matching tools (only build tools are in the game)
 sys.path.insert(0, str(TOOLS))
 import missdb  # noqa: E402  (every miss of this job is kept: gametools/missdb.py)
+# the game's build tools: its own tools/, or the shared tools/ of All-nds-decomp-games (games/<L>/<game>/)
+BUILD_TOOLS = ROOT / "tools" if (ROOT / "tools" / "configure.py").exists() else ROOT.parents[2] / "tools"
 VERSION = next(p.name for p in sorted((ROOT / "config").iterdir()) if (p / "arm9" / "symbols.txt").exists())
 WORK = ROOT / "build" / "qwen_auto"
 WORK.mkdir(parents=True, exist_ok=True)
@@ -173,7 +175,7 @@ def log(msg):
 
 
 def probe(path, name, addr, profile, show=True):
-    cmd = [sys.executable, "tools/probe_compiler.py", str(path), name, str(addr), "--only", profile, f"--flags={FLAGS}"]
+    cmd = [sys.executable, str(BUILD_TOOLS / "probe_compiler.py"), str(path), name, str(addr), "--only", profile, f"--flags={FLAGS}"]
     if show:
         cmd.append("--show")
     try:
@@ -975,39 +977,63 @@ def solve(unit: list[Fn], minutes: float, plateau: int, final: bool = False) -> 
                     pending.remove(f)
 
 
-def integrate_and_verify(found):
-    """found = [(name, size, addr, source)]. True if the build still matches with all of them."""
+def integrate_and_verify(found) -> list[Path] | None:
+    """found = [(name, size, addr, source)]. Returns the source files created if the build still matches with all
+    of them, None otherwise (everything rolled back). A journal (gametools/pipeline_lock.py) covers the integration:
+    killed during the verify (job cancelled), the next pipeline on this game puts delinks.txt / compilers.txt back
+    and deletes these unverified files, as auto_match.commit_found does."""
     import auto_match as am
+    from pipeline_lock import journal_begin, journal_created, journal_end
     saved = (am.DELINKS.read_bytes(), am.COMPILERS_TXT.read_bytes() if am.COMPILERS_TXT.exists() else b"")
+    journal_begin([am.DELINKS, am.COMPILERS_TXT])
     created = am.integrate(found)
+    journal_created(created)
     # Same style as the CI (clang-format), so the commit never breaks the lint check; verify runs after it
     pc = shutil.which("pre-commit")
     if pc:
         run([pc, "run", "clang-format", "--files", *[str(p.relative_to(ROOT)) for p in created]])
-    run([sys.executable, "tools/configure.py", VERSION])
-    v = run([sys.executable, "tools/match.py", "verify"])
+    run([sys.executable, str(BUILD_TOOLS / "configure.py"), VERSION])
+    v = run([sys.executable, str(BUILD_TOOLS / "match.py"), "verify"])
     if v.returncode == 0 and "VERIFY PASSED" in v.stdout:
-        return True
+        journal_end()
+        return created
     am.DELINKS.write_bytes(saved[0])
     am.COMPILERS_TXT.write_bytes(saved[1])
     for p in created:
         p.unlink(missing_ok=True)
-    run([sys.executable, "tools/configure.py", VERSION])
-    return False
+    run([sys.executable, str(BUILD_TOOLS / "configure.py"), VERSION])
+    journal_end()
+    return None
 
 
-def commit(found):
-    commit_names([f[0] for f in found], "qwen")
+def commit(found, files):
+    commit_names([f[0] for f in found], "qwen", files)
 
 
-def commit_names(names, how):
-    run(["git", "add", "src/auto", f"config/{VERSION}"])
+# verified files whose commit failed: taken again by the next commit (delinks.txt already lists them)
+_not_committed: set[str] = set()
+
+
+def commit_names(names, how, files) -> bool:
+    """Commits exactly `files` (the verified sources of this batch) + the game config (delinks.txt, compilers.txt),
+    never the other files of src/auto (another tool's unverified work). Pushes only after a real commit."""
+    _not_committed.update(Path(f).resolve().relative_to(ROOT).as_posix() for f in files)
+    paths = sorted(f for f in _not_committed if (ROOT / f).exists()) + [f"config/{VERSION}"]
+    a = run(["git", "add", "--", *paths])
+    if a.returncode:
+        log(f"git add a echoue ({(a.stdout + a.stderr).strip()[-300:]}) : rien commite")
+        return False
     msg = f"Match {len(names)} function(s) ({how}, {', '.join(BLOCKS)})\n\n" + "\n".join(names) + \
         ("\n\nCo-Authored-By: Qwen <noreply@qwen.ai>\n" if how == "qwen" else "\n")
-    run(["git", "commit", "-q", "-m", msg, "--", "src/auto", f"config/{VERSION}"])
+    c = run(["git", "commit", "-q", "-m", msg, "--", *paths])
+    if c.returncode:
+        log(f"git commit a echoue ({(c.stdout + c.stderr).strip()[-300:]}) : pas de push")
+        return False
+    _not_committed.clear()
     if not args.no_push and run(["git", "remote"]).stdout.strip():
         ok = run(["git", "push", "-q", "origin", "HEAD"]).returncode == 0
         log(f"push {'ok' if ok else 'rate (sera refait au prochain commit)'}")
+    return True
 
 
 def touch_claims():
@@ -1032,32 +1058,51 @@ def release_blocks():
         log(f"impossible de rendre les blocs ({e}) : les rendre depuis l'app")
 
 
-def multiply(names: list[str]) -> list[str]:
+def multiply(names: list[str]) -> tuple[list[str], list[Path]]:
     """One AI match is worth more: its clones (same code, or same code with other constants, in this game) are
     matched without the AI (tools/clone_match.py), then the callers and callees of every new match are retried by
     auto_match with the real signatures they now have (tools/auto_match.py --neighbours). Each tool verifies the ROM
-    itself. Returns the names they added (committed by the caller)."""
-    added = []
+    itself. Returns the names they added and their source files (committed by the caller)."""
+    added, files = [], []
     if (TOOLS / "clone_match.py").exists():
         emit = WORK / "clones.json"
         emit.unlink(missing_ok=True)
         r = run([sys.executable, str(TOOLS / "clone_match.py"), "--sources", ",".join(names), "--emit", str(emit)])
         clones = [tuple(c) for c in json.loads(emit.read_text(encoding="utf-8"))] if emit.exists() else []
-        if clones and integrate_and_verify(clones):  # one verify for all the clones of the batch
+        created = integrate_and_verify(clones) if clones else None  # one verify for all the clones of the batch
+        if created is not None:
             added += [c[0] for c in clones]
+            files += created
             log(f"CLONES ({len(clones)}, sans IA) : {', '.join(added)}")
         elif clones:
             log(f"{len(clones)} clones compilent mais VERIFY echoue une fois integres (annules)")
         elif r.returncode:
             log(f"clone_match a echoue : {(r.stdout + r.stderr).strip().splitlines()[-1:]}")
     if not args.no_neighbours:
-        before = set(p.stem for p in (ROOT / "src" / "auto").glob("*.c"))
+        import auto_match as am
+
+        def sources():
+            return {p for ext in ("*.c", "*.cpp") for p in (ROOT / "src" / "auto").glob(ext)}
+        before = sources()
+        saved = (am.DELINKS.read_bytes(), am.COMPILERS_TXT.read_bytes() if am.COMPILERS_TXT.exists() else b"")
         r = run([sys.executable, str(TOOLS / "auto_match.py"), "--neighbours", ",".join(names + added)])
-        new = sorted(set(p.stem for p in (ROOT / "src" / "auto").glob("*.c")) - before)
-        if new:
-            log(f"VOISINS rematches par auto_match ({len(new)}) : {', '.join(new)}")
-            added += new
-    return added
+        new = sorted(sources() - before)
+        if new and r.returncode == 0 and "VERIFY PASSED" in r.stdout:
+            log(f"VOISINS rematches par auto_match ({len(new)}) : {', '.join(p.stem for p in new)}")
+            added += [p.stem for p in new]
+            files += new
+        elif new:
+            # Not proven: auto_match failed or never printed VERIFY PASSED. Its files must not reach a commit
+            # (delinks.txt is committed with the next batch): put the config back and delete them
+            am.DELINKS.write_bytes(saved[0])
+            am.COMPILERS_TXT.write_bytes(saved[1])
+            for p in new:
+                p.unlink(missing_ok=True)
+            run([sys.executable, str(BUILD_TOOLS / "configure.py"), VERSION])
+            log(f"auto_match --neighbours (code {r.returncode}) sans VERIFY PASSED : {len(new)} fichier(s) annule(s)")
+        elif r.returncode:
+            log(f"auto_match --neighbours a echoue (code {r.returncode})")
+    return added, files
 
 
 def preclone(names: list[str]) -> None:
@@ -1073,8 +1118,9 @@ def preclone(names: list[str]) -> None:
     if not clones:
         return
     log(f"{len(clones)} fonction(s) des blocs ont une jumelle deja matchee : copiees sans IA, verification...")
-    if integrate_and_verify(clones):
-        commit_names([c[0] for c in clones], "clone_match")
+    created = integrate_and_verify(clones)
+    if created is not None:
+        commit_names([c[0] for c in clones], "clone_match", created)
         log(f"CLONES INTEGRES + VERIFY PASSED : {', '.join(c[0] for c in clones)}")
     else:
         log("les clones compilent mais VERIFY echoue une fois integres (annules) : Qwen les essaiera")
@@ -1093,13 +1139,14 @@ class Integrator(threading.Thread):
         batch = [f for f in batch if not any(a <= f[2] < e for a, e in covered)]  # cloned meanwhile: already in
         if not batch:
             return
-        if integrate_and_verify(batch):
-            commit(batch)
+        created = integrate_and_verify(batch)
+        if created is not None:
+            commit(batch, created)
             self.won += batch
             log(f"INTEGRE + VERIFY PASSED : {', '.join(f[0] for f in batch)}")
-            more = multiply([f[0] for f in batch])
+            more, more_files = multiply([f[0] for f in batch])
             if more:
-                commit_names(more, "clones + neighbours")
+                commit_names(more, "clones + neighbours", more_files)
                 self.extra += more
         elif len(batch) > 1:
             log(f"verify echoue sur un lot de {len(batch)} : reessai une par une")
@@ -1401,16 +1448,19 @@ def main():
 
 
 if __name__ == "__main__":
-    lock_mod = ROOT / "tools" / "pipeline_lock.py"
-    if lock_mod.exists():  # same lock as the moulinette / auto_match of this game: never two pipelines at once
-        from pipeline_lock import pipeline_lock
-        with pipeline_lock("qwen_block", ROOT):
-            main()
-    else:
+    # same lock as the moulinette / auto_match of this game: never two pipelines at once (gametools/pipeline_lock.py,
+    # one lock per game: DSD_PROJECT is this game)
+    from pipeline_lock import pipeline_lock, recover
+    with pipeline_lock("qwen_block", ROOT):
+        # with root= the lock does not undo a killed run by itself: a journal left by a cancelled job is rolled back
+        # here, before anything reads delinks.txt
+        recover(log=log, holding_lock=True)
         main()
-    # the job is over: every miss kept (this job and all earlier ones, all games) is tried on every unmatched
-    # function of this game; matches are verified, committed (and pushed)
-    if not STOP.exists():
-        log("missdb : les essais rates sont rejoues sur toutes les fonctions non matchees du jeu...")
-        subprocess.run([sys.executable, str(TOOLS / "missdb.py"), "replay", "--all-games", "--commit"]
-                       + ([] if args.no_push else ["--push"]), cwd=ROOT)
+        # the job is over: every miss kept (this job and all earlier ones, all games) is tried on every unmatched
+        # function of this game; matches are verified, committed (and pushed). Inside the lock: it rewrites this
+        # game's delinks.txt and commits like any pipeline
+        if not STOP.exists():
+            log("missdb : les essais rates sont rejoues sur toutes les fonctions non matchees du jeu...")
+            r = subprocess.run([sys.executable, str(TOOLS / "missdb.py"), "replay", "--all-games", "--commit"]
+                               + ([] if args.no_push else ["--push"]), cwd=ROOT)
+            log(f"missdb replay : code {r.returncode}" + ("" if r.returncode == 0 else " (echec, voir le log)"))

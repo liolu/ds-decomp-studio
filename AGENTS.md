@@ -10,7 +10,7 @@ python studio/studio.py games                                  # projects and pr
 python studio/studio.py blocks <game> --free                   # free blocks, easiest first
 python studio/studio.py claim <game> next --who <agent-name> --kind claude [--level N]
 python studio/studio.py brief <game> <block>                   # your work sheet: functions, commands, rules
-# ... match functions in projets/<game>/ ...
+# ... match functions in the game's folder (the brief names it) ...
 python studio/studio.py touch <game> <block> --note "..."      # still working / what blocks you
 python studio/studio.py done <game> <block>                    # or `release` to give it back unfinished
 ```
@@ -20,7 +20,14 @@ python studio/studio.py done <game> <block>                    # or `release` to
 `python studio/studio.py mcp-config` prints the command that gives an agent the studio's tools
 (`workers/mcp_server.py`): claim_block, get_function (asm, draft, Ghidra's reading, calls, look-alikes from all
 games), compile_and_diff, submit_match, commit_matches, read_data / check_data, edit_header, split_function. They
-all run `studio/gametools/workbench.py` in the game's folder, which can also be used by hand (from `projets/<game>/`):
+all run `studio/gametools/workbench.py` in the game's folder, which can also be used by hand.
+
+Where the games are: most of them in the single repository `All-nds-decomp-games/games/<LETTER>/<game>/`
+(github.com/liolu/All-nds-decomp-games, one shared `tools/` at its root), the games with outside contributors
+(Lego SW II, Sims 2, Nintendogs) in their own repository `projets/<game>/`. From a game of the single repository
+the studio is four levels up: `python ../../../../studio/gametools/workbench.py ...` and its build tools are
+`../../../tools/` (configure.py, match.py); from `projets/<game>/` they are `../../studio/gametools/` and `tools/`.
+The commands below are written for `projets/<game>/`:
 
 ```shell
 python ../../studio/gametools/workbench.py info <function>          # everything about one function (JSON)
@@ -34,9 +41,12 @@ python ../../studio/gametools/ghidra_draft.py --names a,b            # Ghidra dr
 
 ## Rules
 
-1. Work only inside `projets/<game>/`. Run `source env.sh` (Git Bash) first.
-2. Never commit unless `python tools/match.py verify` prints `VERIFY PASSED`. Commit only the files you changed
-   (`src/`, `include/`, `config/`), never `git add -A`.
+1. Work only inside the game's folder (`All-nds-decomp-games/games/<LETTER>/<game>/` or `projets/<game>/`). Run
+   `source env.sh` (Git Bash) first.
+2. Never commit unless `match.py verify` (`tools/` or `../../../tools/`) prints `VERIFY PASSED`. Commit only the
+   files you changed (`src/`, `include/`, `config/`) with a pathspec (`git commit -- <paths>`), never `git add -A`
+   and never a bare `git commit`: in All-nds-decomp-games every game shares one index, and a bare commit would take
+   what another job staged for another game. `gametools/gitcommit.py` does it right.
 3. ASCII-only sources, comments in English. `asm` functions only for instructions the compiler never emits, or for
    functions the user listed in the game's `config/asm_allowed.txt` (hand-written code proven not to be C).
    Fake matches are refused by the tools (`gametools/fakematch.py`): asm, new `#define`/`#pragma`/`#include` lines,
@@ -55,10 +65,10 @@ python ../../studio/gametools/ghidra_draft.py --names a,b            # Ghidra dr
    `decomp ds/missdb.sqlite` for all games) and replayed on every unmatched function of every game. A miss of
    function A is often the exact C of a sibling B, here or in another game.
 8. Put your misses in the right place. The game a miss belongs to is the name of the folder you run from, so run
-   `workbench.py` from `projets/<game>/` itself (or set `DSD_PROJECT` to it), never from a worktree, a copy or a
+   `workbench.py` from the game's folder itself (or set `DSD_PROJECT` to it), never from a worktree, a copy or a
    scratch folder. Never set `MISSDB` and never make another copy of `missdb.sqlite`: the only database is
    `decomp ds/missdb.sqlite`. A try you could not judge (compiler error in your own harness, session cut short)
-   goes to `projets/<game>/build/hunt/best/<function>.c`, the file named exactly after the function, where
+   goes to `<game folder>/build/hunt/best/<function>.c`, the file named exactly after the function, where
    `missdb.py import` picks it up. Never leave misses in /tmp, a scratchpad, notes or the game repository.
 
 ## Layout

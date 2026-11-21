@@ -80,4 +80,7 @@ th.sort{cursor:pointer;user-select:none;white-space:nowrap}th.sort:hover,th.sort
 .bar .seg>i{display:block;height:100%}.seg.code>i,.dot.code{background:linear-gradient(90deg,var(--acc2),var(--acc))}
 .seg.data>i,.dot.data{background:#e0a23a}.dot{display:inline-block;width:8px;height:8px;border-radius:2px;vertical-align:middle}
 .bar .seg.code{display:flex}.bar .seg.code>i{flex:none}.bar .seg>i.pot,.dot.pot{background:#7a8194}
+
+.star{cursor:pointer;color:#888;font-size:17px;width:22px;text-align:center;user-select:none}.star.on{color:#f5b301}.star:hover{color:#f5b301}
+table.runs td{padding:2px 12px 2px 0}
 span.ok{color:var(--l1)}

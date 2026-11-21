@@ -3,6 +3,7 @@ import re
 import shutil
 import subprocess
 import time
+from pathlib import Path
 
 from . import config, games, gitutil
 
@@ -17,7 +18,7 @@ REGIONS = {"E": "usa", "P": "eu", "V": "eu", "X": "eu", "Y": "eu", "J": "jp", "K
 
 def roms_without_project() -> list[dict]:
     known = {g.code: g.id for g in games.all_games() if g.code}
-    taken = {p.name for p in config.PROJETS.iterdir()} if config.PROJETS.exists() else set()
+    taken = ({p.name for p in config.PROJETS.iterdir()} if config.PROJETS.exists() else set())         | {p.name for p in config.game_dirs()}
     out, seen = [], set()
     for rom in sorted(config.ROMS.glob("*.nds")) if config.ROMS.exists() else []:
         try:
@@ -53,6 +54,9 @@ def slug_of(name: str) -> str:
 def archive(game_id: str) -> dict:
     """Removes a game from the studio by moving it to projets/_archive/ (nothing is deleted)."""
     g = games.get(game_id)
+    if g.mono:  # moving it out would delete it from All-nds-decomp-games for everyone
+        return {"error": "jeu du depot unique All-nds-decomp-games : il ne s'archive pas (git sparse-checkout "
+                         "pour ne plus l'avoir sur le disque)"}
     config.ARCHIVE.mkdir(exist_ok=True)
     dest = config.ARCHIVE / g.id
     if dest.exists():
@@ -70,7 +74,7 @@ def archived() -> list[str]:
 
 def restore(name: str) -> dict:
     src = config.ARCHIVE / name
-    if not src.is_dir() or "/" in name or ".." in name:
+    if Path(name).name != name or any(c in name for c in '/\\:') or ".." in name or not src.is_dir():
         return {"error": "archive inconnue"}
     dest = config.PROJETS / re.sub(r"-\d{8}-\d{6}$", "", name)
     if dest.exists():

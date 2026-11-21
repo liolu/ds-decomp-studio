@@ -30,7 +30,8 @@ from project import ROOT  # noqa: E402  (the game: DSD_PROJECT or the current fo
 import probe_compiler as pc  # noqa: E402
 import workbench as wb  # noqa: E402
 
-DIFF_PY = Path(os.environ.get("ASM_DIFFER", ROOT.parent.parent / "tools" / "asm-differ")) / "diff.py"
+import workspace  # noqa: E402
+DIFF_PY = Path(os.environ.get("ASM_DIFFER", workspace.WORKSPACE / "tools" / "asm-differ")) / "diff.py"
 SETTINGS = '''import json
 from pathlib import Path
 

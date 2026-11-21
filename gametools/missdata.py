@@ -304,8 +304,9 @@ def matched_sources(idx: dict, log=print) -> list[dict]:
     import clone_match as cm
     import missdb
     rows = []
-    for g in sorted(ROOT.parent.iterdir()):
-        if g == ROOT or g.name.startswith(("_", ".")) or not (g / "config").is_dir():
+    import workspace  # every game, not only the folders next to this one (games/<L>/ in All-nds-decomp-games)
+    for g in workspace.game_dirs():
+        if g.resolve() == ROOT.resolve() or not (g / "config").is_dir():
             continue
         try:
             table = matched_table(g)

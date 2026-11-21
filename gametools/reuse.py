@@ -28,8 +28,32 @@ def git(*a):
     return subprocess.run(['git', *a], capture_output=True, text=True, errors='replace').stdout
 
 
+def git_ok(*a) -> bool:
+    r = subprocess.run(['git', *a], capture_output=True, text=True, errors='replace')
+    if r.returncode:
+        print(f"git {a[0]} a echoue : {(r.stderr or r.stdout).strip()[-400:]}", flush=True)
+    return r.returncode == 0
+
+
+GENERATED = {'include/m2c_protos.h'}  # rewritten by auto_match / gen_context: never someone's unfinished work
+
+
 def changes():
-    return [l for l in git('status', '--short', '--', 'src', 'include', 'config').splitlines() if l.strip()]
+    """Real changes in src, include, config: not the generated headers, not a file that only differs by its line ends.
+    Paths are made relative to the game (porcelain prints them from the top of the repository)."""
+    out = []
+    prefix = git('rev-parse', '--show-prefix').strip()
+    for l in git('status', '--porcelain', '--', 'src', 'include', 'config').splitlines():
+        f = l[3:].strip().strip('"')
+        if prefix and f.startswith(prefix):
+            f = f[len(prefix):]
+            l = l[:3] + f
+        if not l.strip() or f in GENERATED:
+            continue
+        if l[:2].strip() == 'M' and subprocess.run(['git', 'diff', '--ignore-cr-at-eol', '--quiet', 'HEAD', '--', f]).returncode == 0:
+            continue
+        out.append(l)
+    return out
 
 
 def run(*a):
@@ -69,8 +93,11 @@ def blocked():
 
 def scan():
     t0 = time.time()
-    _, o1, _ = run(G / 'clone_match.py', '--other-games', '--dry-run')
-    _, o2, _ = run(G / 'donor_match.py', '--dry-run', '-j', '4')
+    r1, o1, _ = run(G / 'clone_match.py', '--other-games', '--dry-run')
+    r2, o2, _ = run(G / 'donor_match.py', '--dry-run', '-j', '4')
+    if r1 or r2:  # a tool that failed (or found the game busy) measured nothing: keep the last estimate
+        print(f"reuse scan: clone_match code {r1}, donor_match code {r2} : estimation precedente gardee", flush=True)
+        return 1
     # hits: what each function would be copied from; the Studio puts them in the level Portable
     hits = {n: ['donor:' + repo, '', ''] for n, repo in DONOR_HIT.findall(o2)}
     for n, frm, kind in CLONE_HIT.findall(o1):
@@ -91,6 +118,15 @@ def scan():
 
 
 def apply():
+    """Takes this game's pipeline lock for the whole run (donor_match, its commit, clone_match): the Studio's
+    scheduler and the other pipelines see the game busy; donor_match and clone_match inherit the lock."""
+    sys.path.insert(0, str(G))
+    from pipeline_lock import pipeline_lock
+    with pipeline_lock('reuse'):
+        return _apply()
+
+
+def _apply():
     d = load()
     why = blocked()
     if why:
@@ -98,22 +134,34 @@ def apply():
         save(d)
         print('reuse apply: skipped,', why, flush=True)
         return 0
-    head = git('rev-parse', 'HEAD').strip()
+    head = git('log', '-1', '--format=%H', '--', '.').strip()  # this game's last commit
     t0 = time.time()
     verify_s = []
     gained = 0
-    _, text, s = run(G / 'donor_match.py', '-j', '4')
+    rc, text, s = run(G / 'donor_match.py', '-j', '4')
+    if rc:  # crashed or the game is busy (pipeline lock): the estimate stays, the Studio shows the step failed
+        print(f'reuse apply: donor_match code {rc}, rien de commite', flush=True)
+        return 1
     m = re.search(r'OK: (\d+) functions reused', text)
     if m and 'VERIFY PASSED' in text and changes():
-        git('add', 'src', 'include', 'config')
-        git('commit', '-q', '-m', f'donors: {m.group(1)} functions reused from other decompilations')
+        import gitcommit  # only src/include/config of this game, never the generated headers or another game
+        ok, err = gitcommit.commit_paths(Path.cwd(), ['src', 'include', 'config'],
+                                         f'donors: {m.group(1)} functions reused from other decompilations',
+                                         exclude=sorted(GENERATED))
+        if not ok:
+            print(f'reuse apply: {err}', flush=True)
+            print('reuse apply: commit des donneurs echoue', flush=True)
+            return 1
         gained += int(m.group(1))
         verify_s.append(s)
     elif changes():
         print('reuse apply: donor_match left changes, not committed', flush=True)
         return 1
     # the donor matches are new sources for the clones: they go second
-    _, text, s = run(G / 'clone_match.py', '--other-games', '--commit')
+    rc, text, s = run(G / 'clone_match.py', '--other-games', '--commit')
+    if rc:
+        print(f'reuse apply: clone_match code {rc}', flush=True)
+        return 1
     m = re.search(r'OK: (\d+) functions matched by cloning', text)
     if m and int(m.group(1)):
         gained += int(m.group(1))
@@ -123,7 +171,7 @@ def apply():
         return 1
     d.update(gain=0, clones=0, donors=0, bytes=0, eta_s=0, blocked='', hits={},
              last={'at': round(time.time()), 'gained': gained, 'seconds': round(time.time() - t0),
-                   'commits': git('log', '--oneline', f'{head}..HEAD').count('\n')})
+                   'commits': git('log', '--oneline', f'{head}..HEAD', '--', '.').count('\n')})
     if verify_s:
         d.update(pass_s=max(verify_s), measured=True)
     save(d)

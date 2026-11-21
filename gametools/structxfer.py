@@ -27,6 +27,7 @@ from project import ROOT  # noqa: E402
 DS = HERE.parent.parent  # decomp ds
 DB = DS / 'techtags.sqlite'
 GAMES = DS / 'projets'
+import workspace  # noqa: E402
 OUT = ROOT / 'build' / 'hunt' / 'structxfer'
 _ASM = {}
 
@@ -35,7 +36,7 @@ def game_shapes(game):
     """hunt.shapes() of another game (its own build/<ver>/asm), cached per process."""
     if game in _ASM: return _ASM[game]
     out = {}
-    for asm in (GAMES / game / 'build').glob('*/asm'):
+    for asm in ((workspace.find_game(game) or GAMES / game) / 'build').glob('*/asm'):
         for p in asm.rglob('*.s'):
             for m in hunt.FUNC.finditer(p.read_text(encoding='utf-8', errors='replace')):
                 body = m.group(3)
@@ -96,7 +97,7 @@ def candidates(min_score, game=None):
 def transplant(target, donor, sh_target):
     """[C texts] for target from the donor's file (plain rename, then + immediates remapped), and the donor profile."""
     dgame, dname, dpath, dprof = donor
-    f = GAMES / dgame / dpath
+    f = (workspace.find_game(dgame) or GAMES / dgame) / dpath
     if not f.exists(): return [], dprof
     src = f.read_text(encoding='utf-8', errors='replace')
     src = re.sub(r'^/\* compiler: .*?\*/\n', '', src)

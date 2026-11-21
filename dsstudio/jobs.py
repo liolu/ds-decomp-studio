@@ -9,6 +9,7 @@ import re
 import subprocess
 import threading
 import time
+from pathlib import Path
 
 from . import config, games
 
@@ -16,8 +17,12 @@ LOGS = config.DATA / "logs"
 LOGS.mkdir(exist_ok=True)
 STATE = config.DATA / "jobs.json"
 LAST = config.DATA / "last_runs.json"  # game -> kind -> {"ended", "state"}: kept forever (jobs.json keeps 200)
-LAST_KIND = {"auto": "auto", "permute": "auto", "moulinette": "moulinette", "misses": "misses", "misses_all": "misses"}
-MOULINETTE = config.PROJETS / "rayman-rr" / "tools" / "moulinette.py"
+LAST_KIND = {"auto": "auto", "permute": "auto", "moulinette": "moulinette", "misses": "misses", "misses_all": "misses",
+             "reuse": "reuse", "reuse_apply": "reuse", "reuse_scan": "reuse_scan", "clone": "clone", "clone_all": "clone",
+             "donors": "donors", "qwen": "qwen", "verify": "verify", "build": "build", "progress": "progress",
+             "publish": "publish", "sync_tools": "sync_tools", "sync_all": "sync_tools", "ghidra": "ghidra",
+             "names": "names", "regroup": "regroup", "cleanup": "cleanup", "culprits": "culprits", "wb_commit": "wb_commit"}
+MOULINETTE = config.game_path("rayman-rr") / "tools" / "moulinette.py"
 
 # id: label, scope ("game" runs in the project, "global" in the workspace), expected seconds, description
 DEFS = {
@@ -107,9 +112,17 @@ def _q(s: str) -> str:
 
 
 def _t(game, name: str) -> str:
-    """A matching tool for a command run with cwd = the game: its tools/ copy, else gametools/ (quoted)."""
+    """A matching tool for a command run with cwd = the game: gametools/, else its own tools/ copy, else the shared
+    tools/ of All-nds-decomp-games (quoted)."""
     p = config.game_tool(game.path, name)
-    return f"tools/{name}" if p.parent != config.GAMETOOLS else _q(p.as_posix())
+    if p.parent == config.GAMETOOLS:
+        return _q(p.as_posix())
+    return _q(Path(os.path.relpath(p, game.path)).as_posix())
+
+
+def _cd(game) -> str:
+    """`cd` to the game for a command run from the workspace: projets/<game> or All-nds-decomp-games/games/<L>/<game>."""
+    return "cd " + _q(Path(os.path.relpath(game.path, config.ROOT)).as_posix())
 
 
 def _block_functions(game, block_id: str) -> list[str]:
@@ -143,23 +156,26 @@ def _steps(jid: str, game, parts: list[tuple[str, str]], p: dict) -> str:
     the steps already done, a new run starts from scratch. Inside a step the tools keep their own caches."""
     f = _q((STEPS / f"{jid}-{game.id if game else 'all'}.txt").as_posix())
     stop = _q(stop_file(jid, game.id if game else None).as_posix())
-    out = [f"mkdir -p {_q(STEPS.as_posix())}", f"rm -f {stop}"] + ([] if p.get("resume") else [f"rm -f {f}"])
+    out = ["fail=0", f"mkdir -p {_q(STEPS.as_posix())}", f"rm -f {stop}"] + ([] if p.get("resume") else [f"rm -f {f}"])
     for name, cmd in parts:
         # "Arreter apres l'etape": the file is checked between two steps, never in the middle of one
         out.append(f"if [ -e {stop} ]; then rm -f {stop}; echo {_q('== arret demande : stop avant ' + name)}; exit {STOP_RC}; fi")
         out.append(f"if grep -qxF {_q(name)} {f} 2>/dev/null; then echo {_q('== ' + name + ' : deja fait (reprise)')}; "
-                   f"else echo {_q('== ' + name)}; ({cmd}) && echo {_q(name)} >> {f}; fi")
+                   f"else echo {_q('== ' + name)}; if ({cmd}); then echo {_q(name)} >> {f}; "
+                   f"else fail=1; echo {_q('== ' + name + ' : ECHEC (la suite continue)')}; fi; fi")
+    # the exit code is the one of the whole task, not only of its last step
+    out.append('if [ "$fail" = 1 ]; then exit 1; fi')
     return "; ".join(out)
 
 
 def command(jid: str, game, p: dict) -> str:
     v = game.version if game else ""
     if jid == "status":
-        return "python tools/match.py status"
+        return f"python {_q(config.build_tool(game.path, 'match.py'))} status"
     if jid == "build":
         return "ninja"
     if jid == "verify":
-        return "python tools/match.py verify"
+        return f"python {_q(config.build_tool(game.path, 'match.py'))} verify"
     if jid == "culprits":
         return f"python {_t(game, 'find_culprits.py')}" + (" --fix" if p.get("fix") else "") + (" --any" if p.get("any") else "")
     if jid == "dis":
@@ -245,7 +261,7 @@ def command(jid: str, game, p: dict) -> str:
         return cmd
     if jid == "clone_all":
         # one game after the other; a game busy with another pipeline is skipped (its lock), the others go on
-        return _steps(jid, None, [(g.id, f"cd {_q('projets/' + g.id)} && python {_t(g, 'clone_match.py')} --other-games --commit --push")
+        return _steps(jid, None, [(g.id, f"{_cd(g)} && python {_t(g, 'clone_match.py')} --other-games --commit --push")
                                   for g in games.all_games() if g.ready and config.game_tool(g.path, "clone_match.py").exists()], p)
     if jid == "reuse":
         return f"python {_q((config.GAMETOOLS / 'reuse.py').as_posix())} apply"
@@ -253,14 +269,14 @@ def command(jid: str, game, p: dict) -> str:
         tool = _q((config.GAMETOOLS / "reuse.py").as_posix())
         ready = [g for g in games.all_games() if g.ready]
         if jid == "reuse_scan":
-            return _steps(jid, None, [(g.id, f"cd {_q('projets/' + g.id)} && python {tool} scan") for g in ready], p)
+            return _steps(jid, None, [(g.id, f"{_cd(g)} && python {tool} scan") for g in ready], p)
         # the most functions per second first: a game with few files gives far more than a slow link
         todo = [(g, g.reuse()) for g in ready]
         todo = sorted(((g, e) for g, e in todo if e.get("gain") and not e.get("blocked")),
                       key=lambda x: -x[1]["gain"] / max(x[1].get("eta_s") or 1, 1))
         if not todo:
             return "echo aucun gain estime : lance d'abord l'estimation"
-        return _steps(jid, None, [(g.id, f"cd {_q('projets/' + g.id)} && python {tool} apply") for g, _e in todo], p)
+        return _steps(jid, None, [(g.id, f"{_cd(g)} && python {tool} apply") for g, _e in todo], p)
     if jid == "misses":
         tool = f"python {_t(game, 'missdb.py')}"
         cmd = f"{tool} replay" + ("" if p.get("this_game") else " --all-games")
@@ -273,10 +289,10 @@ def command(jid: str, game, p: dict) -> str:
         ready = [g for g in games.all_games() if g.ready and config.game_tool(g.path, "missdb.py").exists()]
         if not ready:
             return "echo aucun jeu"
-        parts = [("import " + g.id, f"cd {_q('projets/' + g.id)} && python {_t(g, 'missdb.py')} import") for g in ready]
-        parts += [("replay " + g.id, f"cd {_q('projets/' + g.id)} && python {_t(g, 'missdb.py')} replay --all-games --commit --push")
+        parts = [("import " + g.id, f"{_cd(g)} && python {_t(g, 'missdb.py')} import") for g in ready]
+        parts += [("replay " + g.id, f"{_cd(g)} && python {_t(g, 'missdb.py')} replay --all-games --commit --push")
                   for g in ready]
-        return _steps(jid, None, parts, p) + f"; python {_t(ready[0], 'missdb.py')} stats"
+        return _steps(jid, None, parts + [("stats", f"python {_t(ready[0], 'missdb.py')} stats")], p)
     if jid == "donors":
         # by block (the functions of one block), by batch (--max N matches), or only the list of candidates
         cmd = f"python {_t(game, 'donor_match.py')}"
@@ -360,14 +376,35 @@ def last_runs() -> dict:
         LAST.write_text(json.dumps(last, ensure_ascii=False), encoding="utf-8")
         return last
     try:
-        return json.loads(LAST.read_text(encoding="utf-8"))
+        last = json.loads(LAST.read_text(encoding="utf-8"))
     except Exception:
-        return {}
+        last = {}
+    # kinds tracked later than the file was made: filled from the tasks still in memory (jobs.json keeps 200)
+    every = None
+    for j in list(jobs.values()):
+        kind = LAST_KIND.get(j["id"])
+        if not kind or not j.get("started") or not j.get("ended"):
+            continue
+        if j["game"]:
+            ids = [j["game"]]
+        else:
+            every = every if every is not None else [g.id for g in games.all_games()]
+            ids = every
+        for gid in ids:
+            r = last.setdefault(gid, {}).get(kind)
+            if not r or (r.get("ended") or 0) < j["ended"]:
+                last[gid][kind] = {"ended": j["ended"], "state": j["state"]}
+    return last
 
 
 def _save():
     snap = [{k: v for k, v in j.items() if k != "log"} for j in jobs.values()]
-    STATE.write_text(json.dumps(snap[-200:], ensure_ascii=False), encoding="utf-8")
+    tmp = STATE.with_suffix(".tmp")
+    try:
+        tmp.write_text(json.dumps(snap[-200:], ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, STATE)
+    except OSError:
+        pass  # file held by an antivirus / editor: written again at the next turn
 
 
 def _restore():
@@ -375,11 +412,17 @@ def _restore():
         for j in json.loads(STATE.read_text(encoding="utf-8")):
             if j["state"] in ("running", "queued"):
                 j["state"] = "interrupted"
+                if j.get("started") and not j.get("ended"):  # else its time keeps growing in the Queue tab
+                    lf = LOGS / f"{j['n']}.log"
+                    j["ended"] = lf.stat().st_mtime if lf.exists() else j["started"]
             j["log"] = []
             jobs[j["n"]] = j
             _seq[0] = max(_seq[0], j["n"])
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"jobs.json illisible ({e}) : historique des taches vide")
+    for lf in LOGS.glob("*.log"):  # never reuse the number (and overwrite the log) of an older task
+        if lf.stem.isdigit():
+            _seq[0] = max(_seq[0], int(lf.stem))
 
 
 def submit(jid: str, game_id: str | None, params: dict | None = None, who: str = "") -> dict:
@@ -415,24 +458,33 @@ def submit(jid: str, game_id: str | None, params: dict | None = None, who: str =
 
 
 def _start(j):
-    game = games.get(j["game"]) if j["game"] else None
-    cwd = game.path if game else config.ROOT
-    env_line = f"source {_q(config.ENV_SH.as_posix())} >/dev/null 2>&1; " if config.ENV_SH.exists() else ""
-    if config.FPDB.exists() and j["id"] == "qwen":
-        env_line += f"export DSSTUDIO_ROOT={_q(config.ROOT.as_posix())}; "
-    full = f"{env_line}cd {_q(cwd.as_posix())} && {j['cmd']}"
-    env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
     j["state"], j["started"] = "running", time.time()
-    logf = (LOGS / f"{j['n']}.log").open("w", encoding="utf-8")
-    logf.write(f"$ {j['cmd']}\n(dans {cwd})\n\n")
-    logf.flush()  # visible in the Queue tab right away, even before the task prints anything
+    logf = None
     try:
-        p = subprocess.Popen([str(config.BASH), "-c", full], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        game = games.get(j["game"]) if j["game"] else None
+        cwd = game.path if game else config.ROOT
+        if j["id"] == "reuse_apply":  # the games and their order come from the estimates as they are now, not at the click
+            j["cmd"] = command(j["id"], game, j.get("params") or {})
+        env_line = f"source {_q(config.ENV_SH.as_posix())} >/dev/null 2>&1; " if config.ENV_SH.exists() else ""
+        if config.FPDB.exists() and j["id"] == "qwen":
+            env_line += f"export DSSTUDIO_ROOT={_q(config.ROOT.as_posix())}; "
+        full = f"{env_line}cd {_q(cwd.as_posix())} || exit 1; {j['cmd']}"
+        env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1", GIT_TERMINAL_PROMPT="0")
+        logf = (LOGS / f"{j['n']}.log").open("w", encoding="utf-8")
+        logf.write(f"$ {j['cmd']}\n(dans {cwd})\n\n")
+        logf.flush()  # visible in the Queue tab right away, even before the task prints anything
+        # through a script file: tasks over every game (reuse_scan, clone_all...) are longer than the
+        # 32767 characters Windows allows on a command line
+        script = LOGS / f"{j['n']}.sh"
+        script.write_text(full + "\n", encoding="utf-8", newline="\n")
+        p = subprocess.Popen([str(config.BASH), script.as_posix()], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                              env=env, creationflags=0x08000000)
     except Exception as e:
         j["state"], j["ended"] = "failed", time.time()
-        j["log"].append(f"impossible de lancer Git Bash : {e}")
-        logf.close()
+        j["log"].append(f"impossible de lancer la tache : {e}")
+        if logf:
+            logf.write(f"impossible de lancer la tache : {e}\n")
+            logf.close()
         return
     _procs[j["n"]] = p
 
@@ -468,6 +520,23 @@ def _start(j):
 _wake = threading.Event()
 
 
+def _lock_holder(game_id: str) -> dict | None:
+    """{"pid", "owner"} when a live process holds the game's build/pipeline.lock (gametools/pipeline_lock.py): a
+    global task (reuse_apply, clone_all, missdb...) or a tool started by hand is working in it."""
+    try:
+        info = json.loads((config.game_path(game_id) / "build" / "pipeline.lock").read_text())
+        pid = int(info.get("pid", 0) or 0)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+    if not pid:
+        return None
+    try:
+        import psutil
+        return info if psutil.pid_exists(pid) else None
+    except ImportError:
+        return info  # cannot check: assume it is still running (as pipeline_lock does)
+
+
 def _scheduler():
     while True:
         _wake.wait(5)
@@ -483,7 +552,19 @@ def _scheduler():
                     continue
                 if j["game"] is None and None in busy:  # global tasks also one at a time
                     continue
-                _start(j)
+                holder = _lock_holder(j["game"]) if j["game"] else None
+                if holder:  # another pipeline works in this game: wait for it, never two at once
+                    if j.get("waiting_lock") != holder.get("pid"):
+                        j["waiting_lock"] = holder.get("pid")
+                        j["log"].append(f"en attente : {holder.get('owner', 'un outil')} (PID {holder.get('pid')}) "
+                                        "travaille deja dans ce jeu")
+                    continue
+                try:
+                    _start(j)
+                except Exception as e:
+                    j["state"], j["ended"] = "failed", time.time()
+                    j["log"].append(f"impossible de lancer la tache : {e}")
+                    continue
                 running.append(j)
                 busy.add(j["game"])
             _save()
@@ -502,6 +583,10 @@ def resume(n: int, who: str = "") -> dict:
     j = jobs.get(n)
     if not j:
         return {"error": "tache inconnue"}
+    if j["state"] not in ("stopped", "failed", "interrupted", "cancelled"):
+        return {"error": "cette tache n'est pas arretee"}
+    if any(x["id"] == j["id"] and x["game"] == j["game"] and x["state"] in ("queued", "running") for x in jobs.values()):
+        return {"error": "cette tache est deja en file ou en cours"}
     return submit(j["id"], j["game"], {**(j.get("params") or {}), "resume": j["id"] in RESUMABLE}, who)
 
 
@@ -519,9 +604,13 @@ def cancel(n: int) -> bool:
             try:  # taskkill /T needs WMI, broken on some PCs: kill the tree with psutil
                 import psutil
                 parent = psutil.Process(p.pid)
-                for c in parent.children(recursive=True):
-                    c.kill()
+                kids = parent.children(recursive=True)
                 parent.kill()
+                for c in kids:  # bash is dead: no next step can start after this snapshot
+                    try:
+                        c.kill()
+                    except psutil.Error:
+                        pass
             except Exception:
                 p.kill()
             j["state"], j["ended"] = "stopped", time.time()

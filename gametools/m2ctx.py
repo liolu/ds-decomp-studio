@@ -26,7 +26,7 @@ CXX_FLAGS = [
 ]
 
 script_dir = Path(os.path.dirname(os.path.realpath(__file__)))
-root_dir = script_dir / ".."
+root_dir = Path.cwd()  # the game (ninja runs from it; the shared tools/ of All-nds-decomp-games is not under it)
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
