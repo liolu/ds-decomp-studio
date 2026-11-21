@@ -343,12 +343,21 @@ class Game:
         except (OSError, ValueError):
             return {}
 
+    def rules(self) -> dict:
+        """What gametools/coderules.py counted last (`studio.py rules <game>`, `match.py verify/progress --rules`): the
+        functions matched under the code rules, MATCH-PENDING and ORIGINAL-ASM. Empty when it never ran."""
+        try:
+            return json.loads((self.path / "build" / "coderules" / "totals.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+
     def info(self) -> dict:
         return {"id": self.id, "title": self.title, "version": self.version, "code": self.code, "ready": self.ready,
                 "studio": STUDIOS.get(self.id, ""), "remote": self.remote(), "web": self.web_url(), "mono": self.mono,
                 "bytematch": _bytematch_repo(self),
                 "rom": self.rom_state(),
-                "auto_done": (self.path / ".auto_done").exists(), "reuse": self.reuse(), **self.summary()}
+                "auto_done": (self.path / ".auto_done").exists(), "reuse": self.reuse(), "rules": self.rules(),
+                **self.summary()}
 
 
 def _bytematch_repo(g: Game) -> str:

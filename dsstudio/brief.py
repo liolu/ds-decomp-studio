@@ -29,6 +29,8 @@ def brief(g, block_id: str) -> str:
         "- Format before verifying: `pre-commit run clang-format --files <your .c files>` (the CI checks it).",
         "- Never use leaked source code. Clean-room: from the binary and public projects only.",
         "- A function you cannot match: leave it, note why in the claim (`studio.py touch ... --note`).",
+        "- Code rules: `judge` adds a `rules` verdict to each match; report it (`MATCH` or `MATCH-PENDING <rules>`), do "
+        "not chase it (the source cleanup is a separate pass).",
         f"- When finished: `python \"{(config.STUDIO / 'studio.py').as_posix()}\" done {g.id} {block_id}`.",
         "",
         "Functions whose note names an external decompilation (decomps-externes/) are matched automatically:",

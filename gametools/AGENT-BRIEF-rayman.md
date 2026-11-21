@@ -41,5 +41,7 @@ RULES (violations make the match rejected):
 - Write only in your own dir `aK/`, in the journals of YOUR functions (through techlog.py) and NEW scripts in
   `G/prototypes/` (docstring + `proto_run(ctx)` when possible). Helper scripts never in /tmp.
 - Never use leaked SDK source.
+- `judge` adds a code-rules verdict (`rules.status`) to every MATCH: report it, do not chase it (cleanup is a separate pass).
 
-Final answer (short): `NAME: MATCH <profile>` lines, then `no: NAME (N diffs)` for the near misses, plus new technique ids.
+Final answer (short): `NAME: MATCH <profile>` lines (`NAME: MATCH <profile> PENDING <rules>` when the verdict is
+MATCH-PENDING), then `no: NAME (N diffs)` for the near misses, plus new technique ids.

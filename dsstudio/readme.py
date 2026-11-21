@@ -27,19 +27,23 @@ def table() -> str:
              f"· mis à jour le {datetime.date.today().isoformat()} par le bouton « Publier l'avancement sur GitHub » "
              f"(onglet Jeux) ou `python studio.py progress`",
              "",
-             "| Jeu | Version | Studio | Code matché | Fonctions | ROM | Dépôt |",
-             "|---|---|---|---|---|---|---|"]
+             "| Jeu | Version | Studio | Code matché | Fonctions | Sous les règles | ROM | Dépôt |",
+             "|---|---|---|---|---|---|---|---|"]
     for r in rows:
         remote = r["remote"] or ""
         url = r.get("web") or re.sub(r"\.git$", "", remote)
         name = "All-nds-decomp-games" if r.get("mono") else url.rsplit('/', 1)[-1]
         repo = f"[{name}]({url})" if url.startswith("http") else "local (pas encore de match)"
         rom = "✅" if r["rom"]["ok"] else "❌ " + r["rom"]["note"]
+        t = r.get("rules") or {}
+        rules = f"{t['rules_matched']}/{t['functions'] - t['original_asm']}" if t else "—"
         lines.append(f"| {r['title']} | {r['version']} {r['code']} | {r['studio']} | {bar(r['pct_code'])} "
-                     f"{r['pct_code']:.2f}% | {r['matched']}/{r['functions']} | {rom} | {repo} |")
+                     f"{r['pct_code']:.2f}% | {r['matched']}/{r['functions']} | {rules} | {rom} | {repo} |")
     lines += ["",
               "*Code matché : part du code des fonctions (ARM9, ITCM, DTCM, overlays) qui recompile à l'octet près. "
-              "ROM ✅ : la ROM se reconstruit identique à l'originale.*",
+              "Sous les règles : fonctions identiques à l'octet près ET dont la source passe toutes les règles [match] "
+              "de [CODE-RULES.md](CODE-RULES.md) (les autres sont MATCH-PENDING ; — : jamais compté, "
+              "`python studio.py rules <jeu>`). ROM ✅ : la ROM se reconstruit identique à l'originale.*",
               END]
     return "\n".join(lines)
 

@@ -71,6 +71,83 @@ python ../../studio/gametools/ghidra_draft.py --names a,b            # Ghidra dr
    goes to `<game folder>/build/hunt/best/<function>.c`, the file named exactly after the function, where
    `missdb.py import` picks it up. Never leave misses in /tmp, a scratchpad, notes or the game repository.
 
+9. `workbench.py judge` (MCP compile_and_diff) adds a code-rules verdict to each match ([CODE-RULES.md](CODE-RULES.md)):
+   report it (`MATCH` or `MATCH-PENDING <rules>`), do not chase it; the source cleanup is a separate pass.
+
+## Code rules profile
+
+The project profile [CODE-RULES.md](CODE-RULES.md) asks for. A game's own `AGENTS.md` overrides it (its original
+studio's naming style, its dialect, a rule it tightens or relaxes, each with the reason).
+
+In short: a function counts as matched only when its bytes match and its source passes every [match] rule (R1, R2,
+R4, R13, R17, R18). Byte-identical but failing is `MATCH-PENDING`: kept in the game, reported, not counted. A
+function the original wrote in assembly is `ORIGINAL-ASM`: listed apart, counted neither way. To clean up existing
+source, run the checker, fix [free] findings first in their own commit, then each [checked] or [evidence] fix with
+`judge` and `verify`; a fix that breaks a match is reverted, and a rule the bytes defeat gets a `RULE-EXCEPTION`.
+
+- **Compiler and dialect.** Metrowerks `mwccarm` (CodeWarrior for NDS 1.2 and 2.0 builds), `-O4,p`, base flags
+  `-enum int -char signed -gccext,on -inline noauto -lang=c -interworking` (`probe_compiler.BASE_FLAGS`). Each file's
+  real profile is its first line `/* compiler: <version> <flags> */` and `config/<version>/compilers.txt`. C is
+  C89 with the extensions the drafts already use (`//` comments, `static inline`, `long long`); write declarations
+  at the top of a block unless the file's profile says `-lang c99`. C++ files (`.cpp`, `-lang=c++`) are pre-C++11:
+  no `nullptr`, `auto`, `enum class`. `enum` is `int`-sized and `char` is signed. `judge` is the referee: a dialect
+  error is a compile error.
+- **Annotations.** Line 1 `/* compiler: ... */` when the profile is not the game's default; the attribution comment
+  of a reused file stays above its function; `// ASM: <public decompilation>` on a function proven to be original
+  assembly; `// volatile: <evidence>`, `// reserved: <SDK or format name>`, `// R36: <what the bytes show>` and
+  `// RULE-EXCEPTION: <rule>, <reason>` where the checker or a reader needs the evidence. There is no parking
+  mechanism in `src/`: unfinished attempts live in `build/hunt/` and the miss database, never behind an `#if`.
+- **Names.** Library code (NitroSDK, NitroSystem, MSL...) keeps the recorded names that `names.py` finds in public
+  decompilations, verbatim: `OS_CreateThread`, `NNS_FndAllocFromExpHeap`, `OSThread`, files like
+  `src/nitro/os/os_thread.c` (`regroup.py`). Game code: the original studio's style where the binary shows it
+  (assert strings, file names, RTTI), recorded in the game's `AGENTS.md`; with no evidence, the default tables of
+  [style-defaults.md](style-defaults.md), copied into the game's `AGENTS.md`: `Prefix_VerbNoun`
+  functions, `lowerCamel_t` struct types and `UPPER_SNAKE` constants for C, `PascalCase` methods and `lowerCamel`
+  members for C++. Placeholders (open naming work, never a failed match): `func_XXXXXXXX`, `func_ovNNN_XXXXXXXX`,
+  `data_XXXXXXXX`, `lbl_XXXXXXXX`, `arg0`, `temp_r4`, `var_r5`, `sp10`, `phi_`, `unk_XX`, `M2C_UNK`.
+- **Layout.** The game's `.clang-format` decides (the CI checks it): LLVM base, 4 spaces, 127 columns, K&R braces,
+  braces on every block. Function banner: `/*` `====` `Name` *what it does* `====` `*/`; a unit opens with
+  `// file.c -- what this unit does`.
+- **Evidence sources.** The game binary (strings, asserts, RTTI), public decompilations (`donors.sqlite`), the
+  same code matched in another game of the workspace (`fpdb.sqlite`). Never leaked source, never SDK source.
+- **Line information.** Retail ROMs carry no line tables. `__LINE__` reaches the bytes only in units that call an
+  assert or panic macro (the files the binary names in its assertion strings): layout changes there are [checked].
+- **Commands.** Per-function check: `workbench.py judge NAME FILE.c`. Byte gate: `python tools/match.py verify`.
+  Rule checker: `python tools/coderules.py [--pending] [--advisory]` (`studio.py rules <game>`); `verify --rules`
+  and `progress --rules` print both numbers, from the same matched set.
+- **Checker coverage.** `coderules.py` implements the [match] rows of the table at the end of CODE-RULES.md, with
+  these differences:
+  - R1: the two-bodies row is checked; the "layout view" row (a struct that copies another struct's leading fields
+    and is read through a cast) is not. Advisory only: a `class`/`struct` mismatch (mwccarm's mangled names do not
+    carry the class key), and a draft's file-local helper types (a name no header defines that is placeholder-like,
+    `D`, `Obj`, `Ctx`..., or that nearly every file defining it gives its own body: unrelated types, not one type
+    declared twice).
+  - R4: `M2C_FIELD` is this studio's offset macro, and a virtual call through `*(u8 **)obj + K` counts as an
+    offset cast.
+  - R13: only virtuals named `pad`/`dummy`; the studio has no vtable data to compare slot counts with yet.
+  - R17: "statements marked as probes" are the names the search tools write (`hunt_pad`, `hunt_t`, `hunt_v`,
+    `arg_pad`); a line that names a `0x04xxxxxx` register or the shared work area the ARM7 writes (`0x027FFxxx`,
+    `0x02FFFxxx` on DSi) passes the `volatile` row; a padding member passes with a
+    `// reserved: <SDK or format name>` note; a statement the original really had passes with `// R36: <what the
+    bytes show>` on its line.
+  - R18: there is no list of original inline-asm helpers yet, so any `asm` in a function holds it unless the
+    function is `ORIGINAL-ASM`.
+  - Advisory: R7, R14, R25, R33, R35 (assignments in conditions, `!!x`), R37, and byte-pointer arithmetic that is
+    not dereferenced.
+- **Rule changes.**
+  - R23: the line limit is 127 columns and the layout is clang-format's, because the games' CI already enforces
+    that file.
+  - R18: `ORIGINAL-ASM` means the function is in the game's `config/asm_allowed.txt` or carries an `// ASM:`
+    citation. An `asm` function written only because it holds an instruction the compiler never emits
+    (`swp`, `mrs`, `clz`...) is `MATCH-PENDING` until evidence shows whether the original was assembly or C around
+    an inline helper.
+  - R17/R22: the section pragmas of rule 3 (`__sinit_*` in `.init`/`.ctor`, `BuildInfo` in `.text`) are recorded
+    exceptions: the original build placed those objects there.
+  - R1, R2, R4 are not relaxed. `src/auto/` is raw m2c output: its functions stay `MATCH-PENDING` until their
+    structs and externs move into headers.
+  - R24: the progress blocks of the READMEs, `.studio/`, `build/` and the miss database are generated: run the
+    tool, never edit them.
+
 ## Layout
 
 - `dsstudio/games.py`: project discovery, functions, matched state (`delinks.txt`), cross-game twins (`fpdb.sqlite`).
@@ -101,5 +178,12 @@ python ../../studio/gametools/ghidra_draft.py --names a,b            # Ghidra dr
   bytes it compiled to, its pointers); `replay` also gives the unmatched .data / .rodata of every module the C of
   a data miss or of the same data matched in another of our games (`--all-games`; fingerprint = section + size
   + bytes, pointers masked then renamed), one file per object (src/data/<module>_<section>_<addr>.c), ROM rebuilt.
+  CODE RULES (`gametools/coderules.py`, a build tool: copied into each game as `tools/coderules.py`): the checker of
+  [CODE-RULES.md](CODE-RULES.md). `fakematch.py` refuses what can never be source before compiling (asm, sections,
+  preprocessor tricks); `coderules.py` judges what did match: `ok`, `MATCH-PENDING` (R1, R2, R4, R13, R17, R18) or
+  `ORIGINAL-ASM`, per function, plus advisory findings (names, banners). `workbench.judge` attaches it to every
+  match, `match.py verify --rules`/`progress --rules` and `studio.py rules <game>` count it, out of objdiff's
+  matched set when its report.json is up to date (build/coderules/report.json; per-file scan cache in
+  build/coderules/scan-cache.json).
   `--no-data` / `--data-only`. The game page has a Donnees tab (dsstudio/data.py: every data symbol, matched or
   not, its bytes and an exact C declaration).

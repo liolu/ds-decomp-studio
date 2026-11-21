@@ -61,6 +61,7 @@ RULES (violations make the match rejected):
   `build/hunt/agents/*.c` (or your round dir), the journals `build/hunt/techlog/NAME.md` of YOUR functions (through
   techlog.py / protorun.py only) and NEW files in `studio/gametools/prototypes/`: parallel writes corrupt shared state.
 - Before a match counts, run `python ../../studio/gametools/relcheck.py NAME FILE.c PROFILE` (judge masks the literal pool).
+- `judge` adds a code-rules verdict (`rules.status`) to every MATCH: report it, do not chase it (cleanup is a separate pass).
 - Never use leaked SDK source.
 
 Near-miss fixes found in r27: re-judge 1.2/sp3, 1.2/sp2p3 AND 2.0/sp1p5 first (the header profile was wrong for 3 of 6
@@ -74,6 +75,7 @@ Struct by value (r28, ov004 fixed-point family): `push {r0,r1,r2,r3}` + `add sp,
 from the stack (`ldr r2,[sp,#4]`) = a one-word struct passed by value, not varargs: `typedef struct { int v; } Fx;
 void f(O *o, Fx v) { o->f = v.v; }`. A call `add r0,sp,#N; bl g` then `ldr [sp+N]` = out pointer `void g(Fx *ret, Fx a)`.
 
-Final answer (short): for each function `NAME: MATCH <profile>` (file written) or `NAME: no (best N diffs, what blocks)`,
+Final answer (short): for each function `NAME: MATCH <profile>` (file written), `NAME: MATCH <profile> PENDING <rules>`
+or `NAME: no (best N diffs, what blocks)`,
 plus the new technique ids / prototypes you created (the orchestrator adds them to TECHNIQUES.md).
 ---

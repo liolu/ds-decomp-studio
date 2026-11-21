@@ -207,5 +207,9 @@ arrêter les tâches). Git Bash est nécessaire pour lancer les tâches sous Win
   `.nds`, `.bin`, `extract/`, `build/`… ou des fichiers de plus de 20 Mo.
 - Ne jamais utiliser de code source fuité. Salle blanche : le binaire et les projets publics seulement.
 - Aucun commit sans `VERIFY PASSED`. Formater avec `pre-commit run clang-format` avant (le CI des jeux le vérifie, `.studio/` est exclu).
+- Des octets identiques ne suffisent pas : une fonction ne compte comme matchée que si sa source passe aussi les
+  règles [match] de [CODE-RULES.md](CODE-RULES.md) (pas d'accès par offset, pas de `extern` hors des headers, pas de
+  faux code, pas de corps en `asm`). Sinon elle est `MATCH-PENDING` : gardée, signalée, pas comptée.
+  `python studio.py rules <jeu> --pending` donne la liste ; le profil du projet est dans [AGENTS.md](AGENTS.md).
 
 Licence : CC0-1.0.

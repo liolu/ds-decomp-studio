@@ -134,6 +134,7 @@ How mwccarm decides the code (use it to choose what to change):
 Forbidden, refused without compiling (fake matches): asm in any form, new #define/#pragma/#include/#if lines, ##,
 _Pragma, __declspec, __attribute__, machine code written as numbers. volatile only for hardware registers
 (0x04xxxxxx); no empty statements or do {} while (0) that only exist to move the score.
+A byte match may be judged MATCH-PENDING under the code rules: it is kept; that verdict is reported, do not chase it.
 """
 # One request gives several tries: the prompt is read once (qwen3.5 serves one request at a time), the candidates
 # are compiled in parallel.

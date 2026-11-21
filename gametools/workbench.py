@@ -15,6 +15,10 @@ C editor. Every command prints one JSON object.
 
 Matches are judged like auto_match does (bl targets and literal pool words masked), with the fake-match gate
 (fakematch.py): asm, preprocessor tricks and sections are refused unless the target is assembly-only code.
+A byte match also carries `rules` (coderules.py, CODE-RULES.md): `MATCH-PENDING` with the [match] rules that fire
+(offset casts, externs outside a header, fake code, an asm body) means the bytes are right and the source is not
+finished. It is still submitted (the bytes win), reported in `pending` and in the commit message, and not counted
+as matched under the rules by `match.py progress`. `CODERULES_STRICT=1` makes `submit` refuse it instead.
 `submit` is quick (one ninja build: the ROM must stay byte-identical); the full `match.py verify` (objdiff on every
 file, minutes on a big game) runs once for all submitted matches in `commit`, which drops the files it rejects.
 Only ARM functions of the main module are handled, like auto_match.
@@ -40,6 +44,7 @@ import probe_compiler as pc  # noqa: E402
 import missdb  # noqa: E402
 import auto_match as am  # noqa: E402
 from fakematch import fake_match  # noqa: E402
+import coderules  # noqa: E402
 from pipeline_lock import journal_begin, journal_created, journal_end, pipeline_lock  # noqa: E402
 
 WORK = ROOT / "build" / "workbench"
@@ -464,6 +469,8 @@ def judge(name: str, source: str, profile: str | None = None) -> dict:
             best = r
         if best["match"]:
             break
+    if best and best["match"]:  # identical bytes alone are not a match: which [match] rules still fire
+        best["rules"] = coderules.check_function(source, name, asm_allowed())
     return best
 
 
@@ -498,6 +505,10 @@ def cmd_submit(a) -> None:
     r = judge(a.name, source, a.profile)
     if not r["match"]:
         return out({"ok": False, "error": "not a match", "judge": r})
+    rules = r.get("rules") or {"status": coderules.OK, "rules": [], "blocking": []}
+    if rules["status"] == coderules.PENDING and os.environ.get("CODERULES_STRICT"):
+        return out({"ok": False, "error": "MATCH-PENDING: the bytes match, the source breaks the code rules "
+                                          "(CODERULES_STRICT is set)", "rules": rules})
     if r["profile"] != f"{am.COMPILERS[0][0]} {am.COMPILERS[0][1]}".strip() and not source.startswith(am.MARKER):
         source = f"{am.MARKER}{r['profile']} */\n" + source
     import find_culprits
@@ -525,11 +536,13 @@ def cmd_submit(a) -> None:
         journal_end()
     pend = load_pending()
     pend.append({"name": f["name"], "file": created[0].relative_to(ROOT).as_posix(), "who": a.who,
-                 "time": time.strftime("%Y-%m-%d %H:%M")})
+                 "time": time.strftime("%Y-%m-%d %H:%M"), "rules": rules["rules"]})
     save_pending(pend)
     out({"ok": True, "file": created[0].relative_to(ROOT).as_posix(), "profile": r["profile"],
-         "build_seconds": round(time.time() - t0, 1), "pending": len(pend),
-         "next": "ROM byte-identical. `commit` runs the full verify once for all pending matches."})
+         "build_seconds": round(time.time() - t0, 1), "pending": len(pend), "rules": rules,
+         "next": "ROM byte-identical. `commit` runs the full verify once for all pending matches."
+                 + (" MATCH-PENDING under the code rules: report it, the cleanup pass takes it from there."
+                    if rules["status"] == coderules.PENDING else "")})
 
 
 def cmd_submit_many(a) -> None:
@@ -696,7 +709,10 @@ def cmd_commit(a) -> None:
         names = [p["name"] for p in pend]
         if names:
             who = ", ".join(sorted({p.get("who") or "workbench" for p in pend}))
+            held = [f"{p['name']} ({', '.join(p['rules'])})" for p in pend if p.get("rules")]
             msg = f"Match {len(names)} function(s) ({who})\n\n" + "\n".join(names) + "\n"
+            if held:  # byte-identical, not yet a match under the code rules (CODE-RULES.md)
+                msg += f"\nMATCH-PENDING ({len(held)}):\n" + "\n".join(held) + "\n"
             import gitcommit  # only these paths: in All-nds-decomp-games other games share the index
             ok, err = gitcommit.commit_paths(ROOT, paths, msg)
             if err:

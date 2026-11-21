@@ -1,5 +1,9 @@
 """Fake matches: code that gets the target's bytes without being C that compiles to them.
 
+This gate refuses, before compiling, what can never be source (R18 and the preprocessor side of R17 in
+CODE-RULES.md). What compiles and matches is then judged by coderules.py: steering code, offset casts and scattered
+declarations make a byte-identical function MATCH-PENDING instead of matched.
+
     from fakematch import fake_match
     why = fake_match(candidate, starting_file)   # None when the candidate is plain C
 
