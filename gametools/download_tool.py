@@ -23,6 +23,10 @@ args = parser.parse_args()
 def dsd_url(tag: str) -> str:
     return f'https://github.com/AetiasHax/ds-decomp/releases/download/{tag}/dsd-{platform.system}-{platform.machine}{platform.exe}'
 
+def dsd_dsi_url(tag: str) -> str:
+    # Fork of ds-decomp with DSi-enhanced (SDK 5) ROM support: games whose game.toml says dsd = "dsi-enhanced"
+    return f'https://github.com/liolu/ds-decomp/releases/download/{tag}/dsd-{platform.system}-{platform.machine}{platform.exe}'
+
 def mwccarm_url(tag: str) -> str:
     return 'http://decomp.aetias.com/files/mwccarm.zip'
 
@@ -38,6 +42,7 @@ def sjiswrap_url(tag: str) -> str:
 
 TOOLS = {
     "dsd": dsd_url,
+    "dsd-dsi": dsd_dsi_url,
     "mwccarm": mwccarm_url,
     "wibo": wibo_url,
     "objdiff": objdiff_url,

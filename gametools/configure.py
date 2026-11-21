@@ -31,7 +31,7 @@ _ROOT = _UP if (_UP / "config").is_dir() else Path.cwd().resolve()
 TOOLS_DIR = Path(__file__).resolve().parent
 TOOLS_REL = Path(os.path.relpath(TOOLS_DIR, _ROOT)).as_posix()  # "tools", or "../../../tools" in All-nds-decomp-games
 if args.dsd is None and (_ROOT / "dsd-dsi.exe").exists():
-    # dsd built with DSi-enhanced ROM support (decomp ds/_src/ds-decomp, branch dsi-enhanced) until it is released
+    # A dsd built by hand from the fork (github.com/liolu/ds-decomp, branch dsi-enhanced) wins over any download
     args.dsd = os.path.join(".", "dsd-dsi.exe")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import reloc_fixes  # per-game fix of false pointers: does nothing without config/<version>/reloc_fixes.txt
@@ -56,6 +56,11 @@ def _game_name() -> str:
 # Config
 GAME = GAME_CFG.get("game") or _game_name()
 DSD_VERSION = 'v0.12.1'
+# game.toml: dsd = "dsi-enhanced" -> the dsd fork with DSi-enhanced (SDK 5) ROM support and init/delink fixes
+# (github.com/liolu/ds-decomp, branch dsi-enhanced), downloaded from its releases into the same ./dsd file
+DSD_DSI_VERSION = 'v0.12.1-dsi.1'
+DSD_TOOL = "dsd-dsi" if GAME_CFG.get("dsd") == "dsi-enhanced" else "dsd"
+DSD_WANTED = DSD_DSI_VERSION if DSD_TOOL == "dsd-dsi" else DSD_VERSION
 WIBO_VERSION = '1.2.0' if sys.platform == 'darwin' else '0.6.16'
 SJISWRAP_VERSION = 'v1.2.2'
 OBJDIFF_VERSION = 'v3.8.2'
@@ -250,11 +255,16 @@ def check_can_run_dsd() -> bool:
         if not version.startswith("v"):
             version = "v" + version
 
-        # If it's not the correct version, Ninja will download it and then rerun this script
-        return version == DSD_VERSION or args.dsd is not None
+        if version == DSD_WANTED or args.dsd is not None:
+            return True
+        # A dsd downloaded for another version (or the released dsd in a game that needs the fork): Ninja only
+        # downloads a missing file, so remove it; Ninja then downloads the right one and reruns this script
+        print(f"{DSD} is {version}, this game needs {DSD_TOOL} {DSD_WANTED}: downloading it")
+        os.remove(DSD)
+        return False
     except subprocess.CalledProcessError:
         return False
-    except FileNotFoundError:
+    except (FileNotFoundError, PermissionError):
         return False
 
 
@@ -440,8 +450,8 @@ def add_download_tool_builds(n: ninja_syntax.Writer, project: Project):
             rule="download_tool",
             outputs=DSD,
             variables={
-                "tool": "dsd",
-                "tag": DSD_VERSION,
+                "tool": DSD_TOOL,
+                "tag": DSD_WANTED,
                 "path": DSD,
             },
         )

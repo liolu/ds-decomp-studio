@@ -18,6 +18,10 @@ After the build:
   - the cartridge size: dsd picks the smallest chip, the original may be bigger and padded with 0xFF;
   - the recorded secure-area CRC, when no BIOS was supplied and the secure area
     is unchanged. dsd otherwise writes zero; the header CRC is then recomputed.
+  - DSi-enhanced ROMs without a BIOS (arm7_bios.bin): dsd needs the BIOS Blowfish key to encrypt the ARM9 secure
+    area, which some DSi hashes cover. It gets a placeholder key, then each value computed from the encrypted secure
+    area takes the base ROM's value back, only when what that value covers is byte-identical to the base ROM
+    (dsi_no_bios_fix). A changed ARM9 or secure area keeps the placeholder's values: the build says so.
 """
 import re
 import struct
@@ -174,6 +178,92 @@ def secure_area_crc_fix(orig: bytes, rom: bytearray) -> bool:
     return True
 
 
+HASH = 0x14                 # SHA1-HMAC
+DSI_HMAC_ARM9_SA = 0x300    # header: SHA1-HMAC of the ARM9 with its secure area encrypted
+DSI_HMAC_DIGEST = 0x328     # header: SHA1-HMAC of the digest block hashtable
+SECURE_AREA = 0x4000        # encrypted secure area: the first 16 KB of the ARM9 (only 2 KB really change)
+
+
+def is_dsi(header: bytes) -> bool:
+    """DSi-enhanced or DSi-only ROM (unit code)."""
+    return len(header) > 0x12 and bool(header[0x12] & 0x02)
+
+
+def dsi_no_bios_fix(orig: bytes, rom: bytearray, arm9i_unchanged: bool) -> list[str]:
+    """DSi ROM built with a placeholder Blowfish key: the values computed from the encrypted secure area are wrong.
+    Each one takes the base ROM's value back, only when everything it covers is byte-identical to the base ROM (so
+    the real key would give that value too). Returns what was restored."""
+    if not (is_dsi(orig) and is_dsi(rom)) or min(len(orig), len(rom)) < 0x8000:
+        return []
+    # Same game code, ARM9 place and size, DSi program/digest/modcrypt tables (0x1c0-0x230)
+    if orig[0x0c:0x10] != rom[0x0c:0x10] or orig[0x20:0x30] != rom[0x20:0x30] or orig[0x1c0:0x230] != rom[0x1c0:0x230]:
+        return []
+    arm9_off, arm9_size = u32(rom, 0x20), u32(rom, 0x2c)
+    if arm9_size < SECURE_AREA or orig[arm9_off:arm9_off + SECURE_AREA] != rom[arm9_off:arm9_off + SECURE_AREA]:
+        return []
+    done = []
+
+    def restore(start: int, size: int) -> bool:
+        if rom[start:start + size] == orig[start:start + size]:
+            return False
+        rom[start:start + size] = orig[start:start + size]
+        return True
+
+    if restore(0x6c, 2):  # NTR secure-area CRC: CRC16 of the encrypted secure area
+        done.append("secure-area CRC")
+    if orig[arm9_off:arm9_off + arm9_size] == rom[arm9_off:arm9_off + arm9_size] and restore(DSI_HMAC_ARM9_SA, HASH):
+        done.append("ARM9 SHA1-HMAC")
+    # Digest: one hash per sector (the secure area's sectors are hashed encrypted), one per block of sectors, then
+    # the master hash of the block hashtable
+    ds_off = u32(rom, 0x1e0)
+    sht_off, sht_size, bht_off, bht_size = u32(rom, 0x1f0), u32(rom, 0x1f4), u32(rom, 0x1f8), u32(rom, 0x1fc)
+    sector_size, per_block = u32(rom, 0x200), u32(rom, 0x204)
+    if sector_size and per_block and sht_size and bht_size and ds_off <= arm9_off:
+        n = 0
+        for s in range((arm9_off - ds_off) // sector_size, (arm9_off + SECURE_AREA - 1 - ds_off) // sector_size + 1):
+            sector = ds_off + s * sector_size
+            if orig[sector:sector + sector_size] == rom[sector:sector + sector_size]:
+                n += restore(sht_off + s * HASH, HASH)
+        if n:
+            done.append(f"{n} digest sector hash(es)")
+        n = 0
+        for b in range(bht_size // HASH):
+            hashes = slice(sht_off + b * per_block * HASH, min(sht_off + (b + 1) * per_block * HASH, sht_off + sht_size))
+            if orig[hashes] == rom[hashes]:
+                n += restore(bht_off + b * HASH, HASH)
+        if n:
+            done.append(f"{n} digest block hash(es)")
+        if orig[bht_off:bht_off + bht_size] == rom[bht_off:bht_off + bht_size] and restore(DSI_HMAC_DIGEST, HASH):
+            done.append("digest master hash")
+    # Modcrypt area 1 (ARM9i): AES-CTR whose counter is the ARM9 SHA1-HMAC above. Same counter + same ARM9i as the
+    # one extracted from the base ROM = the base ROM's bytes
+    m_off, m_size = u32(rom, 0x220), u32(rom, 0x224)
+    if m_size and arm9i_unchanged and orig[DSI_HMAC_ARM9_SA:DSI_HMAC_ARM9_SA + HASH] == rom[DSI_HMAC_ARM9_SA:DSI_HMAC_ARM9_SA + HASH]:
+        if restore(m_off, m_size):
+            done.append("ARM9i modcrypt area")
+    if done:
+        struct.pack_into("<H", rom, 0x15e, _common.crc16(rom[:0x15e]))
+    return done
+
+
+def dsi_key_fields_differ(orig: bytes, rom: bytes) -> bool:
+    """Whether a value that needs the real Blowfish key still differs from the base ROM (after dsi_no_bios_fix)."""
+    if min(len(orig), len(rom)) < 0x8000:
+        return True
+    spans = [(0x6c, 2), (DSI_HMAC_ARM9_SA, HASH), (DSI_HMAC_DIGEST, HASH), (u32(rom, 0x220), u32(rom, 0x224))]
+    return any(orig[a:a + n] != rom[a:a + n] for a, n in spans)
+
+
+def arm9i_unchanged(config: Path) -> bool:
+    """The ARM9i the build used is the one extracted from the base ROM (build/<version>/build/rom_config.yaml)."""
+    m = re.search(r"^  arm9i_bin: (\S+)", config.read_text(encoding="utf-8"), re.M)
+    extracted = ROOT / "extract" / config.parent.parent.name / "dsi" / "arm9i.bin"
+    if not m or not extracted.exists():
+        return False
+    used = config.parent / m.group(1)
+    return used.exists() and used.read_bytes() == extracted.read_bytes()
+
+
 def capacity_fix(orig: bytes, rom: bytearray) -> bool:
     """dsd picks the smallest cartridge that holds the files (header byte 0x14) and writes no padding after them;
     Nintendo's tool may have chosen a bigger chip and filled the rest with 0xFF (Sudokumaniacs: 8 MB, dsd 4 MB).
@@ -190,15 +280,28 @@ def capacity_fix(orig: bytes, rom: bytearray) -> bool:
 
 def main():
     cmd = sys.argv[1:]
+    config = None
     if "--config" in cmd:
         i = cmd.index("--config") + 1
-        cmd[i] = str(dsprot_config(Path(cmd[i])))
+        config = Path(cmd[i])
+        cmd[i] = str(dsprot_config(config))
+    has_bios = any(arg == "--arm7-bios" or arg.startswith("--arm7-bios=") or arg.startswith("-7") for arg in cmd)
+    base = next((ROOT / "extract").glob("baserom*.nds"), None)
+    placeholder_key = False
+    if not has_bios and base is not None and config is not None and "--rom" in cmd:
+        with base.open("rb") as f:
+            if is_dsi(f.read(0x200)):
+                # A DSi ROM cannot be built without a Blowfish key: a placeholder one, fixed after the build
+                key = config.parent / "placeholder_arm7_bios.bin"
+                if not key.exists():
+                    key.write_bytes(bytes(0x4000))
+                cmd += ["--arm7-bios", str(key)]
+                placeholder_key = True
     r = subprocess.run(cmd)
     if r.returncode:
         sys.exit(r.returncode)
     if "--rom" in cmd:
         rom_path = Path(cmd[cmd.index("--rom") + 1])
-        base = next((ROOT / "extract").glob("baserom*.nds"), None)
         if base is not None and rom_path.exists():
             rom, orig = bytearray(rom_path.read_bytes()), base.read_bytes()
             n = banner_fix.fix(orig, rom)
@@ -207,15 +310,20 @@ def main():
             e = empty_files_fix(orig, rom)
             if e:
                 print(f"rom_build: {e} empty files given their original address back")
-            has_bios = any(arg == "--arm7-bios" or arg.startswith("--arm7-bios=") or arg.startswith("-7")
-                           for arg in cmd)
-            c = not has_bios and secure_area_crc_fix(orig, rom)
+            c = not has_bios and not placeholder_key and secure_area_crc_fix(orig, rom)
             if c:
                 print("rom_build: preserved recorded secure-area CRC for unchanged secure area; recomputed header CRC")
+            d = placeholder_key and dsi_no_bios_fix(orig, rom, arm9i_unchanged(config))
+            if d:
+                print(f"rom_build: DSi ROM without arm7_bios.bin: {', '.join(d)} of the base ROM kept (unchanged "
+                      "secure area / ARM9 / ARM9i); recomputed header CRC")
+            if placeholder_key and dsi_key_fields_differ(orig, rom):
+                print("rom_build: WARNING: DSi ROM built without arm7_bios.bin and its secure area or ARM9 changed: "
+                      "the hashes that need the BIOS key are wrong. Put your ARM7 BIOS in arm7_bios.bin to get them.")
             p = capacity_fix(orig, rom)
             if p:
                 print(f"rom_build: cartridge size and 0xFF padding of the original kept ({len(orig) >> 20} MB)")
-            if n > 0 or e or c or p:
+            if n > 0 or e or c or d or p:
                 rom_path.write_bytes(rom)
 
 
