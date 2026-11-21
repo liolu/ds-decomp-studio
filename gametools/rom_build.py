@@ -10,18 +10,24 @@ compressed overlay changes size and the whole ROM after it moves. When the linke
 one (its code was not changed), dsd gets the original encrypted bytes instead (taken from extract/baserom_*.nds)
 with the protection removed from its config: nothing left to encrypt, same bytes as the original. A changed
 overlay is left to dsd.
+Also before the build: the file alignment, when dsd's extracted config gives a smaller one than the base ROM's files
+show (file_alignment_config).
 
 After the build:
   - the banner icon (banner_fix.py: palettes with the same colour twice);
   - empty files: Nintendo's tool gave them another address than dsd does (Tom and Jerry Tales: structor3/adf/...).
     They hold no data, so their FAT entry takes the original address back;
+  - a header title padded with spaces, which dsd's header.yaml loses (title_fix);
   - the cartridge size: dsd picks the smallest chip, the original may be bigger and padded with 0xFF;
+  - the bytes outside every ROM structure (gaps, end of the ROM): dsd writes its padding byte there, the original
+    may hold another one or mastering leftovers. Same ROM layout only (unused_areas_fix);
   - the recorded secure-area CRC, when no BIOS was supplied and the secure area
     is unchanged. dsd otherwise writes zero; the header CRC is then recomputed.
   - DSi-enhanced ROMs without a BIOS (arm7_bios.bin): dsd needs the BIOS Blowfish key to encrypt the ARM9 secure
     area, which some DSi hashes cover. It gets a placeholder key, then each value computed from the encrypted secure
     area takes the base ROM's value back, only when what that value covers is byte-identical to the base ROM
-    (dsi_no_bios_fix). A changed ARM9 or secure area keeps the placeholder's values: the build says so.
+    (dsi_no_bios_fix). A changed ARM9 or secure area keeps the placeholder's values: the build says so. The same
+    rule restores the digest hashes of the sectors unused_areas_fix took back, and the ARM9i/ARM7i SHA1-HMACs.
 """
 import re
 import struct
@@ -139,6 +145,45 @@ def dsprot_config(config: Path) -> Path:
     return new_cfg
 
 
+def file_alignment_config(config: Path) -> Path:
+    """dsd's ROM config (from `dsd rom extract`) may give the files a smaller alignment than the original ROM used
+    (Higurashi no Naku Koro ni Kizuna 3: dsd 4, every file of the original on 32 bytes): then every file moves. When
+    the base ROM's files (overlays left out), in address order, are not where `alignment: file` puts them but are
+    exactly where a bigger alignment puts them, the config given to dsd gets that one. Returns the config to use."""
+    base = next((ROOT / "extract").glob("baserom*.nds"), None)
+    text = config.read_text(encoding="utf-8")
+    m = re.search(r"(?m)^alignment:\r?\n(?:[ \t]+.*\r?\n)*?[ \t]+file: (\d+)[ \t]*\r?$", text)
+    if base is None or not m:
+        return config
+    with base.open("rb") as f:
+        hdr = f.read(0x200)
+        if len(hdr) < 0x200:
+            return config
+        f.seek(u32(hdr, 0x48))
+        fat = f.read(u32(hdr, 0x4C))
+        overlay_files = set()
+        for o in (0x50, 0x58):
+            f.seek(u32(hdr, o))
+            table = f.read(u32(hdr, o + 4))
+            overlay_files |= {u32(table, i + 24) for i in range(0, len(table) - 31, 32)}
+    files = sorted((u32(fat, 8 * i), u32(fat, 8 * i + 4)) for i in range(len(fat) // 8)
+                   if i not in overlay_files and u32(fat, 8 * i + 4) > u32(fat, 8 * i))
+
+    def fits(align: int) -> bool:  # each file where `align` puts it after the previous one
+        return all(start == -(-end // align) * align for (_, end), (start, _) in zip(files, files[1:]))
+
+    current = int(m.group(1))
+    if len(files) < 2 or fits(current):
+        return config
+    align = next((a for a in (8, 16, 32, 64, 128, 256, 512) if a > current and fits(a)), None)
+    if align is None:
+        return config
+    new = config.with_name(config.stem + ".align.yaml")
+    new.write_text(text[:m.start(1)] + str(align) + text[m.end(1):], encoding="utf-8", newline="")
+    print(f"rom_build: files aligned on {align} bytes as in the base ROM (dsd's config: {current})")
+    return new
+
+
 def empty_files_fix(orig: bytes, rom: bytearray) -> int:
     """FAT entries of empty files (start == end in both ROMs) set to the original address."""
     fo, fn = u32(orig, 0x48), u32(rom, 0x48)
@@ -152,6 +197,74 @@ def empty_files_fix(orig: bytes, rom: bytearray) -> int:
             struct.pack_into("<II", rom, fn + i * 8, so, eo)
             n += 1
     return n
+
+
+def title_fix(orig: bytes, rom: bytearray) -> bool:
+    """A header title padded with spaces in the original ("PVZ        ", Plants vs Zombies EU): dsd's header.yaml
+    loses the trailing spaces and the title gets zeros instead. Same text = the original title back."""
+    if min(len(orig), len(rom)) < 0x200 or orig[:12] == rom[:12]:
+        return False
+    title = orig[:12].rstrip(b"\0")
+    if title.rstrip(b" ") == title or bytes(rom[:12]) != title.rstrip(b" ").ljust(12, b"\0"):
+        return False
+    rom[:12] = orig[:12]
+    struct.pack_into("<H", rom, 0x15e, _common.crc16(rom[:0x15e]))
+    return True
+
+
+BANNER_SIZES = {1: 0x840, 2: 0x940, 3: 0xA40, 0x103: 0x23C0}
+NITROCODE = 0xDEC00621
+
+
+def rom_structures(rom: bytes) -> list[tuple[int, int]]:
+    """(start, end) of everything the ROM holds: header (up to the ARM9), ARM9 (+ its nitrocode footer), ARM7, file
+    name and allocation tables, overlay tables, banner, files (overlays included), and for a DSi ROM the ARM9i, the
+    ARM7i and the digest hash tables."""
+    spans = [(0, max(0x200, min(u32(rom, 0x20), 0x4000)))]
+    arm9_off, arm9_size = u32(rom, 0x20), u32(rom, 0x2C)
+    footer = arm9_off + arm9_size
+    spans.append((arm9_off, footer + (12 if footer + 4 <= len(rom) and u32(rom, footer) == NITROCODE else 0)))
+    spans.append((u32(rom, 0x30), u32(rom, 0x30) + u32(rom, 0x3C)))
+    for o in (0x40, 0x48, 0x50, 0x58):
+        spans.append((u32(rom, o), u32(rom, o) + u32(rom, o + 4)))
+    banner = u32(rom, 0x68)
+    if banner and banner + 2 <= len(rom):
+        spans.append((banner, banner + BANNER_SIZES.get(struct.unpack_from("<H", rom, banner)[0], 0x840)))
+    fat = u32(rom, 0x48)
+    for i in range(u32(rom, 0x4C) // 8):
+        spans.append((u32(rom, fat + 8 * i), u32(rom, fat + 8 * i + 4)))
+    if is_dsi(rom):
+        for o in (0x1C0, 0x1D0):
+            spans.append((u32(rom, o), u32(rom, o) + u32(rom, o + 0xC)))
+        for o in (0x1F0, 0x1F8):
+            spans.append((u32(rom, o), u32(rom, o) + u32(rom, o + 4)))
+    return sorted((s, e) for s, e in spans if e > s)
+
+
+def unused_areas_fix(orig: bytes, rom: bytearray) -> tuple[int, int]:
+    """Bytes outside every ROM structure (rom_structures: the gaps between them and the end of the ROM) take the
+    base ROM's value back. dsd fills them with one padding byte; the original may hold another one (Harry Potter and
+    the Goblet of Fire: 0x00 between the overlay table and the first overlay, dsd 0xFF) or leftovers of the
+    mastering tool (Pokemon + Nobunaga no Yabou: ~106 MB after the DSi area, the gaps after the ARM9i and the ARM7i).
+    Only when both ROMs have the same size and the same structures at the same places (header offsets, FAT and DSi
+    tables): no code or data can be hidden. Returns (gaps, bytes) taken back."""
+    if len(orig) != len(rom) or len(rom) < 0x8000:
+        return 0, 0
+    if orig[0x20:0x60] != rom[0x20:0x60] or orig[0x68:0x6C] != rom[0x68:0x6C] or is_dsi(orig) != is_dsi(rom):
+        return 0, 0
+    if is_dsi(rom) and orig[0x1C0:0x230] != rom[0x1C0:0x230]:
+        return 0, 0
+    fat, fat_size = u32(rom, 0x48), u32(rom, 0x4C)
+    if orig[fat:fat + fat_size] != rom[fat:fat + fat_size]:
+        return 0, 0
+    gaps = size = pos = 0
+    for s, e in rom_structures(rom) + [(len(rom), len(rom))]:
+        s = min(s, len(rom))
+        if s > pos and rom[pos:s] != orig[pos:s]:
+            rom[pos:s] = orig[pos:s]
+            gaps, size = gaps + 1, size + s - pos
+        pos = max(pos, e)
+    return gaps, size
 
 
 def secure_area_crc_fix(orig: bytes, rom: bytearray) -> bool:
@@ -180,7 +293,10 @@ def secure_area_crc_fix(orig: bytes, rom: bytearray) -> bool:
 
 HASH = 0x14                 # SHA1-HMAC
 DSI_HMAC_ARM9_SA = 0x300    # header: SHA1-HMAC of the ARM9 with its secure area encrypted
+DSI_HMAC_ARM7 = 0x314       # header: SHA1-HMAC of the ARM7
 DSI_HMAC_DIGEST = 0x328     # header: SHA1-HMAC of the digest block hashtable
+DSI_HMAC_ARM9I = 0x350      # header: SHA1-HMAC of the decrypted ARM9i
+DSI_HMAC_ARM7I = 0x364      # header: SHA1-HMAC of the decrypted ARM7i
 SECURE_AREA = 0x4000        # encrypted secure area: the first 16 KB of the ARM9 (only 2 KB really change)
 
 
@@ -213,17 +329,40 @@ def dsi_no_bios_fix(orig: bytes, rom: bytearray, arm9i_unchanged: bool) -> list[
         done.append("secure-area CRC")
     if orig[arm9_off:arm9_off + arm9_size] == rom[arm9_off:arm9_off + arm9_size] and restore(DSI_HMAC_ARM9_SA, HASH):
         done.append("ARM9 SHA1-HMAC")
-    # Digest: one hash per sector (the secure area's sectors are hashed encrypted), one per block of sectors, then
-    # the master hash of the block hashtable
+    # Modcrypt area 1 (ARM9i): AES-CTR whose counter is the ARM9 SHA1-HMAC above. Same counter + same ARM9i as the
+    # one extracted from the base ROM = the base ROM's bytes
+    m_off, m_size = u32(rom, 0x220), u32(rom, 0x224)
+    if m_size and arm9i_unchanged and orig[DSI_HMAC_ARM9_SA:DSI_HMAC_ARM9_SA + HASH] == rom[DSI_HMAC_ARM9_SA:DSI_HMAC_ARM9_SA + HASH]:
+        if restore(m_off, m_size):
+            done.append("ARM9i modcrypt area")
+    # SHA1-HMACs of the decrypted ARM9i and ARM7i: dsd's differ when the original has other bytes than dsd's padding
+    # after them (Pokemon + Nobunaga no Yabou). Base ROM's value when the module up to the end of its last sector and
+    # its modcrypt counter (ARM9 / ARM7 SHA1-HMAC) are byte-identical
+    for name, hdr, mac, counter in (("ARM9i", 0x1c0, DSI_HMAC_ARM9I, DSI_HMAC_ARM9_SA),
+                                    ("ARM7i", 0x1d0, DSI_HMAC_ARM7I, DSI_HMAC_ARM7)):
+        off, size = u32(rom, hdr), u32(rom, hdr + 0xc)
+        end = -(-(off + size) // 0x400) * 0x400
+        if size and orig[off:end] == rom[off:end] and orig[counter:counter + HASH] == rom[counter:counter + HASH]:
+            if restore(mac, HASH):
+                done.append(f"{name} SHA1-HMAC")
+    # Digest, last: it covers all of the above. One hash per sector (the secure area's sectors are hashed encrypted),
+    # one per block of sectors, then the master hash of the block hashtable
     ds_off = u32(rom, 0x1e0)
     sht_off, sht_size, bht_off, bht_size = u32(rom, 0x1f0), u32(rom, 0x1f4), u32(rom, 0x1f8), u32(rom, 0x1fc)
     sector_size, per_block = u32(rom, 0x200), u32(rom, 0x204)
     if sector_size and per_block and sht_size and bht_size and ds_off <= arm9_off:
+        # Every sector, NTR region then TWL region: the secure area's ones, the ARM9i modcrypt area's ones and those
+        # of the areas that unused_areas_fix took back from the base ROM
+        ntr_sectors = u32(rom, 0x1e4) // sector_size
+        twl_off, twl_sectors = u32(rom, 0x1e8), u32(rom, 0x1ec) // sector_size
         n = 0
-        for s in range((arm9_off - ds_off) // sector_size, (arm9_off + SECURE_AREA - 1 - ds_off) // sector_size + 1):
-            sector = ds_off + s * sector_size
+        for s in range(min(sht_size // HASH, ntr_sectors + twl_sectors)):
+            h = sht_off + s * HASH
+            if rom[h:h + HASH] == orig[h:h + HASH]:
+                continue
+            sector = ds_off + s * sector_size if s < ntr_sectors else twl_off + (s - ntr_sectors) * sector_size
             if orig[sector:sector + sector_size] == rom[sector:sector + sector_size]:
-                n += restore(sht_off + s * HASH, HASH)
+                n += restore(h, HASH)
         if n:
             done.append(f"{n} digest sector hash(es)")
         n = 0
@@ -235,12 +374,6 @@ def dsi_no_bios_fix(orig: bytes, rom: bytearray, arm9i_unchanged: bool) -> list[
             done.append(f"{n} digest block hash(es)")
         if orig[bht_off:bht_off + bht_size] == rom[bht_off:bht_off + bht_size] and restore(DSI_HMAC_DIGEST, HASH):
             done.append("digest master hash")
-    # Modcrypt area 1 (ARM9i): AES-CTR whose counter is the ARM9 SHA1-HMAC above. Same counter + same ARM9i as the
-    # one extracted from the base ROM = the base ROM's bytes
-    m_off, m_size = u32(rom, 0x220), u32(rom, 0x224)
-    if m_size and arm9i_unchanged and orig[DSI_HMAC_ARM9_SA:DSI_HMAC_ARM9_SA + HASH] == rom[DSI_HMAC_ARM9_SA:DSI_HMAC_ARM9_SA + HASH]:
-        if restore(m_off, m_size):
-            done.append("ARM9i modcrypt area")
     if done:
         struct.pack_into("<H", rom, 0x15e, _common.crc16(rom[:0x15e]))
     return done
@@ -284,7 +417,7 @@ def main():
     if "--config" in cmd:
         i = cmd.index("--config") + 1
         config = Path(cmd[i])
-        cmd[i] = str(dsprot_config(config))
+        cmd[i] = str(file_alignment_config(dsprot_config(config)))
     has_bios = any(arg == "--arm7-bios" or arg.startswith("--arm7-bios=") or arg.startswith("-7") for arg in cmd)
     base = next((ROOT / "extract").glob("baserom*.nds"), None)
     placeholder_key = False
@@ -310,6 +443,15 @@ def main():
             e = empty_files_fix(orig, rom)
             if e:
                 print(f"rom_build: {e} empty files given their original address back")
+            t = title_fix(orig, rom)
+            if t:
+                print("rom_build: header title padded with spaces as in the original")
+            p = capacity_fix(orig, rom)
+            if p:
+                print(f"rom_build: cartridge size and 0xFF padding of the original kept ({len(orig) >> 20} MB)")
+            gaps, size = unused_areas_fix(orig, rom)
+            if gaps:
+                print(f"rom_build: {gaps} area(s) outside the ROM structures ({size} bytes) taken from the base ROM")
             c = not has_bios and not placeholder_key and secure_area_crc_fix(orig, rom)
             if c:
                 print("rom_build: preserved recorded secure-area CRC for unchanged secure area; recomputed header CRC")
@@ -320,10 +462,7 @@ def main():
             if placeholder_key and dsi_key_fields_differ(orig, rom):
                 print("rom_build: WARNING: DSi ROM built without arm7_bios.bin and its secure area or ARM9 changed: "
                       "the hashes that need the BIOS key are wrong. Put your ARM7 BIOS in arm7_bios.bin to get them.")
-            p = capacity_fix(orig, rom)
-            if p:
-                print(f"rom_build: cartridge size and 0xFF padding of the original kept ({len(orig) >> 20} MB)")
-            if n > 0 or e or c or d or p:
+            if n > 0 or e or t or p or gaps or c or d:
                 rom_path.write_bytes(rom)
 
 
