@@ -57,6 +57,13 @@ void f(int v) {
 """
         self.assertEqual(rules(src), [])
 
+    def test_shared_work_area_volatile(self):
+        """The ARM7 writes the system work area: the SDK reads it through volatile (CARDi_ReadRomIDCore)."""
+        for addr in ("0x027FFE60", "0x27FFC3C", "0x02FFFE60", "0x02fffc00"):
+            src = f"u32 f(void) {{\n    u32 v;\n    v = *(volatile u32 *) {addr};\n    return v;\n}}\n"
+            self.assertEqual(rules(src), [], addr)
+        self.assertEqual(rules("u32 f(void) { return *(volatile u32 *) 0x02001000; }\n"), ["R17"])
+
     def test_evidence_notes(self):
         src = """
 typedef struct {
@@ -166,39 +173,119 @@ class AcrossFiles(unittest.TestCase):
         self.assertEqual(units["src/a.c"]["functions"][0]["status"], cr.OK)
         self.assertEqual([fd["tier"] for fd in units["src/a.c"]["findings"] if fd["rule"] == "R1"], ["advisory"])
 
-    def test_r1_class_struct_mismatch(self):
-        units = cr.check_files({"include/a.h": "class Actor;\n", "include/b.h": "struct Actor { int x; };\n"})
-        self.assertEqual([fd["rule"] for fd in units["include/a.h"]["findings"]], ["R1"])
+    def test_r1_class_struct_mismatch_is_advisory(self):
+        """mwccarm does not put the class key in mangled names (only MSVC does), and a .c file cannot say `class`."""
+        units = cr.check_files({"include/a.h": "class Actor;\n", "include/b.h": "struct Actor { int x; };\n",
+                                "src/c.c": "struct Actor;\nint f(struct Actor *a) { return 0; }\n"})
+        self.assertEqual([(fd["rule"], fd["tier"]) for fd in units["include/a.h"]["findings"]], [("R1", "advisory")])
+        self.assertEqual(units["src/c.c"]["functions"][0]["status"], cr.OK)
+
+    def test_r1_file_local_helper_types_are_advisory(self):
+        """m2c drafts name their own local struct `D`, `Obj`...: unrelated types sharing a placeholder name."""
+        files = {f"src/f{i}.c": f"typedef struct D {{ int a{i}; }} D;\nint f{i}(D *d) {{ return d->a{i}; }}\n"
+                 for i in range(4)}
+        units = cr.check_files(files)
+        self.assertEqual({u["functions"][0]["status"] for u in units.values()}, {cr.OK})
+        self.assertEqual({fd["tier"] for u in units.values() for fd in u["findings"] if fd["rule"] == "R1"},
+                         {"advisory"})
+        # nearly one body per file, whatever the name
+        files = {f"src/g{i}.c": f"typedef struct {{ int b{i}; }} Owner;\nint g{i}(Owner *o) {{ return o->b{i}; }}\n"
+                 for i in range(3)}
+        self.assertEqual({u["functions"][0]["status"] for u in cr.check_files(files).values()}, {cr.OK})
+
+    def test_r1_holds_header_types_and_shared_names(self):
+        local = "typedef struct D { int z; } D;\nint f(D *d) { return d->z; }\n"
+        units = cr.check_files({"include/d.h": "typedef struct D { int a; } D;\n", "src/f.c": local})
+        self.assertEqual(units["src/f.c"]["functions"][0]["rules"], ["R1"])
+        # one real type spelled two ways in many files (Vec3 in Lego: 202 files, 14 bodies) stays R1
+        v1, v2 = "typedef struct { s32 x, y, z; } Vec3;\n", "typedef struct { int x; int y; int z; } Vec3;\n"
+        files = {f"src/v{i}.c": (v1 if i % 3 else v2) + f"int v{i}(Vec3 *v) {{ return v->x; }}\n" for i in range(6)}
+        self.assertEqual({u["functions"][0]["status"] for u in cr.check_files(files).values()}, {cr.PENDING})
 
     def test_r2_two_types(self):
         units = cr.check_files({"include/a.h": "extern int g_frameCount;\n", "include/b.h": "extern long g_frameCount;\n"})
         self.assertEqual([fd["rule"] for fd in units["include/b.h"]["findings"]], ["R2"])
 
+    def test_r2_linkage_string_is_not_part_of_the_type(self):
+        h = 'extern s32 data_02101a64;\n'
+        a = 'extern "C" s32 data_02101a64;\ns32 f(void) { return data_02101a64; }\n'
+        units = cr.check_files({"include/engine.h": h, "src/a.cpp": a})
+        self.assertEqual([fd["what"] for u in units.values() for fd in u["findings"] if "different types" in fd["what"]],
+                         [])
+        self.assertEqual(units["src/a.cpp"]["functions"][0]["rules"], ["R2"])  # still an extern outside a header
+        units = cr.check_files({"include/engine.h": 'extern "C" {\nextern s32 g;\n}\n',
+                                "include/other.h": 'extern "C"   s32 g;\n'})
+        self.assertEqual([fd for u in units.values() for fd in u["findings"]], [])
+
+
+def make_game(root: Path) -> Path:
+    cfg = root / "config" / "eu"
+    (cfg / "arm9").mkdir(parents=True)
+    (root / "src" / "auto").mkdir(parents=True)
+    (cfg / "arm9" / "symbols.txt").write_text(
+        "clean kind:function(arm,size=0x10) addr:0x02000000\n"
+        "func_02000010 kind:function(arm,size=0x20) addr:0x02000010\n"
+        "OS_GetLockID kind:function(arm,size=0x8) addr:0x02000030\n"
+        "func_02000038 kind:function(arm,size=0x40) addr:0x02000038\n", encoding="utf-8")
+    (cfg / "arm9" / "delinks.txt").write_text(
+        "    .text start:0x02000000 end:0x02000078 kind:code align:4\n\n"
+        "src/auto/clean.c:\n    complete\n    .text start:0x02000000 end:0x02000010\n\n"
+        "src/auto/func_02000010.c:\n    complete\n    .text start:0x02000010 end:0x02000030\n\n"
+        "src/auto/OS_GetLockID.c:\n    complete\n    .text start:0x02000030 end:0x02000038\n", encoding="utf-8")
+    (root / "src" / "auto" / "clean.c").write_text("int clean(int a) { return a; }\n", encoding="utf-8")
+    (root / "src" / "auto" / "func_02000010.c").write_text(
+        "extern int data_02001000;\nint func_02000010(void *p) { return M2C_FIELD(p, int *, 4) + data_02001000; }\n",
+        encoding="utf-8")
+    (root / "src" / "auto" / "OS_GetLockID.c").write_text(
+        "// ASM: pokediamond arm9/lib/NitroSDK/src/OS_spinLock.c\nasm int OS_GetLockID(void) {\n    bx lr\n}\n",
+        encoding="utf-8")
+    return cfg
+
 
 class WholeGame(unittest.TestCase):
+    def test_matched_set_is_objdiffs(self):
+        """With objdiff's report the byte count is the report's: a function matched in a file that is not `complete`
+        yet counts, one the report says differs does not (match.py verify prints the same number)."""
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            cfg = make_game(root)
+            (root / "src" / "auto" / "wip.c").write_text("int func_02000038(int a) { return a + 0; }\n",
+                                                         encoding="utf-8")
+            unit = lambda path, *fns: {"name": "eu/" + path, "metadata": {"source_path": path}, "functions": [  # noqa
+                {"name": n, "size": str(sz), **({"fuzzy_match_percent": p} if p else {})} for n, sz, p in fns]}
+            report = {"measures": {"total_functions": 4, "matched_functions": 3, "total_code": "120"}, "units": [
+                unit("src/auto/clean.c", ("clean", 16, 100.0)),
+                unit("src/auto/func_02000010.c", ("func_02000010", 32, 87.5)),
+                unit("src/auto/wip.c", ("func_02000038", 64, 100.0)),
+                unit("asm/gap_02000030.s", ("OS_GetLockID", 8, 100.0))]}
+            t = cr.project_report(root, cfg, report, cache=False)["totals"]
+            self.assertEqual((t["source"], t["functions"], t["bytes_matched"], t["rules_matched"], t["pending"],
+                              t["no_source"]), ("objdiff", 4, 3, 1, 1, 1))
+            # match.py progress without a fresh objdiff report: config_report has no function lists
+            t = cr.project_report(root, cfg, {"measures": {}, "units": [{"name": "x", "measures": {}}]})["totals"]
+            self.assertEqual((t["source"], t["bytes_matched"]), ("delinks", 3))
+
+    def test_scan_cache(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            cfg = make_game(root)
+            first = cr.project_report(root, cfg)
+            self.assertTrue((root / "build" / "coderules" / cr.CACHE_NAME).is_file())
+            orig = cr.scan
+            try:  # nothing changed: no file is scanned again, same report
+                cr.scan = lambda *a, **k: self.fail("scanned a file the cache holds")
+                self.assertEqual(cr.project_report(root, cfg), first)
+            finally:
+                cr.scan = orig
+            f = root / "src" / "auto" / "func_02000010.c"
+            f.write_text("int func_02000010(int *p) { return p[1]; }\n", encoding="utf-8")
+            t = cr.project_report(root, cfg)["totals"]
+            self.assertEqual((t["rules_matched"], t["pending"]), (2, 0))
+
     def test_both_numbers(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
-            cfg = root / "config" / "eu"
-            (cfg / "arm9").mkdir(parents=True)
-            (root / "src" / "auto").mkdir(parents=True)
-            (cfg / "arm9" / "symbols.txt").write_text(
-                "clean kind:function(arm,size=0x10) addr:0x02000000\n"
-                "func_02000010 kind:function(arm,size=0x20) addr:0x02000010\n"
-                "OS_GetLockID kind:function(arm,size=0x8) addr:0x02000030\n"
-                "func_02000038 kind:function(arm,size=0x40) addr:0x02000038\n", encoding="utf-8")
-            (cfg / "arm9" / "delinks.txt").write_text(
-                "    .text start:0x02000000 end:0x02000078 kind:code align:4\n\n"
-                "src/auto/clean.c:\n    complete\n    .text start:0x02000000 end:0x02000010\n\n"
-                "src/auto/func_02000010.c:\n    complete\n    .text start:0x02000010 end:0x02000030\n\n"
-                "src/auto/OS_GetLockID.c:\n    complete\n    .text start:0x02000030 end:0x02000038\n", encoding="utf-8")
-            (root / "src" / "auto" / "clean.c").write_text("int clean(int a) { return a; }\n", encoding="utf-8")
-            (root / "src" / "auto" / "func_02000010.c").write_text(
-                "extern int data_02001000;\nint func_02000010(void *p) { return M2C_FIELD(p, int *, 4) + data_02001000; }\n",
-                encoding="utf-8")
-            (root / "src" / "auto" / "OS_GetLockID.c").write_text(
-                "// ASM: pokediamond arm9/lib/NitroSDK/src/OS_spinLock.c\nasm int OS_GetLockID(void) {\n    bx lr\n}\n",
-                encoding="utf-8")
+            cfg = make_game(root)
             rep = cr.project_report(root, cfg)
             t = rep["totals"]
             self.assertEqual((t["functions"], t["bytes_matched"], t["rules_matched"], t["pending"], t["original_asm"]),
@@ -206,7 +293,8 @@ class WholeGame(unittest.TestCase):
             self.assertEqual(rep["by_rule"], {"R2": 1, "R4": 1})
             self.assertEqual(rep["pending"], [{"name": "func_02000010", "file": "src/auto/func_02000010.c",
                                                "rules": ["R2", "R4"]}])
-            self.assertIn("2/3 functions matched by bytes, 1/3 matched under the code rules", cr.summary(rep))
+            self.assertIn("1/3 functions matched under the code rules: of the 3 byte-identical ones (the complete "
+                          "files of delinks.txt), 1 MATCH-PENDING (R2 1, R4 1), 1 ORIGINAL-ASM", cr.summary(rep))
             self.assertTrue(cr.write_report(root, rep).is_file())
             self.assertIn('"rules_matched": 1', (root / "build" / "coderules" / "totals.json").read_text())
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Code rules checker: is a byte-identical function also a match under the code rules (CODE-RULES.md)?
 
-    python tools/coderules.py                  # every `complete` file of the game: summary + build/coderules/report.json
+    python tools/coderules.py                  # every matched function of the game: summary + build/coderules/report.json
     python tools/coderules.py --pending        # the MATCH-PENDING functions and the rules that hold them
     python tools/coderules.py --advisory       # also the findings that do not block a match (naming, banners...)
     python tools/coderules.py FILE.c [...]     # only these files (works outside a project)
@@ -9,7 +9,8 @@
 
 Identical bytes alone are not a match. A function counts only when its bytes match AND no [match] rule fires on it:
 
-    R1   one declaration per type        the same type defined in two files with different bodies; class/struct mismatch
+    R1   one declaration per type        the same type defined in two files with different bodies (a draft's file-local
+                                         helper, `typedef struct D {...} D;` in many files, is advisory)
     R2   one declaration per global      `extern` of a global outside a header; one global declared with two types
     R4   typed members, no offsets       M2C_FIELD, `*(T *)((char *)p + K)`, virtual calls through `*(u8 **)p + K`
     R13  real vtables                    virtuals named pad/dummy (slot counts need vtable data: not checked here)
@@ -20,20 +21,27 @@ Identical bytes alone are not a match. A function counts only when its bytes mat
 
 Byte-identical but failing = MATCH-PENDING: reported, not counted. ORIGINAL-ASM (the game's config/asm_allowed.txt, or
 an `// ASM: <public decomp that proves it>` comment at the function) is listed apart and counted neither way.
-Each check is deliberately narrow, so genuine code passes: `volatile` on a 0x04xxxxxx register or with a
-`// volatile: <evidence>` note, a reserved field with a `// reserved: <SDK or file format name>` note, an unused
-local or an odd statement the original really had with a `// R36: <what the bytes show>` note, empty loop bodies,
-`case X: ;`.
+The matched set is objdiff's (build/<version>/report.json, what `match.py verify` prints) when it is up to date, else
+the functions of the `complete` files of delinks.txt. Each file's scan is cached in build/coderules/scan-cache.json
+(size + mtime): a run after a small change rereads only the changed files.
 
-Advisory findings never block a match: placeholder names (R7: func_02001234, data_..., arg0, temp_r4, M2C_UNK),
-prototypes outside a header (R25), functions without a header comment (R33), `#if 0` (R37), assignments inside
+Each check is deliberately narrow, so genuine code passes: `volatile` on a 0x04xxxxxx register, on the shared work
+area the ARM7 writes (0x027FFxxx, 0x02FFFxxx on DSi) or with a `// volatile: <evidence>` note, a reserved field
+with a `// reserved: <SDK or file format name>` note, an unused local or an odd statement the original really had
+with a `// R36: <what the bytes show>` note, empty loop bodies, `case X: ;`.
+
+Advisory findings never block a match: a type declared both `class` and `struct` (R1: mwccarm's mangled names do
+not carry the class key), placeholder names (R7: func_02001234, data_..., arg0, temp_r4, M2C_UNK), prototypes
+outside a header (R25), functions without a header comment (R33), `#if 0` (R37), assignments inside
 conditions (R35), byte-pointer arithmetic that is not dereferenced (R4), `goto` (R14), `!!x`.
 
 Only the standard library, and no project needed at import: workbench.py, match.py and the workers load this file.
 """
 import argparse
 import bisect
+import hashlib
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -50,7 +58,11 @@ PLACEHOLDER = re.compile(
 ADDRESS_LIKE = re.compile(r"\b(?![0-9])[A-Za-z_]*?_?(?=[0-9a-fA-F]*[0-9])[0-9a-fA-F]{6,8}\b")
 # what the studio's own search tools write to steer the compiler (hunt.py: pad-param, call-temp, cmp-hoist)
 PROBE = re.compile(r"\b(?:hunt_\w+|arg_pad|probe_\w+)\b")
-HW_ADDRESS = re.compile(r"\b0x0?4[0-9A-Fa-f]{6}\b|\bREG_\w+\b")  # DS I/O registers: volatile is genuine there
+# volatile is genuine on the DS I/O registers (0x04xxxxxx) and on the main-memory areas the other processor writes:
+# the shared system work area 0x027FFxxx (0x02FFFxxx on DSi), e.g. the card ROM ID the SDK polls at 0x027FFE60
+HW_ADDRESS = re.compile(r"\b0x0?(?:4[0-9A-Fa-f]{6}|2[7Ff][Ff]{2}[0-9A-Fa-f]{3})\b|\bREG_\w+\b")
+# names m2c drafts give a struct only the one file uses: the same name in many files is many unrelated types (R1)
+LOCAL_TYPE_NAME = re.compile(r"[A-Za-z]{1,2}\d*|Obj|Ctx|Self|Tmp|Temp|Local\w*|Anon\w*|Unk\d*")
 PAD_MEMBER = re.compile(r"\b(_?pad(?:ding)?_?(?:[0-9][0-9A-Fa-f]*)?)\s*(?:\[[^\]]*\]\s*)*(?::\s*\d+\s*)?;")
 ASM_EVIDENCE = re.compile(r"//\s*ASM:|ORIGINAL-ASM")
 
@@ -82,6 +94,24 @@ LOCAL_DECL = re.compile(r"^[ \t]+((?:(?:static|const|register|volatile|unsigned|
 _TOKEN = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'', re.S)
 _DIRECTIVE = re.compile(r"^[ \t]*#(?:[^\n\\]|\\.|\\\r?\n)*", re.M)
 _BLANK = re.compile(r"[^\n]")
+_BRACE_OR_SEMI = re.compile(r"[{};]")
+_LINKAGE = re.compile(r'^extern\s*"\s*"\s*(?=[^\s{])')  # `extern "C" s32 x;` (string blanked) -> `extern s32 x;`
+
+
+_BRACE, _PAREN_OR_SEMI = re.compile(r"[{}]"), re.compile(r"[()\[\];]")
+
+
+def _prev_index(text: str, i: int) -> int:
+    """Index of the last non-blank character before text[i] (-1 at the start)."""
+    j = i - 1
+    while j >= 0 and text[j].isspace():
+        j -= 1
+    return j
+
+
+def _prev_char(text: str, i: int) -> str:
+    j = _prev_index(text, i)
+    return text[j] if j >= 0 else ""
 
 
 def _code_view(text: str) -> str:
@@ -131,8 +161,9 @@ def _functions(code: str) -> tuple[list[dict], list[tuple[int, int]]]:
     """Function definitions at file scope ({name, start, body, end, asm}) and the file-scope statements between
     them (start, end). `extern "C" {` and `namespace X {` are looked through."""
     funcs, stmts, stack, cur, start = [], [], [], None, 0
-    for i, c in enumerate(code):
-        blocks = sum(1 for s in stack if s == "B")
+    blocks = 0  # open "B" entries of the stack
+    for mt in _BRACE_OR_SEMI.finditer(code):
+        i, c = mt.start(), mt.group(0)
         if c == "{":
             if blocks == 0:
                 head = code[start:i]
@@ -156,13 +187,15 @@ def _functions(code: str) -> tuple[list[dict], list[tuple[int, int]]]:
                         cur = {"name": nm.group(1), "start": start + lead, "body": i,
                                "asm": bool(re.search(r"\b(?:__)?asm\b", head))}
             stack.append("B")
+            blocks += 1
         elif c == "}":
             if stack:
                 kind = stack.pop()
                 if kind == "T":
                     start = i + 1
                     continue
-            if sum(1 for s in stack if s == "B") == 0:
+                blocks -= 1
+            if blocks == 0:
                 if cur:
                     cur["end"] = i + 1
                     funcs.append(cur)
@@ -215,7 +248,7 @@ def _fake_code(code: str, lines: _Lines, f: dict) -> list[dict]:
     for m in LOCAL_DECL.finditer(body):
         if m.group(1).split()[-1] in NOT_A_TYPE or m.group(1).split()[0] == "static":
             continue
-        if body[:m.start()].rstrip()[-1:] not in (";", "{", "}"):  # the tail of a statement, not a declaration
+        if _prev_char(body, m.start()) not in (";", "{", "}"):  # the tail of a statement, not a declaration
             continue
         for d in m.group(2).split(","):
             v = re.sub(r"\[[^\]]*\]", "", d).strip(" \t*")
@@ -240,28 +273,27 @@ def _fake_code(code: str, lines: _Lines, f: dict) -> list[dict]:
             add(b0 + m.start() + 1, f"{what} only steers the compiler")
     # bare `;` statements (empty loop bodies, `case X: ;` and `label: ;` are allowed)
     paren, opened, block = 0, [], {}
-    for i, c in enumerate(body):
-        if c == "{":
+    for mt in _BRACE.finditer(body):
+        i = mt.start()
+        if body[i] == "{":
             opened.append(i)
-        elif c == "}" and opened:
+        elif opened:
             block[i] = opened.pop()
-    prev = ""
-    prev_i = -1
-    for i, c in enumerate(body):
+    for mt in _PAREN_OR_SEMI.finditer(body):
+        i, c = mt.start(), mt.group(0)
         if c in "([":
             paren += 1
         elif c in ")]":
             paren -= 1
-        elif c == ";" and paren == 0:
+        elif paren == 0:
+            prev_i = _prev_index(body, i)
+            prev = body[prev_i] if prev_i >= 0 else ""
             bare = prev in (";", "{")
             if prev == "}":  # `};` ends an initializer or a type; after a block it is an empty statement
-                o = block.get(prev_i, 0)
-                before = body[:o].rstrip()
-                bare = before[-1:] in (")", "{", ";", "}") or bool(re.search(r"\b(?:else|do)$", before))
+                k = _prev_index(body, block.get(prev_i, 0))
+                bare = (k >= 0 and body[k] in "){;}") or bool(re.search(r"\b(?:else|do)$", body[max(0, k - 7):k + 1]))
             if bare:
                 add(b0 + i, "bare `;` statement")
-        if not c.isspace():
-            prev, prev_i = c, i
     return out
 
 
@@ -349,7 +381,7 @@ def scan(text: str, path: str = "") -> dict:
     findings, externs = [], {}
     defined = {f["name"] for f in funcs}
     for a, b in stmts:
-        s = code[a:b].strip()
+        s = _LINKAGE.sub("extern ", code[a:b].strip())  # the linkage string is not part of the type
         ln = lines.no(a + len(code[a:b]) - len(code[a:b].lstrip()))
         proto = re.match(r"(?:extern\s+)?[\w \t*]+?\b([A-Za-z_]\w*)\s*\([^;{}]*\)\s*;$", s)
         fnptr = re.match(r"extern\s+([\w \t*]+?)\(\s*\*+\s*([A-Za-z_]\w*)\s*\)\s*(\([^;{}]*\))\s*;$", s)
@@ -408,12 +440,23 @@ def scan(text: str, path: str = "") -> dict:
 
 def _settle(unit: dict, original_asm=frozenset()) -> dict:
     """Unit-level findings go to the functions that use what they name; every function gets its status."""
+    users = {}  # word -> names of the functions that use it (one pass, not findings x functions)
+    for f in unit["functions"]:
+        for w in f["words"]:
+            users.setdefault(w, []).append(f["name"])
+    by_function = {}
     for fd in unit["findings"]:
-        fd.setdefault("functions", [fd["function"]] if fd["function"] else
-                      [f["name"] for f in unit["functions"] if set(fd["uses"]) & f["words"]])
+        if "functions" not in fd:
+            if fd["function"]:
+                fd["functions"] = [fd["function"]]
+            else:
+                names = {n for w in fd["uses"] for n in users.get(w, ())}
+                fd["functions"] = [f["name"] for f in unit["functions"] if f["name"] in names]
+        for n in dict.fromkeys(fd["functions"]):
+            by_function.setdefault(n, []).append(fd)
     result = []
     for f in unit["functions"]:
-        mine = [fd for fd in unit["findings"] if f["name"] in fd["functions"]]
+        mine = by_function.get(f["name"], [])
         rules = sorted({fd["rule"] for fd in mine if fd["tier"] == "match"}, key=lambda r: int(r[1:]))
         status = PENDING if rules else OK
         if f["has_asm"] and (f["name"] in original_asm or f["asm_evidence"]):
@@ -446,9 +489,22 @@ def check_function(text: str, name: str, original_asm=frozenset(), limit: int = 
 
 
 def check_files(files: dict[str, str], original_asm=frozenset()) -> dict[str, dict]:
-    """{path: text} judged together: R1 (one type, two bodies; class/struct mismatch) and R2 (one global, two types)
-    are found across the files. Returns {path: settled unit}."""
-    units = {p: scan(t, p) for p, t in files.items()}
+    """{path: text} judged together: R1 (one type, two bodies) and R2 (one global, two types) are found across the
+    files. Returns {path: settled unit}."""
+    return _check_units({p: scan(t, p) for p, t in files.items()}, original_asm)
+
+
+def _local_helper_type(name: str, bodies: dict, units: dict) -> bool:
+    """A name m2c drafts give a struct only their own file uses (`typedef struct D {...} D;` in 180 files with 180
+    bodies): unrelated types that share a placeholder name, not one type declared twice. Never when a header
+    defines it; else a placeholder-like name, or a name nearly every file defines its own way."""
+    files = [p for ps in bodies.values() for p in ps]
+    if any(units[p]["header"] for p in files):
+        return False
+    return bool(LOCAL_TYPE_NAME.fullmatch(name)) or (len(files) >= 3 and 2 * len(bodies) >= len(files))
+
+
+def _check_units(units: dict[str, dict], original_asm=frozenset()) -> dict[str, dict]:
     types, keywords, globals_ = {}, {}, {}
     for p, u in units.items():
         for n, body in u["types"].items():
@@ -461,10 +517,16 @@ def check_files(files: dict[str, str], original_asm=frozenset()) -> dict[str, di
     for n, bodies in types.items():
         if len(bodies) > 1:
             where = sorted({p for ps in bodies.values() for p in ps})
+            listed = f"{', '.join(where[:3])}{'...' if len(where) > 3 else ''}"
+            if _local_helper_type(n, bodies, units):
+                for p in where:
+                    units[p]["findings"].append(_advice(
+                        "R1", 1, f"`{n}` names {len(bodies)} different file-local types ({listed}): a draft's "
+                        "placeholder; name each after what it is, or share it from a header if it is one type"))
+                continue
             for p in where:
                 units[p]["findings"].append(_finding("R1", 1, f"type `{n}` has {len(bodies)} different definitions "
-                                                     f"({', '.join(where[:3])}{'...' if len(where) > 3 else ''}): "
-                                                     "declare it once in a shared header", uses=(n,)))
+                                                     f"({listed}): declare it once in a shared header", uses=(n,)))
         else:
             ps = [p for p in next(iter(bodies.values())) if not units[p]["header"]]
             if len(ps) > 1:
@@ -472,10 +534,10 @@ def check_files(files: dict[str, str], original_asm=frozenset()) -> dict[str, di
                     units[p]["findings"].append(_advice("R1", 1, f"type `{n}` is defined in {len(ps)} units: one "
                                                         "declaration in a shared header"))
     for n, kws in keywords.items():
-        if {"class", "struct"} <= set(kws):
+        if {"class", "struct"} <= set(kws):  # mwccarm's mangling has no class key (only MSVC's does): one spelling
             for p in sorted({p for ps in kws.values() for p in ps}):
-                units[p]["findings"].append(_finding("R1", 1, f"`{n}` is declared both `class` and `struct` (mwcc and "
-                                                     "MSVC mangle them differently)", uses=(n,)))
+                units[p]["findings"].append(_advice("R1", 1, f"`{n}` is declared both `class` and `struct`: pick "
+                                                    "one spelling (it does not change mwccarm's mangled names)"))
     for n, ts in globals_.items():
         if len(ts) > 1:
             for p in sorted({p for ps in ts.values() for p in ps}):
@@ -488,6 +550,8 @@ def check_files(files: dict[str, str], original_asm=frozenset()) -> dict[str, di
 FUNC_SYM = re.compile(r"^(\S+) kind:function\((?:arm|thumb),size=0x([0-9a-f]+)\) addr:0x([0-9a-f]+)", re.M)
 DELINK_BLOCK = re.compile(r"^(\S+):\n((?:[ \t]+.*\n?)*)", re.M)
 DELINK_SEC = re.compile(r"\.(\w+)\s+start:0x([0-9a-f]+) end:0x([0-9a-f]+)")
+SOURCE_SUFFIXES = (".c", ".cpp", ".cc", ".cp", ".h", ".hpp", ".inc")
+CACHE_NAME = "scan-cache.json"
 
 
 def asm_allowed(root: Path) -> set[str]:
@@ -497,74 +561,168 @@ def asm_allowed(root: Path) -> set[str]:
     return {l.split()[0] for l in p.read_text(encoding="utf-8").splitlines() if l.strip() and not l.lstrip().startswith("#")}
 
 
-def project_report(root: Path, config: Path) -> dict:
-    """Every function of a `complete` file (delinks.txt + symbols.txt of every module, like match.py's
-    config_report): matched by bytes, and matched under the rules. A symbol the checker cannot find in its source
-    file (C++ method, macro-made function) follows its file: it passes only when no [match] rule fires in the file."""
-    files = {}
-    for base in ("src", "include"):
-        for p in sorted((root / base).rglob("*")) if (root / base).is_dir() else []:
-            if p.suffix.lower() in (".c", ".cpp", ".cc", ".cp", ".h", ".hpp", ".inc"):
-                files[p.relative_to(root).as_posix()] = p.read_text(encoding="utf-8", errors="replace")
-    units = check_files(files, asm_allowed(root))
-    tot = {"functions": 0, "code": 0, "bytes_matched": 0, "bytes_matched_code": 0, "rules_matched": 0,
-           "rules_matched_code": 0, "pending": 0, "original_asm": 0, "original_asm_code": 0, "unlocated": 0,
-           "placeholders": 0}
-    by_rule, pending, original, per_unit = {}, [], [], []
+def _source_files(root: Path) -> list[tuple[str, os.DirEntry]]:
+    """(path relative to the game, entry) of every source file under src/ and include/, sorted."""
+    out, todo = [], [(base, root / base) for base in ("src", "include")]
+    while todo:
+        rel, d = todo.pop()
+        try:
+            entries = list(os.scandir(d))
+        except OSError:
+            continue
+        for e in entries:
+            if e.is_dir():
+                todo.append((f"{rel}/{e.name}", e.path))
+            elif e.name.lower().endswith(SOURCE_SUFFIXES):
+                out.append((f"{rel}/{e.name}", e))
+    return sorted(out, key=lambda pe: pe[0])
+
+
+def _checker_version() -> str:
+    """Changes whenever this file does: a cache written by another version of the checks is not reused."""
+    return hashlib.sha1(Path(__file__).read_bytes()).hexdigest()
+
+
+def scan_game(root: Path, cache: bool = True) -> dict[str, dict]:
+    """scan() of every source file of the game, through build/coderules/scan-cache.json: a file whose size and
+    mtime did not change since the last run is not read again."""
+    path = root / "build" / "coderules" / CACHE_NAME
+    version, old = _checker_version(), {}
+    if cache:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            old = data["files"] if data.get("version") == version else {}
+        except (OSError, ValueError, KeyError, TypeError):
+            old = {}
+    units, new = {}, {}
+    for rel, e in _source_files(root):
+        st = e.stat()
+        stamp = [st.st_mtime_ns, st.st_size]
+        hit = old.get(rel)
+        if hit and hit["stamp"] == stamp:
+            u = hit["scan"]
+        else:
+            with open(e.path, encoding="utf-8", errors="replace") as fh:
+                u = scan(fh.read(), rel)
+            for f in u["functions"]:
+                f["words"] = sorted(f["words"])
+        new[rel] = {"stamp": stamp, "scan": u}
+        units[rel] = u
+    if cache:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps({"version": version, "files": new}, separators=(",", ":")), encoding="utf-8")
+            os.replace(tmp, path)
+        except OSError:
+            pass
+    # the cross-file pass adds findings and settle reads `words` as sets: hand it copies, never the cached entries
+    return {rel: {**u, "findings": [dict(fd) for fd in u["findings"]],
+                  "functions": [{**f, "words": set(f["words"])} for f in u["functions"]]} for rel, u in units.items()}
+
+
+def _report_matched(report: dict) -> tuple[dict, list[tuple[str, str, int]]] | None:
+    """From objdiff's report.json (the one `match.py verify` and `status` print): the totals, and (source path,
+    name, size) of every function it finds byte-identical. None when the report has no function lists (match.py's
+    config_report)."""
+    units = report.get("units") or []
+    if not any("functions" in u for u in units):
+        return None
+    m = report.get("measures", {})
+    matched = []
+    for u in units:
+        path = u.get("metadata", {}).get("source_path") or u.get("name", "")
+        for f in u.get("functions", []):
+            if float(f.get("fuzzy_match_percent", 0) or 0) >= 100.0:
+                matched.append((path, f["name"], int(f.get("size", 0) or 0)))
+    return {"functions": int(m.get("total_functions", 0) or 0), "code": int(m.get("total_code", 0) or 0)}, matched
+
+
+def _delinks_matched(config: Path) -> tuple[dict, list[tuple[str, str, int]]]:
+    """Without objdiff's report: every function of a `complete` file (delinks.txt + symbols.txt of every module,
+    like match.py's config_report)."""
+    tot, matched = {"functions": 0, "code": 0}, []
     for delinks in sorted(config.rglob("delinks.txt")):
         symbols = delinks.with_name("symbols.txt")
         if not symbols.exists():
             continue
-        funcs = [(n, int(a, 16), int(sz, 16)) for n, sz, a in FUNC_SYM.findall(symbols.read_text(encoding="utf-8"))]
+        funcs = sorted((int(a, 16), n, int(sz, 16)) for n, sz, a in FUNC_SYM.findall(symbols.read_text(encoding="utf-8")))
+        addrs = [a for a, _n, _sz in funcs]
         tot["functions"] += len(funcs)
-        tot["code"] += sum(sz for _n, _a, sz in funcs)
+        tot["code"] += sum(sz for _a, _n, sz in funcs)
         for m in DELINK_BLOCK.finditer(delinks.read_text(encoding="utf-8")):
             path, body = m.group(1), m.group(2)
             if not path.startswith("src/") or "complete" not in body.split():
                 continue
-            secs = [(int(s, 16), int(e, 16)) for n, s, e in DELINK_SEC.findall(body) if n == "text"]
-            inside = [(n, sz) for n, a, sz in funcs if any(s <= a < e for s, e in secs)]
-            unit = units.get(path, {"functions": [], "findings": []})
-            known = {f["name"]: f for f in unit["functions"]}
-            file_clean = not any(fd["tier"] == "match" for fd in unit["findings"])
-            row = {"path": path, "functions": len(inside), "rules_matched": 0, "pending": 0, "original_asm": 0}
-            for n, sz in inside:
-                tot["bytes_matched"] += 1
-                tot["bytes_matched_code"] += sz
-                f = known.get(n)
-                if f is None:
-                    tot["unlocated"] += 1
-                    f = {"status": OK if file_clean else PENDING, "placeholders": 0, "rules":
-                         sorted({fd["rule"] for fd in unit["findings"] if fd["tier"] == "match"})}
-                tot["placeholders"] += 1 if f["placeholders"] else 0
-                if f["status"] == ORIGINAL_ASM:
-                    tot["original_asm"] += 1
-                    tot["original_asm_code"] += sz
-                    row["original_asm"] += 1
-                    original.append({"name": n, "file": path})
-                elif f["status"] == PENDING:
-                    tot["pending"] += 1
-                    row["pending"] += 1
-                    pending.append({"name": n, "file": path, "rules": f["rules"]})
-                    for r in f["rules"]:
-                        by_rule[r] = by_rule.get(r, 0) + 1
-                else:
-                    tot["rules_matched"] += 1
-                    tot["rules_matched_code"] += sz
-                    row["rules_matched"] += 1
-            per_unit.append(row)
+            for n, s, e in DELINK_SEC.findall(body):
+                if n == "text":
+                    lo, hi = bisect.bisect_left(addrs, int(s, 16)), bisect.bisect_left(addrs, int(e, 16))
+                    matched += [(path, fn, sz) for _a, fn, sz in funcs[lo:hi]]
+    return tot, matched
+
+
+def project_report(root: Path, config: Path, report: dict | None = None, cache: bool = True) -> dict:
+    """The functions matched by bytes, judged under the rules. The matched set is objdiff's (`report`, the
+    build/<version>/report.json that match.py prints), so both numbers count the same functions; without a report
+    with function lists, the functions of the `complete` files of delinks.txt. A symbol the checker cannot find in
+    its source file (C++ method, macro-made function) follows its file: it passes only when no [match] rule fires
+    in the file. A matched function with no source file to read (an objdiff unit outside src/) is `no_source`."""
+    units = _check_units(scan_game(root, cache), asm_allowed(root))
+    got = _report_matched(report) if report else None
+    source = "objdiff" if got else "delinks"
+    counts, matched = got or _delinks_matched(config)
+    tot = {"source": source, "functions": counts["functions"], "code": counts["code"], "bytes_matched": 0,
+           "bytes_matched_code": 0, "rules_matched": 0, "rules_matched_code": 0, "pending": 0, "original_asm": 0,
+           "original_asm_code": 0, "unlocated": 0, "no_source": 0, "placeholders": 0}
+    by_rule, pending, original, rows = {}, [], [], {}
+    known = {p: {f["name"]: f for f in u["functions"]} for p, u in units.items()}
+    blocked = {p: sorted({fd["rule"] for fd in u["findings"] if fd["tier"] == "match"}, key=lambda r: int(r[1:]))
+               for p, u in units.items()}
+    for path, n, sz in matched:
+        tot["bytes_matched"] += 1
+        tot["bytes_matched_code"] += sz
+        row = rows.setdefault(path, {"path": path, "functions": 0, "rules_matched": 0, "pending": 0, "original_asm": 0})
+        row["functions"] += 1
+        if path not in units:
+            tot["no_source"] += 1
+            continue
+        f = known[path].get(n)
+        if f is None:
+            tot["unlocated"] += 1
+            f = {"status": PENDING if blocked[path] else OK, "placeholders": 0, "rules": blocked[path]}
+        tot["placeholders"] += 1 if f["placeholders"] else 0
+        if f["status"] == ORIGINAL_ASM:
+            tot["original_asm"] += 1
+            tot["original_asm_code"] += sz
+            row["original_asm"] += 1
+            original.append({"name": n, "file": path})
+        elif f["status"] == PENDING:
+            tot["pending"] += 1
+            row["pending"] += 1
+            pending.append({"name": n, "file": path, "rules": f["rules"]})
+            for r in f["rules"]:
+                by_rule[r] = by_rule.get(r, 0) + 1
+        else:
+            tot["rules_matched"] += 1
+            tot["rules_matched_code"] += sz
+            row["rules_matched"] += 1
     return {"totals": tot, "by_rule": dict(sorted(by_rule.items(), key=lambda kv: int(kv[0][1:]))), "pending": pending,
-            "original_asm": original, "units": per_unit}
+            "original_asm": original, "units": list(rows.values())}
+
+
+SOURCES = {"objdiff": "objdiff's report.json", "delinks": "the complete files of delinks.txt"}
 
 
 def summary(rep: dict) -> str:
-    """Both numbers on one line: bytes matched, and matched under the rules (ORIGINAL-ASM left out of both)."""
+    """The number under the rules, and how the byte-identical functions it starts from split (the byte count is
+    the one of the matched set it was given, never a count of the checker's own)."""
     t = rep["totals"]
     counted = t["functions"] - t["original_asm"]
     rules = ", ".join(f"{r} {n}" for r, n in rep["by_rule"].items())
-    return (f"{t['bytes_matched'] - t['original_asm']}/{counted} functions matched by bytes, "
-            f"{t['rules_matched']}/{counted} matched under the code rules "
-            f"({t['pending']} MATCH-PENDING{': ' + rules if rules else ''}; {t['original_asm']} ORIGINAL-ASM listed apart)")
+    return (f"{t['rules_matched']}/{counted} functions matched under the code rules: of the {t['bytes_matched']} "
+            f"byte-identical ones ({SOURCES.get(t.get('source'), t.get('source'))}), {t['pending']} MATCH-PENDING"
+            f"{' (' + rules + ')' if rules else ''}, {t['original_asm']} ORIGINAL-ASM listed apart"
+            + (f", {t['no_source']} with no source file to read" if t.get("no_source") else ""))
 
 
 def write_report(root: Path, rep: dict) -> Path:
@@ -577,6 +735,19 @@ def write_report(root: Path, rep: dict) -> Path:
     return out
 
 
+def objdiff_report(project) -> dict | None:
+    """The game's build/<version>/report.json when it is newer than every config file (like match.py progress),
+    else None (the matched set then comes from delinks.txt)."""
+    path = getattr(project, "REPORT", None)
+    try:
+        newest = max((q.stat().st_mtime for q in project.CONFIG.rglob("*.txt")), default=0)
+        if path and path.stat().st_mtime >= newest:
+            return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("files", nargs="*", help="check only these files (default: every complete file of the game)")
@@ -584,6 +755,7 @@ def main() -> None:
     ap.add_argument("--advisory", action="store_true", help="also print the findings that do not block a match")
     ap.add_argument("--json", action="store_true", help="print the report as JSON")
     ap.add_argument("--strict", action="store_true", help="exit code 1 when a [match] rule fires")
+    ap.add_argument("--no-cache", action="store_true", help="read every file again (build/coderules/scan-cache.json)")
     a = ap.parse_args()
     if a.files:
         texts = {f: Path(f).read_text(encoding="utf-8", errors="replace") for f in a.files}
@@ -605,7 +777,7 @@ def main() -> None:
         sys.exit(1 if a.strict and bad else 0)
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import project  # the game: DSD_PROJECT, this file's game, or the current folder
-    rep = project_report(project.ROOT, project.CONFIG)
+    rep = project_report(project.ROOT, project.CONFIG, objdiff_report(project), cache=not a.no_cache)
     out = write_report(project.ROOT, rep)
     if a.json:
         print(json.dumps(rep, indent=1))
@@ -619,6 +791,9 @@ def main() -> None:
         t = rep["totals"]
         print(f"open naming (R7): {t['placeholders']} matched functions still use placeholder names; "
               f"{t['unlocated']} symbol(s) judged with their file; report: {out.relative_to(project.ROOT).as_posix()}")
+    if t.get("source") != "objdiff":
+        print("matched set: the complete files of delinks.txt (no up-to-date build/<version>/report.json; "
+              "`match.py verify --rules` uses objdiff's)")
     sys.exit(1 if a.strict and rep["totals"]["pending"] else 0)
 
 

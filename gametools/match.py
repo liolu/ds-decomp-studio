@@ -8,9 +8,10 @@
     python tools/match.py progress            # rewrite the progress table in README.md (no build needed)
 
 `verify` exits with a non-zero code on any failure. Automated sessions must not commit unless it passes.
-`verify` and `progress` also give the second number of the code rules (tools/coderules.py, CODE-RULES.md of DS
-Decomp Studio): the functions matched under the rules. Byte-identical functions that break a [match] rule are
-MATCH-PENDING: reported, never a verify failure (the bytes win), and not counted in that number.
+`verify --rules` and `progress --rules` also give the second number of the code rules (tools/coderules.py,
+CODE-RULES.md of DS Decomp Studio): the functions matched under the rules, out of the same matched set the command
+prints. Byte-identical functions that break a [match] rule are MATCH-PENDING: reported, never a verify failure (the
+bytes win), and not counted in that number.
 """
 
 import argparse
@@ -237,7 +238,7 @@ def cmd_verify(args):
     m = report["measures"]
     print(f"INFO: {m.get('matched_functions', 0)}/{m['total_functions']} functions, "
           f"{pct(m, 'matched_code_percent'):.2f}% code")
-    rules = rules_report()
+    rules = rules_report(report) if args.rules else None
     if rules:
         print("INFO: " + rules["summary"] + " (python tools/coderules.py --pending)")
     print("VERIFY PASSED" if ok else "VERIFY FAILED")
@@ -258,12 +259,13 @@ PARTS = [  # (path prefix, label) of the progress table, first match wins
 STUDIO_URL = "https://github.com/liolu/ds-decomp-studio"
 
 
-def rules_report() -> dict | None:
+def rules_report(report: dict) -> dict | None:
     """coderules.project_report of this game, written to build/coderules/report.json; None when tools/coderules.py
-    is not in the game yet (`studio.py sync-tools`) or cannot read the sources."""
+    is not in the game yet (`studio.py sync-tools`) or cannot read the sources. The matched set is `report`'s, the
+    one this command prints (objdiff's report.json; config_report gives the same set from delinks.txt)."""
     try:
         import coderules
-        rep = coderules.project_report(project.ROOT, project.CONFIG)
+        rep = coderules.project_report(project.ROOT, project.CONFIG, report)
         coderules.write_report(project.ROOT, rep)
         rep["summary"] = coderules.summary(rep)
         return rep
@@ -355,7 +357,7 @@ def cmd_progress(args):
              f"{bar(code)} **{code:.2f}%** of the code matched · data {data:.2f}% · "
              f"{m.get('matched_functions', 0)}/{m['total_functions']} functions",
              ""]
-    rules = rules_report()
+    rules = rules_report(report) if args.rules else None
     if rules:
         t = rules["totals"]
         counted = t["functions"] - t["original_asm"]
@@ -374,8 +376,9 @@ def cmd_progress(args):
     lines += ["",
               f"*Updated {datetime.date.today().isoformat()} by `python tools/match.py progress` "
               f"([DS Decomp Studio]({STUDIO_URL})). A function counts only when it compiles to the exact same bytes "
-              f"and the ROM still rebuilds byte for byte; it counts under the code rules only when its source also "
-              f"passes every [match] rule (`python tools/coderules.py --pending`).*",
+              f"and the ROM still rebuilds byte for byte"
+              + ("; it counts under the code rules only when its source also passes every [match] rule "
+                 "(`python tools/coderules.py --pending`).*" if rules else ".*"),
               "<!-- progress:end -->"]
     block = "\n".join(lines)
     text = README.read_text(encoding="utf-8")
@@ -405,6 +408,9 @@ def main():
     p = sub.add_parser("verify")
     p.add_argument("--no-format", action="store_true", help="Do not run pre-commit on the changed files first")
     p.set_defaults(fn=cmd_verify)
+    for name in ("verify", "progress"):
+        sub.choices[name].add_argument("--rules", action="store_true",
+                                       help="Also count the functions matched under the code rules (tools/coderules.py)")
     args = ap.parse_args()
     if args.cmd == "verify":
         # A run of auto_match / donor_match killed while integrating left unverified files: undo that first

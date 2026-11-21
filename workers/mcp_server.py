@@ -33,12 +33,7 @@ stays byte-identical) -> after a few matches, commit_matches (full verify once, 
 release_block (finished=true when everything is matched).
 Rules: plain C only. asm, new #define/#pragma/#include lines, ##, _Pragma, __declspec/__attribute__ and machine code
 written as numbers are refused (fake matches). Never make the function static. ASCII only. Keep the function's name.
-Identical bytes alone are not a match (CODE-RULES.md): a matching compile_and_diff also returns `rules`. When
-rules.status is "MATCH-PENDING", rules.blocking lists what is not source yet: M2C_FIELD / offset casts instead of
-struct members (R4), `extern` data in the .c file instead of include/engine.h (R2), fake code such as volatile off
-hardware registers, unused locals, `x = x`, `+ 0` (R17), an asm body (R18). Finish the source (edit_header for the
-struct and the extern) and judge again; a MATCH-PENDING function may be submitted but is not counted as matched under
-the rules. Placeholder names (func_02001234, arg0) may stay; never invent a confident name.
+A matching compile_and_diff also returns a code-rules verdict (`rules.status`): report it, do not chase it (cleanup is a separate pass).
 Types and prototypes everyone should use go into include/engine.h with edit_header (kept only if every matched file
 still compiles to the same bytes). Source files include engine.h BEFORE m2c.h (clang-format sorts includes), so
 engine.h must stand alone: put #include "m2c.h" above anything that uses s32/u8/... there. Data (tables, strings) can be declared in C: read_data gives a declaration,

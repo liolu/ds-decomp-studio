@@ -61,13 +61,8 @@ python ../../studio/gametools/ghidra_draft.py --names a,b            # Ghidra dr
    goes to `projets/<game>/build/hunt/best/<function>.c`, the file named exactly after the function, where
    `missdb.py import` picks it up. Never leave misses in /tmp, a scratchpad, notes or the game repository.
 
-9. Identical bytes alone are not a match: follow [CODE-RULES.md](CODE-RULES.md). `workbench.py judge` (MCP
-   compile_and_diff) answers `rules: MATCH-PENDING` with the [match] rules that fire. Offset casts, local type
-   copies, `extern` lines in the .c file and steering code are scaffolding: remove them before you report a match.
-   When a spelling matches only through a trick (a `volatile`, a dummy local, a reused variable, `(u8 *)p + K`), it
-   is a clue: look for the helper, the type or the second variable it hides. If you cannot find it, submit the
-   function and report it as `MATCH-PENDING` with the rules and your guess. Never invent a confident name: keep
-   `func_02001234` / `arg0` / `unk_58` until evidence names it.
+9. `workbench.py judge` (MCP compile_and_diff) adds a code-rules verdict to each match ([CODE-RULES.md](CODE-RULES.md)):
+   report it (`MATCH` or `MATCH-PENDING <rules>`), do not chase it; the source cleanup is a separate pass.
 
 ## Code rules profile
 
@@ -108,17 +103,21 @@ source, run the checker, fix [free] findings first in their own commit, then eac
 - **Line information.** Retail ROMs carry no line tables. `__LINE__` reaches the bytes only in units that call an
   assert or panic macro (the files the binary names in its assertion strings): layout changes there are [checked].
 - **Commands.** Per-function check: `workbench.py judge NAME FILE.c`. Byte gate: `python tools/match.py verify`.
-  Rule checker: `python tools/coderules.py [--pending] [--advisory]` (`studio.py rules <game>`); `verify` and
-  `progress` print both numbers.
+  Rule checker: `python tools/coderules.py [--pending] [--advisory]` (`studio.py rules <game>`); `verify --rules`
+  and `progress --rules` print both numbers, from the same matched set.
 - **Checker coverage.** `coderules.py` implements the [match] rows of the table at the end of CODE-RULES.md, with
   these differences:
-  - R1: the two-bodies row and the `class`/`struct` mismatch are checked; the "layout view" row (a struct that
-    copies another struct's leading fields and is read through a cast) is not.
+  - R1: the two-bodies row is checked; the "layout view" row (a struct that copies another struct's leading fields
+    and is read through a cast) is not. Advisory only: a `class`/`struct` mismatch (mwccarm's mangled names do not
+    carry the class key), and a draft's file-local helper types (a name no header defines that is placeholder-like,
+    `D`, `Obj`, `Ctx`..., or that nearly every file defining it gives its own body: unrelated types, not one type
+    declared twice).
   - R4: `M2C_FIELD` is this studio's offset macro, and a virtual call through `*(u8 **)obj + K` counts as an
     offset cast.
   - R13: only virtuals named `pad`/`dummy`; the studio has no vtable data to compare slot counts with yet.
   - R17: "statements marked as probes" are the names the search tools write (`hunt_pad`, `hunt_t`, `hunt_v`,
-    `arg_pad`); a line that names a `0x04xxxxxx` register passes the `volatile` row; a padding member passes with a
+    `arg_pad`); a line that names a `0x04xxxxxx` register or the shared work area the ARM7 writes (`0x027FFxxx`,
+    `0x02FFFxxx` on DSi) passes the `volatile` row; a padding member passes with a
     `// reserved: <SDK or format name>` note; a statement the original really had passes with `// R36: <what the
     bytes show>` on its line.
   - R18: there is no list of original inline-asm helpers yet, so any `asm` in a function holds it unless the
@@ -173,6 +172,8 @@ source, run the checker, fix [free] findings first in their own commit, then eac
   [CODE-RULES.md](CODE-RULES.md). `fakematch.py` refuses what can never be source before compiling (asm, sections,
   preprocessor tricks); `coderules.py` judges what did match: `ok`, `MATCH-PENDING` (R1, R2, R4, R13, R17, R18) or
   `ORIGINAL-ASM`, per function, plus advisory findings (names, banners). `workbench.judge` attaches it to every
-  match, `match.py verify`/`progress` and `studio.py rules <game>` count it (build/coderules/report.json).
+  match, `match.py verify --rules`/`progress --rules` and `studio.py rules <game>` count it, out of objdiff's
+  matched set when its report.json is up to date (build/coderules/report.json; per-file scan cache in
+  build/coderules/scan-cache.json).
   `--no-data` / `--data-only`. The game page has a Donnees tab (dsstudio/data.py: every data symbol, matched or
   not, its bytes and an exact C declaration).

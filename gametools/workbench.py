@@ -540,7 +540,7 @@ def cmd_submit(a) -> None:
     out({"ok": True, "file": created[0].relative_to(ROOT).as_posix(), "profile": r["profile"],
          "build_seconds": round(time.time() - t0, 1), "pending": len(pend), "rules": rules,
          "next": "ROM byte-identical. `commit` runs the full verify once for all pending matches."
-                 + (" MATCH-PENDING under the code rules: finish the source (see rules.blocking)."
+                 + (" MATCH-PENDING under the code rules: report it, the cleanup pass takes it from there."
                     if rules["status"] == coderules.PENDING else "")})
 
 

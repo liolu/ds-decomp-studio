@@ -162,7 +162,7 @@ functions out of the count until the real source is written.
 | typed-struct, callee-type, callee-types, callee-sig, hidden-arg, hidden-return, return-arg, varargs, symbol-names, runtime-names, link-time-const | source | - |
 | loop-form, if-invert, switch-form, decl-order, stmt-order, chain-order, accumulate, block-init, bitfield, int-vs-long, u32-local, local-static, static-anchor, whole-file-ipa, cpp-vcall, embedded-object, sret-virtual | source: what a programmer writes | - |
 | sdk-inline, inline-helper, donor-shape, donor | source when the helper has evidence (a public decompilation, the same shape in several functions): R16 | - |
-| hw-volatile, `volatile` on a 0x04xxxxxx register | source: hardware registers are volatile | - |
+| hw-volatile, `volatile` on a 0x04xxxxxx register or the shared work area the ARM7 writes (0x027FFxxx, 0x02FFFxxx on DSi) | source: hardware registers and shared memory are volatile | - |
 | profile-sweep, profile-prior, nointerworking, pragma-profile, exceptix, init-section, text-data, ld-align, literal-owner | build facts, not source: no rule applies | - |
 | param-volatile, volatile-stack, volatile-field, `volatile` on ordinary data | clue (R17) | varargs, a struct passed by value, a wrong type, an aliasing pointer, a missing call |
 | pad-param (`hunt_pad`) | clue (R17) | the real first argument: a method's `this`, a callback cookie |

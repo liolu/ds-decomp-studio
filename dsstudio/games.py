@@ -307,7 +307,7 @@ class Game:
             return {}
 
     def rules(self) -> dict:
-        """What gametools/coderules.py counted last (`studio.py rules <game>`, `match.py verify`/`progress`): the
+        """What gametools/coderules.py counted last (`studio.py rules <game>`, `match.py verify/progress --rules`): the
         functions matched under the code rules, MATCH-PENDING and ORIGINAL-ASM. Empty when it never ran."""
         try:
             return json.loads((self.path / "build" / "coderules" / "totals.json").read_text(encoding="utf-8"))
