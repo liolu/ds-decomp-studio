@@ -29,7 +29,9 @@ def _read(p, default):
 
 def _write(p, obj):
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(obj, indent=1, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    tmp = p.with_name(p.name + ".tmp")  # a reader never sees half a claim (= a free block)
+    tmp.write_text(json.dumps(obj, indent=1, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    tmp.replace(p)
 
 
 def load(g) -> dict:

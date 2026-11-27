@@ -51,7 +51,8 @@ class Mod:
         self.symbols = targets[module_key(name)]
         self.bin, self.base = image(name, folder)
         self.relocs: dict[int, tuple[int, str]] = {}
-        for frm, kind, to, mod in re.findall(r"^from:0x([0-9a-f]+) kind:(\w+) to:0x([0-9a-f]+) module:(\S+)",
+        # `add:` (symmerge, interior pointers such as strings in a blob) is not read: it is in the word, see declare
+        for frm, kind, to, mod in re.findall(r"^from:0x([0-9a-f]+) kind:(\w+) to:0x([0-9a-f]+)(?: add:\S+)? module:(\S+)",
                                              (folder / "relocs.txt").read_text(encoding="utf-8"), re.M):
             if kind == "load":
                 self.relocs[int(frm, 16)] = (int(to, 16), mod)
@@ -59,6 +60,10 @@ class Mod:
 
 def target_name(targets, to: int, mod: str) -> tuple[str, int] | None:
     syms = targets.get(mod)
+    many = re.fullmatch(r"overlays\(([\d,]+)\)", mod)
+    if many:  # ambiguous target (overlays loaded at one address): the first one that has the exact symbol
+        syms = next((targets[k] for k in (f"overlay({n})" for n in many[1].split(",")) if k in targets and
+                     any(a == to for a, _n, _k in targets[k])), None)
     if not syms:
         return None
     best = None
@@ -218,10 +223,10 @@ def declare(wb, m: Mod, targets, ad: int, n: str, size: int, secname: str):
                     return None, set()
                 tn, off = t
                 off += w - to
-                if w & 1:  # thumb function pointer: written plain, the linker adds the bit itself
-                    if off != 1 or not any(a2 == to - 1 and k == "function" for a2, _n, k in targets.get(mod, [])):
-                        return None, set()
-                    off = 0
+                if w & 1 and any(a2 == w - 1 and k == "function" for a2, _n, k in targets.get(mod, [])):
+                    off = 0  # thumb function pointer: written plain, the linker adds the bit itself
+                elif w & 1 and any(n2 == tn and k == "function" for _a, n2, k in targets.get(mod, [])):
+                    return None, set()
                 ext.add(tn)
                 words.append(f"(u32)&{tn}" if off == 0 else f"(u32)((u8 *)&{tn} + 0x{off:x})")
             else:

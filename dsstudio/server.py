@@ -164,11 +164,26 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (ConnectionError, OSError):
+            pass
+
+    def local_only(self) -> bool:
+        """Only the studio's own page may call the API: another site open in the browser (a POST without preflight)
+        or a DNS rebinding name pointing at 127.0.0.1 gets a 403."""
+        host = (self.headers.get("Host") or "").lower()
+        ok_hosts = {f"127.0.0.1:{config.PORT}", f"localhost:{config.PORT}"}
+        if host not in ok_hosts | {"127.0.0.1", "localhost"}:  # the desktop window's own check sends no port
+            return False
+        origin = (self.headers.get("Origin") or "").lower()
+        return not origin or origin in {"http://" + h for h in ok_hosts}
 
     def do_GET(self):
         u = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
+        if not self.local_only():
+            return self.send({"error": "acces refuse"}, 403)
         try:
             if not u.path.startswith("/api/"):
                 name = u.path.strip("/") or "index.html"
@@ -239,6 +254,8 @@ class H(BaseHTTPRequestHandler):
                 return self.send(gameenv.workbench(games.get(q["game"]).path, "data", q["name"], timeout=60))
         except KeyError as e:
             return self.send({"error": str(e)}, 400)
+        except (ValueError, TypeError) as e:
+            return self.send({"error": f"requete invalide : {e}"}, 400)
         except Exception as e:
             traceback.print_exc()
             return self.send({"error": repr(e)}, 500)
@@ -246,8 +263,12 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urlparse(self.path)
+        if not self.local_only() or "application/json" not in (self.headers.get("Content-Type") or ""):
+            return self.send({"error": "acces refuse"}, 403)
         try:
             d = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0) or 0)) or b"{}")
+            if not isinstance(d, dict):
+                return self.send({"error": "bad request"}, 400)
             p = u.path[5:]
             s = config.settings()
             if p == "claim":
@@ -273,7 +294,14 @@ class H(BaseHTTPRequestHandler):
                 params = {k: d[k] for k in ("agents", "minutes", "max", "model", "batch", "variants", "group")
                           if d.get(k) not in (None, "")}
                 params["blocks"] = taken
-                return self.send({**jobs.submit("qwen", g.id, params, s["who"]), "blocks": taken})
+                r = jobs.submit("qwen", g.id, params, s["who"])
+                if r.get("error"):  # no job: the blocks go back to the queue instead of staying taken for 48 h
+                    for bid in taken:
+                        blocks.release(g, bid)
+                    return self.send(r)
+                return self.send({**r, "blocks": taken})
+            if p in ("release", "touch") and not re.fullmatch(r"[\w-]+", str(d["block"])):
+                return self.send({"error": "bloc inconnu"}, 400)
             if p == "release":
                 return self.send(blocks.release(games.get(d["game"]), d["block"], None, bool(d.get("finished"))))
             if p == "touch":
@@ -317,6 +345,8 @@ class H(BaseHTTPRequestHandler):
                                                                   "who": s["who"]}, s["who"]))
         except KeyError as e:
             return self.send({"error": str(e)}, 400)
+        except (ValueError, TypeError) as e:  # bad JSON, "n": "abc"...: the caller's mistake, not a crash
+            return self.send({"error": f"requete invalide : {e}"}, 400)
         except Exception as e:
             traceback.print_exc()
             return self.send({"error": repr(e)}, 500)

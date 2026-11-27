@@ -59,7 +59,7 @@ def plan(name: str, folder: Path) -> list[list[tuple[int, str, int]]]:
             cur = []
             continue
         contiguous = cur and cur[-1][0] + cur[-1][2] == a
-        fits = a % 4 == 0 or size < 4  # mwcc aligns arrays of 4+ bytes to 4
+        fits = a % 4 == 0  # every array gets a section of its own that the linker aligns to 4 (tiegen, bsssplit: the rest)
         if cur and contiguous and fits and size > cur[-1][2]:
             cur.append((a, n, size))
             continue

@@ -20,7 +20,7 @@ import hunt  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument('round'); ap.add_argument('--per', type=int, default=40); ap.add_argument('--lists', type=int, default=1)
-ap.add_argument('--max-size', type=int, default=1200); ap.add_argument('--census', action='store_true')
+ap.add_argument('--max-size', type=int, default=1200); ap.add_argument('--min-size', type=int, default=0, help='skip tiny stubs (template/fj sweeps catch them)'); ap.add_argument('--census', action='store_true')
 ap.add_argument('--untried', action='store_true', help='deal again names dealt before but with no agent file (r32)')
 ap.add_argument('--max-tries', type=int, default=0, help='with --untried: also deal again names with up to N agent files')
 a = ap.parse_args()
@@ -52,7 +52,7 @@ def usable(n):
     parked = str(e.get('parked') or '')
     return not (n in done or n in zero or parked.startswith(('ITCM', 'this-adjust'))
                 or n.startswith(('func_01ff', '__sinit')) or '-thumb' in (e.get('profile') or '')
-                or (sizes[n] <= 28 and 'ov123' in n) or sizes[n] > a.max_size)
+                or (sizes[n] <= 28 and 'ov123' in n) or sizes[n] > a.max_size or sizes[n] < a.min_size)
 
 
 pool = sorted((n for n in unmatched if usable(n)), key=lambda n: (tries[n], sizes[n]))
