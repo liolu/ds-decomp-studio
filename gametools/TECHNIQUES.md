@@ -42,6 +42,7 @@ Three levels:
 
 ## Prototypes (studio/gametools/prototypes) - see prototypes/README.md
 
+- **inline-depth** (manual, profile) self-recursive functions whose body repeats the call N times = `1.2/sp2p3 -inline auto,depth=N` (Sims 2 func_01ff96c8 depth 5, func_01ffac40 depth 4, 2026-11-27): to add to flagsweep/auto_match profile lists
 - **forgotten-match** `forgotten.py`: rejudges every techlog `0 diffs` file of unmatched functions under default/-thumb/-nointerworking/sp3/2.0 + relcheck, writes OUT/results.json for submit-many (Sims 2 2026-11-27: 18 matches incl. 2 Thumb from r38 never submitted)
 - **proto:profprior** / **profile-prior** `profprior.py` - the game's own profiles (census of compilers.txt) and, per address, the profiles of the nearest matched files (one original TU = one set of flags): top-3 holds the right profile for ~93 % of the matched files over 60 games (`eval --all`). auto_match.profiles_for uses it since 2026-11-16 (AUTO_NO_PRIOR=1 turns it off), and its cache now records the profiles tried (`"p"`), so a new profile is tried on old failures only
 - **proto:nearsweep** / **near-profile-sweep** `nearsweep.py` - build/auto/near (and build/auto/size) drafts judged with every profile that matched in ANY game, one compiler call per profile; `--commit` integrates. Harvest Moon: 4 matches + 86 closer in 2.5 min
