@@ -260,6 +260,12 @@ def mutations(src, name):
         L = lines[:]
         for i, t in subs64: L[i] = t
         emit('sub-s64 all', L)
+    # `bcc/bcs/bhi/bls` where we get `blt/bge/bgt/ble` = the compare is unsigned: `(u32)i < K`
+    # (Sims 2 func_0207bb64 and func_0205df2c, loop bounds of u8 counters held in s32)
+    ucmp = list(re.finditer(r'(?<![\w)\]])(\w+) (<|<=|>|>=) (0x[0-9A-Fa-f]+|\d+)\b', body))
+    for mm in ucmp[:8]:
+        nb = body[:mm.start()] + f'(u32){mm.group(1)} {mm.group(2)} {mm.group(3)}' + body[mm.end():]
+        out.append((f'ucmp {mm.group(1)} @{mm.start()}', pre + head + nb + post))
     out += artifacts(src)
     seen, uniq = {src}, []
     for t, s in out:
