@@ -248,6 +248,18 @@ def mutations(src, name):
             L = lines[:]; dk = k - first[v]
             L[i] = f'{mm.group(1)}{v} {"+" if dk > 0 else "-"}= {abs(dk)};'; emit(f'unfold {v} l{i}', L)
         first.setdefault(v, k)
+    # `subs rX; cmp rX, ..` where we get `sub` = 64-bit subtraction kept to its low word: the dead `sbc` is
+    # removed, the flag-setting `subs` stays (Sims 2 020778ac/020659cc 1 -> 0, idiom of Lego func_0209b88c)
+    subs64 = []
+    for i, l in enumerate(lines):
+        mm = re.match(r'^(\s*)([\w.\->\[\]]+) = ([^=;?]+?) - ([^=;?]+);$', l)
+        if not mm or mm.group(3).count('(') != mm.group(3).count(')'): continue
+        L = lines[:]; L[i] = f'{mm.group(1)}{mm.group(2)} = (s32)((s64){mm.group(3)} - {mm.group(4)});'
+        emit(f'sub-s64 l{i}', L); subs64.append((i, L[i]))
+    if len(subs64) > 1:
+        L = lines[:]
+        for i, t in subs64: L[i] = t
+        emit('sub-s64 all', L)
     out += artifacts(src)
     seen, uniq = {src}, []
     for t, s in out:
