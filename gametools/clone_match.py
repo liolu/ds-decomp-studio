@@ -41,8 +41,22 @@ from pipeline_lock import journal_begin, journal_created, journal_end  # noqa: E
 
 WORK = ROOT / "build" / "clone"
 FAMILIES = WORK / "families.json"
-ARM9_BASE = 0x02000000
-FUNC_RE = re.compile(r"^(\S+) kind:function\(arm,size=0x([0-9a-f]+)\).*?addr:0x([0-9a-f]+)", re.M)
+ARM9_BASE = 0x02000000  # default only: each project's own load address comes from main_load_address()
+
+
+def main_load_address(extract: Path) -> int:
+    """ARM9 main module load address of a project (extract/<version>/arm9/arm9.yaml, base_address): 14 games load
+    at 0x02004000 or 0x02000400, not 0x02000000 (2026-11-28)."""
+    try:
+        for line in (extract / "arm9" / "arm9.yaml").read_text(encoding="utf-8").splitlines():
+            if line.startswith("base_address:"):
+                return int(line.split(":", 1)[1].strip(), 0)
+    except OSError:
+        pass
+    return ARM9_BASE
+
+
+FUNC_RE =re.compile(r"^(\S+) kind:function\(arm,size=0x([0-9a-f]+)\).*?addr:0x([0-9a-f]+)", re.M)
 THUMB_RE = re.compile(r"^(\S+) kind:function\(thumb,size=0x([0-9a-f]+)\).*?addr:0x([0-9a-f]+)", re.M)
 SYM_RE = re.compile(r"^(\S+) kind:(function|data|bss|label)\S* addr:0x([0-9a-f]+)(?! local)", re.M)
 DELINK_RE = re.compile(r"^(src/\S+):\n((?:[ \t]+\S.*\n?)+)", re.M)
@@ -89,9 +103,10 @@ class Image:
         dl = (cfg / "delinks.txt").read_text(encoding="utf-8", errors="replace")
         head, _, files = dl.partition("\n\n")
         first = re.search(r"start:0x([0-9a-f]+)", head)
-        self.base = ARM9_BASE if module == "main" or not first else int(first.group(1), 16)
+        main_base = main_load_address(extract)
+        self.base = main_base if module == "main" or not first else int(first.group(1), 16)
         m = TEXT_RE.search(head)
-        self.text = (int(m.group(1), 16), int(m.group(2), 16)) if m else (ARM9_BASE, ARM9_BASE)
+        self.text = (int(m.group(1), 16), int(m.group(2), 16)) if m else (main_base, main_base)
         self.files = []  # (start, end, source path) of the complete .text ranges
         for path, body in DELINK_RE.findall(files):
             if "complete" in body:
@@ -692,21 +707,26 @@ def integrate_verified(found: list[tuple[str, int, int, str]], log=print) -> lis
             run([pc_exe, "run", "clang-format", "--files", *rels[k:k + 100]])
     run([sys.executable, project.build_tool("configure.py"), project.VERSION])
     verify = run([sys.executable, project.build_tool("match.py"), "verify"])
-    for _ in range(5):
-        # A link error names the object that needs a missing symbol: drop those files and build again
-        # Files the report does not see at 100 % although the ROM is identical (a relocation objdiff reads
-        # differently): auto_match drops them the same way
-        out = verify.stdout + verify.stderr
-        bad = set(re.findall(r'Referenced from "\w+" in (\w+)\.o', out))
-        bad |= {Path(p).stem for p in re.findall(r"FAIL: (src/auto/\S+?\.c(?:pp)?) is marked complete", out)}
-        bad_paths = [c for c in created if c.stem in bad]
-        if verify.returncode == 0 or not bad_paths:
-            break
-        log(f"dropping {len(bad_paths)} file(s) the build or the report rejects: {', '.join(p.stem for p in bad_paths)}")
-        drop(bad_paths)
-        created = [c for c in created if c not in bad_paths]
-        run([sys.executable, project.build_tool("configure.py"), project.VERSION])
-        verify = run([sys.executable, project.build_tool("match.py"), "verify"])
+
+    def drop_rejected(verify, created):
+        for _ in range(5):
+            # A link error names the object that needs a missing symbol: drop those files and build again
+            # Files the report does not see at 100 % although the ROM is identical (a relocation objdiff reads
+            # differently): auto_match drops them the same way
+            out = verify.stdout + verify.stderr
+            bad = set(re.findall(r'Referenced from "\w+" in (\w+)\.o', out))
+            bad |= {Path(p).stem for p in re.findall(r"FAIL: (src/auto/\S+?\.c(?:pp)?) is marked complete", out)}
+            bad_paths = [c for c in created if c.stem in bad]
+            if verify.returncode == 0 or not bad_paths:
+                break
+            log(f"dropping {len(bad_paths)} file(s) the build or the report rejects: {', '.join(p.stem for p in bad_paths)}")
+            drop(bad_paths)
+            created = [c for c in created if c not in bad_paths]
+            run([sys.executable, project.build_tool("configure.py"), project.VERSION])
+            verify = run([sys.executable, project.build_tool("match.py"), "verify"])
+        return verify, created
+
+    verify, created = drop_rejected(verify, created)
     if verify.returncode != 0:
         import find_culprits
         log("verify failed: looking for the files that break the ROM...")
@@ -717,6 +737,9 @@ def integrate_verified(found: list[tuple[str, int, int, str]], log=print) -> lis
             created = [c for c in created if c.relative_to(ROOT).as_posix() not in dropped]
         if ok:
             verify = run([sys.executable, project.build_tool("match.py"), "verify"])
+            # ROM identical again, but a file the report sees below 100 % (Sims 2 JP 2026-11-28: one file at
+            # 99.91 % rolled back 3377 matches): drop it like above instead of rolling everything back
+            verify, created = drop_rejected(verify, created)
     if verify.returncode != 0 or "VERIFY PASSED" not in verify.stdout:
         log(verify.stdout[-2000:])
         log("verify failed: rolling back")

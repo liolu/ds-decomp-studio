@@ -35,7 +35,7 @@ def image(name: str, folder: Path) -> tuple[bytes, int]:
     head = (folder / "delinks.txt").read_text(encoding="utf-8").split("\n\n", 1)[0]
     base = int(re.search(r"start:0x([0-9a-f]+)", head).group(1), 16)
     if name == "main":
-        return (project.EXTRACT / "arm9" / "arm9.bin").read_bytes(), 0x02000000
+        return (project.EXTRACT / "arm9" / "arm9.bin").read_bytes(), project.arm9_base()
     if name in ("itcm", "dtcm"):
         return (project.EXTRACT / "arm9" / f"{name}.bin").read_bytes(), base
     return (project.EXTRACT / "arm9_overlays" / f"{name}.bin").read_bytes(), base

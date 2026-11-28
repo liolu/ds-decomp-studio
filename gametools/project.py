@@ -87,9 +87,22 @@ GAME = _game()
 ROM_NAME = f"{GAME}_{VERSION}.nds"
 
 
+def arm9_base(extract: Path = None) -> int:
+    """Load address of the ARM9 main module (extract/<version>/arm9/arm9.yaml, base_address). Not always 0x02000000:
+    14 games load at 0x02004000 (Penguins of Madagascar, Shrek Forever After, Super Mario 64 DS...) or 0x02000400
+    (Myst); reading arm9.bin as if it started at 0x02000000 shifts every byte by that much (2026-11-28)."""
+    try:
+        for line in ((extract or EXTRACT) / "arm9" / "arm9.yaml").read_text(encoding="utf-8").splitlines():
+            if line.startswith("base_address:"):
+                return int(line.split(":", 1)[1].strip(), 0)
+    except OSError:
+        pass
+    return 0x02000000
+
+
 def _main_text() -> tuple[int, int]:
     m = re.search(r"\.text\s+start:0x([0-9a-f]+) end:0x([0-9a-f]+)", DELINKS.read_text(encoding="utf-8"))
-    return (int(m.group(1), 16), int(m.group(2), 16)) if m else (0x02000000, 0x02000000)
+    return (int(m.group(1), 16), int(m.group(2), 16)) if m else (arm9_base(), arm9_base())
 
 
 MAIN_TEXT = _main_text()

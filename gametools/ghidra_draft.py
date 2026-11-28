@@ -59,7 +59,7 @@ public class DsDraft extends GhidraScript {
         Address dataStart = space.getAddress(Long.parseLong(a[3], 16));
         MemoryBlock b = memory.getBlock(dataStart);
         if (b != null && !b.getStart().equals(dataStart)) memory.split(b, dataStart);
-        MemoryBlock code = memory.getBlock(space.getAddress(0x02000000L));
+        MemoryBlock code = memory.getBlock(space.getAddress(@ARM9_BASE@L));
         if (code != null && code.isWrite()) code.setWrite(false);
         // .bss is not in arm9.bin: an uninitialized block, so pointers to it name their target
         long bssStart = Long.parseLong(a[5], 16), bssEnd = Long.parseLong(a[6], 16);
@@ -147,7 +147,7 @@ def data_start() -> int:
     """Start of .data in the main module (delinks.txt header): what comes before is code and constants."""
     head = project.DELINKS.read_text(encoding="utf-8").split("\n\n", 1)[0]
     m = re.search(r"^\s+\.data\s+start:0x([0-9a-f]+)", head, re.M)
-    return int(m.group(1), 16) if m else 0x02000000 + ARM9_BIN.stat().st_size
+    return int(m.group(1), 16) if m else project.arm9_base() + ARM9_BIN.stat().st_size
 
 
 def bss_range() -> tuple[int, int]:
@@ -232,7 +232,8 @@ def run(names: list[str], log=print) -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     SCRIPTS.mkdir(parents=True, exist_ok=True)
     PROJECT_DIR.mkdir(parents=True, exist_ok=True)
-    (SCRIPTS / "DsDraft.java").write_text(SCRIPT, encoding="utf-8")
+    (SCRIPTS / "DsDraft.java").write_text(SCRIPT.replace("@ARM9_BASE@", f"0x{project.arm9_base():08x}"),
+                                          encoding="utf-8")
     raw = OUT / "raw"
     shutil.rmtree(raw, ignore_errors=True)
     raw.mkdir()
@@ -243,7 +244,7 @@ def run(names: list[str], log=print) -> int:
     if exists:
         head += ["-process", "arm9.bin"]
     else:
-        head += ["-import", str(ARM9_BIN), "-loader", "BinaryLoader", "-loader-baseAddr", "0x02000000",
+        head += ["-import", str(ARM9_BIN), "-loader", "BinaryLoader", "-loader-baseAddr", f"0x{project.arm9_base():08x}",
                  "-processor", "ARM:LE:32:v5t"]
     cmd = head + ["-noanalysis", "-scriptPath", str(SCRIPTS), "-postScript", "DsDraft.java",
                   str(project.SYMBOLS), str(raw), str(wanted), f"{data_start():x}",

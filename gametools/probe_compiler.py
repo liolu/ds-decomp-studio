@@ -26,7 +26,22 @@ import project  # noqa: E402  (this game's version, ROM name, paths: tools/proje
 ROOT = project.ROOT
 ARM9_BIN = project.EXTRACT / "arm9" / "arm9.bin"
 SYMBOLS = project.SYMBOLS
-ARM9_BASE = 0x02000000
+def _arm9_base() -> int:
+    """Load address of the main module: extract/<version>/arm9/arm9.yaml (base_address), 0x02000000 by default.
+    14 games load at 0x02004000 (Penguins of Madagascar, Shrek Forever After, Wheel of Fortune, Super Mario 64 DS...)
+    or 0x02000400 (Myst): with the old fixed 0x02000000, every target was read 0x4000 bytes off and nothing could
+    match there (found 2026-11-28)."""
+    y = ARM9_BIN.with_name("arm9.yaml")
+    try:
+        for line in y.read_text(encoding="utf-8").splitlines():
+            if line.startswith("base_address:"):
+                return int(line.split(":", 1)[1].strip(), 0)
+    except OSError:
+        pass
+    return 0x02000000
+
+
+ARM9_BASE = _arm9_base()
 
 BASE_FLAGS = "-enum int -char signed -str noreuse -proc arm946e -gccext,on -fp soft -inline noauto -lang=c -interworking -w off -nolink"
 
