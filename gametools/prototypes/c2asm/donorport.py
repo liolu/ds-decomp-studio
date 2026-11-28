@@ -37,10 +37,30 @@ def object_relocs(objbytes, name):
             if s['value'] <= off < s['value'] + max(s['size'], 1)}
 
 
-def game_name_at(to):
-    """the game's symbol at address TO, or name+0xN inside an object."""
+_MODSYMS = {}
+
+
+def module_symbols(module):
+    """symbols of a relocs.txt module (main, overlay(N), itcm, dtcm): [{name, kind, addr}]."""
+    if module not in _MODSYMS:
+        m = re.match(r'overlay\((\d+)\)', module or '')
+        p = (wb.OVL_DIR / f'ov{int(m.group(1)):03d}' / 'symbols.txt' if m else
+             wb.project.ARM9 / module / 'symbols.txt' if module in ('itcm', 'dtcm') else
+             wb.project.ARM9 / 'symbols.txt')
+        out = []
+        if p.exists():
+            for line in p.read_text(encoding='utf-8', errors='replace').splitlines():
+                s = wb.SYM.match(line)
+                if s:
+                    out.append({'name': s.group(1), 'kind': s.group(2), 'addr': int(s.group(4), 16)})
+        _MODSYMS[module] = out
+    return _MODSYMS[module]
+
+
+def game_name_at(to, module=None):
+    """the game's symbol at address TO (in MODULE when given), or name+0xN inside an object."""
     best = None
-    for s in wb.symbols():
+    for s in (module_symbols(module) if module else wb.symbols()):
         if s['addr'] == to:
             return s['name']
         if s['addr'] < to and s['kind'] in ('data', 'bss') and (best is None or s['addr'] > best['addr']):
@@ -62,7 +82,7 @@ def main():
         print(json.dumps({'target': target, 'ok': False, 'error': 'compile', 'msg': msg[-600:]}))
         return
     ours = object_relocs(objbytes, target)
-    theirs = {fr - f['addr']: (to, kind) for fr, kind, to, mod in wb.relocs_in(f['addr'], f['addr'] + f['size'])}
+    theirs = {fr - f['addr']: (to, mod) for fr, kind, to, mod in wb.relocs_in(f['addr'], f['addr'] + f['size'])}
     renames, unresolved, implicit, cpp = {}, [], {}, set()
     for off, nm in sorted((ours or {}).items()):
         base, _, add = nm.partition('+')
@@ -74,7 +94,7 @@ def main():
         if off not in theirs:
             unresolved.append(f'{nm}@{off:#x}: no relocation in the game')
             continue
-        gname = game_name_at(theirs[off][0] - add)
+        gname = game_name_at(theirs[off][0] - add, theirs[off][1])
         if gname is None:
             unresolved.append(f'{nm}@{off:#x}: nothing at {theirs[off][0]:#x}')
             continue
