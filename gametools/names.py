@@ -326,9 +326,12 @@ def clashes(renames: dict[str, str]) -> set[str]:
     if not renames:
         return set()
     rx = re.compile(r"\b[A-Za-z_]\w*\b")
+    # comments do not count: a donor file's attribution line names the original function (`/* _f2d from ... */`
+    # above `func_0202cf48`), which is no clash (HoM 2026-11-28: blocked _f2d/_dflt/_dfltu for nothing)
+    comment = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
     out = set()
     for f in source_files():
-        idents = set(rx.findall(f.read_text(encoding="utf-8", errors="replace")))
+        idents = set(rx.findall(comment.sub(" ", f.read_text(encoding="utf-8", errors="replace"))))
         out |= {old for old in idents & renames.keys() if renames[old] in idents}
     return out
 

@@ -75,6 +75,13 @@ def main():
     wb.select_module(target)
     f = wb.function(target)
     src = Path(donor_file).read_text(encoding='utf-8', errors='replace')
+    # the donor's own `/* compiler: ... */` line names the DONOR's profile: submit keeps a first-line marker as it
+    # is, so a stale one builds the function with the wrong compiler (USM 2026-11-28: 1.2/b56 match built with
+    # 1.2/sp2p3, 4 bytes short, everything after it shifted). Drop it: submit writes the judged profile.
+    src = re.sub(r'\A\s*/\* compiler:[^*]*\*/[ \t]*\n', '', src)
+    # `#pragma thumb off/on` of a donor whose default is Thumb: a new pragma is refused as a fake match, and the
+    # profile (with or without -thumb) already gives the mode; judge decides whether the bytes still match
+    src = re.sub(r'^[ \t]*#pragma[ \t]+thumb[ \t]+(off|on|reset)[ \t]*\n', '', src, flags=re.M)
     src = word_rename(src, {donor_func: target})
     objbytes, msg, obj, tmp = wb.compile_one(src, profile)
     tmp.cleanup()
