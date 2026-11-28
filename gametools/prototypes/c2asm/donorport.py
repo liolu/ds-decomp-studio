@@ -83,6 +83,13 @@ def main():
     # profile (with or without -thumb) already gives the mode; judge decides whether the bytes still match
     src = re.sub(r'^[ \t]*#pragma[ \t]+thumb[ \t]+(off|on|reset)[ \t]*\n', '', src, flags=re.M)
     src = word_rename(src, {donor_func: target})
+    # the target must be a GLOBAL symbol: a library's `static` function stays local in the object, the rest of the
+    # game (still asm) calls it by name, the linker goes through an 8-byte veneer ($Ven$lb$$...) and everything
+    # after it shifts (Tremor 2026-11-28: 134 of 233 matches dropped by the ROM build for this)
+    src = re.sub(r'^([ \t]*)static[ \t]+((?:inline[ \t]+|__inline[ \t]+)?[^;{()]*\b' + re.escape(target) + r'[ \t]*\()',
+                 r'\1\2', src, flags=re.M)
+    src = re.sub(r'^([ \t]*)(?:inline|__inline)[ \t]+([^;{()]*\b' + re.escape(target) + r'[ \t]*\()', r'\1\2', src,
+                 flags=re.M)
     objbytes, msg, obj, tmp = wb.compile_one(src, profile)
     tmp.cleanup()
     if objbytes is None:
